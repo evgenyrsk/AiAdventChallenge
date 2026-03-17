@@ -24,24 +24,45 @@ class AIService {
         explicitNulls = false
     }
 
-    suspend fun ask(prompt: String): String = suspendCancellableCoroutine { continuation ->
+    suspend fun askWithNoLimits(
+        messages: List<Message>,
+    ): String {
+        val request = ChatRequest(
+            model = MODEL,
+            messages = messages
+        )
+        return ask(request)
+    }
 
-        val requestDto = ChatRequest(
-            model = "google/gemma-3-4b-it:free",
-            messages = listOf(
-                Message(
-                    role = "user",
-                    content = prompt,
-                )
-            )
+    suspend fun askWithLimits(
+        messages: List<Message>,
+    ): String {
+        val request = ChatRequest(
+            model = MODEL,
+            messages = messages,
+            responseFormat = ResponseFormat(type = "json_object"),
+            maxTokens = 120,
+            stop = listOf("END"),
+            reasoning = ReasoningConfig(
+                effort = "none",
+                exclude = true
+            ),
         )
 
-        val bodyJson = json.encodeToString(ChatRequest.serializer(), requestDto)
+        return ask(request)
+    }
 
-        val body = bodyJson.toRequestBody("application/json".toMediaType())
+    private suspend fun ask(
+        chatRequest: ChatRequest
+    ): String = suspendCancellableCoroutine { continuation ->
 
-        val request = Request.Builder()
-            .url("https://openrouter.ai/api/v1/chat/completions")
+        val requestJson = json.encodeToString(ChatRequest.serializer(), chatRequest)
+        Log.d(TAG, "Request: $requestJson")
+
+        val body = requestJson.toRequestBody("application/json".toMediaType())
+
+        val httpRequest = Request.Builder()
+            .url(BASE_URL)
             .addHeader("Authorization", "Bearer ${BuildConfig.AI_API_KEY}")
             .addHeader("Content-Type", "application/json")
             .addHeader("HTTP-Referer", "https://example.com")
@@ -49,7 +70,7 @@ class AIService {
             .post(body)
             .build()
 
-        val call = client.newCall(request)
+        val call = client.newCall(httpRequest)
 
         continuation.invokeOnCancellation {
             call.cancel()
@@ -58,33 +79,20 @@ class AIService {
         call.enqueue(object : Callback {
 
             override fun onFailure(call: Call, e: IOException) {
-                if (continuation.isCancelled) return
-                continuation.resume("Error: ${e.message}")
+                if (!continuation.isCancelled) {
+                    continuation.resume("Error: ${e.message ?: "Network error"}")
+                }
             }
 
             override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    val responseBody = it.body?.string().orEmpty()
-                    Log.d("OPENROUTER", responseBody)
+                response.use { httpResponse ->
+                    val responseBody = httpResponse.body?.string().orEmpty()
+                    Log.d(TAG, "Response: $responseBody")
 
-                    val resultText = if (!it.isSuccessful) {
-                        try {
-                            val errorResponse = json.decodeFromString<ErrorResponse>(responseBody)
-                            "Error: ${errorResponse.error?.message ?: "Unknown API error"}"
-                        } catch (_: Exception) {
-                            "Error: HTTP ${it.code}: $responseBody"
-                        }
+                    val resultText = if (!httpResponse.isSuccessful) {
+                        parseError(httpResponse.code, responseBody)
                     } else {
-                        try {
-                            val parsedResponse = json.decodeFromString<ChatResponse>(responseBody)
-                            parsedResponse.choices
-                                .firstOrNull()
-                                ?.message
-                                ?.content
-                                ?: "Empty response"
-                        } catch (e: Exception) {
-                            "Error parsing response: ${e.message}"
-                        }
+                        parseSuccess(responseBody)
                     }
 
                     if (!continuation.isCancelled) {
@@ -93,5 +101,43 @@ class AIService {
                 }
             }
         })
+    }
+
+    private fun parseSuccess(responseBody: String): String {
+        return try {
+            val parsed = json.decodeFromString(ChatResponse.serializer(), responseBody)
+            val choice = parsed.choices.firstOrNull()
+            val message = choice?.message
+
+            when {
+                !message?.content.isNullOrBlank() -> {
+                    message?.content!!.trim()
+                }
+                !message?.reasoning.isNullOrBlank() -> {
+                    "Model returned reasoning but no final answer. " +
+                            "finish_reason=${choice?.finishReason}, reasoning=${message?.reasoning}"
+                }
+                else -> {
+                    "Empty response"
+                }
+            }
+        } catch (e: Exception) {
+            "Error parsing response: ${e.message ?: "Unknown parsing error"}"
+        }
+    }
+
+    private fun parseError(code: Int, responseBody: String): String {
+        return try {
+            val errorResponse = json.decodeFromString(ErrorResponse.serializer(), responseBody)
+            "Error: ${errorResponse.error?.message ?: "HTTP $code"}"
+        } catch (_: Exception) {
+            "Error: HTTP $code: $responseBody"
+        }
+    }
+
+    companion object {
+        private const val MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+        private const val TAG = "OPENROUTER"
+        private const val BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
     }
 }

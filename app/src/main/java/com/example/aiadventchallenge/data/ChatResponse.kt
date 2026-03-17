@@ -21,7 +21,8 @@ data class Choice(
 @Serializable
 data class ResponseMessage(
     val role: String? = null,
-    val content: String? = null
+    val content: String? = null,
+    val reasoning: String? = null,
 )
 
 @Serializable
