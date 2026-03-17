@@ -2,34 +2,43 @@ package com.example.aiadventchallenge.data
 
 import android.util.Log
 import com.example.aiadventchallenge.BuildConfig
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
-import org.json.JSONObject
+import okhttp3.Response
 import java.io.IOException
+import kotlin.coroutines.resume
 
 class AIService {
 
     private val client = OkHttpClient()
 
-    fun ask(prompt: String, callback: (String) -> Unit) {
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        explicitNulls = false
+    }
 
-        val json = JSONObject().apply {
-            put("model", "google/gemma-3-4b-it:free")
-            put(
-                "messages",
-                JSONArray().put(
-                    JSONObject().apply {
-                        put("role", "user")
-                        put("content", prompt)
-                    }
+    suspend fun ask(prompt: String): String = suspendCancellableCoroutine { continuation ->
+
+        val requestDto = ChatRequest(
+            model = "google/gemma-3-4b-it:free",
+            messages = listOf(
+                Message(
+                    role = "user",
+                    content = prompt,
                 )
             )
-        }
+        )
 
-        val body = json.toString()
-            .toRequestBody("application/json".toMediaTypeOrNull())
+        val bodyJson = json.encodeToString(ChatRequest.serializer(), requestDto)
+
+        val body = bodyJson.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
             .url("https://openrouter.ai/api/v1/chat/completions")
@@ -40,44 +49,48 @@ class AIService {
             .post(body)
             .build()
 
-        client.newCall(request).enqueue(object : Callback {
+        val call = client.newCall(request)
+
+        continuation.invokeOnCancellation {
+            call.cancel()
+        }
+
+        call.enqueue(object : Callback {
 
             override fun onFailure(call: Call, e: IOException) {
-                e.printStackTrace()
-                callback("Error: ${e.message}")
+                if (continuation.isCancelled) return
+                continuation.resume("Error: ${e.message}")
             }
 
             override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    val responseBody = it.body?.string().orEmpty()
+                    Log.d("OPENROUTER", responseBody)
 
-                val responseBody = response.body?.string().orEmpty()
-                Log.d("OPENROUTER", responseBody)
-
-                if (!response.isSuccessful) {
-                    val errorMessage = try {
-                        JSONObject(responseBody)
-                            .optJSONObject("error")
-                            ?.optString("message", "Unknown API error")
-                            ?: "Unknown API error"
-                    } catch (_: Exception) {
-                        "HTTP ${response.code}: $responseBody"
+                    val resultText = if (!it.isSuccessful) {
+                        try {
+                            val errorResponse = json.decodeFromString<ErrorResponse>(responseBody)
+                            "Error: ${errorResponse.error?.message ?: "Unknown API error"}"
+                        } catch (_: Exception) {
+                            "Error: HTTP ${it.code}: $responseBody"
+                        }
+                    } else {
+                        try {
+                            val parsedResponse = json.decodeFromString<ChatResponse>(responseBody)
+                            parsedResponse.choices
+                                .firstOrNull()
+                                ?.message
+                                ?.content
+                                ?: "Empty response"
+                        } catch (e: Exception) {
+                            "Error parsing response: ${e.message}"
+                        }
                     }
 
-                    callback("Error: $errorMessage")
-                    return
+                    if (!continuation.isCancelled) {
+                        continuation.resume(resultText)
+                    }
                 }
-
-                val text = try {
-                    val jsonResponse = JSONObject(responseBody)
-                    jsonResponse
-                        .getJSONArray("choices")
-                        .getJSONObject(0)
-                        .getJSONObject("message")
-                        .optString("content", "Empty response")
-                } catch (e: Exception) {
-                    "Error parsing response: ${e.message}"
-                }
-
-                callback(text)
             }
         })
     }

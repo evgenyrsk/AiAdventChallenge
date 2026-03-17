@@ -11,6 +11,7 @@ val aiApiKey = localProperties.getProperty("AI_API_KEY") ?: ""
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    kotlin("plugin.serialization") version "2.3.0"
 }
 
 android {
@@ -70,4 +71,5 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
 }
