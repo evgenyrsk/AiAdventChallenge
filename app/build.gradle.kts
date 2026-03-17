@@ -1,3 +1,13 @@
+import java.util.Properties
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+
+val aiApiKey = localProperties.getProperty("AI_API_KEY") ?: ""
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -21,8 +31,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        val apiKey = project.findProperty("OPENAI_API_KEY")
-        buildConfigField("String", "OPENAI_API_KEY", "\"$apiKey\"")
+        buildConfigField("String", "AI_API_KEY", "\"$aiApiKey\"")
     }
 
     buildTypes {

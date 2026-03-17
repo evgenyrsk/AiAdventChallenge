@@ -16,7 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.aiadventchallenge.data.OpenAIService
+import com.example.aiadventchallenge.data.AIService
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
                 var answer by remember { mutableStateOf("Loading...") }
 
                 LaunchedEffect(Unit) {
-                    OpenAIService().ask("Explain what Kotlin is in one sentence") { result ->
+                    AIService().ask("Explain what Kotlin is in one sentence") { result ->
                         runOnUiThread {
                             answer = result
                         }
