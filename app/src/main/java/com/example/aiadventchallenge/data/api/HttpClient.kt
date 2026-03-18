@@ -1,7 +1,6 @@
 package com.example.aiadventchallenge.data.api
 
 import android.util.Log
-
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
@@ -11,12 +10,18 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
-class HttpClient(
-    private val client: OkHttpClient = OkHttpClient(),
+class HttpClient private constructor(
     private val config: ApiConfig
 ) {
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
+
     suspend fun post(requestJson: String): Result<String> = suspendCancellableCoroutine { continuation ->
         val body = requestJson.toRequestBody("application/json".toMediaType())
 
@@ -59,9 +64,18 @@ class HttpClient(
         })
     }
 
-    class HttpException(val code: Int, val body: String) : Exception("HTTP $code")
+    class HttpException(val code: Int, val body: String) : Exception("HTTP $code: $body")
 
     companion object {
+        @Volatile
+        private var instance: HttpClient? = null
+
+        fun getInstance(config: ApiConfig): HttpClient {
+            return instance ?: synchronized(this) {
+                instance ?: HttpClient(config).also { instance = it }
+            }
+        }
+
         private const val TAG = "HttpClient"
     }
 }

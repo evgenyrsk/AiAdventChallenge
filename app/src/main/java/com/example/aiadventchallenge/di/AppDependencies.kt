@@ -6,12 +6,13 @@ import com.example.aiadventchallenge.data.parser.ResponseParser
 import com.example.aiadventchallenge.data.repository.AiRepositoryImpl
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
+import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
 
 object AppDependencies {
     private val apiConfig: ApiConfig = ApiConfig()
 
     private val httpClient: HttpClient by lazy {
-        HttpClient(config = apiConfig)
+        HttpClient.getInstance(config = apiConfig)
     }
 
     private val responseParser: ResponseParser by lazy {
@@ -28,5 +29,9 @@ object AppDependencies {
 
     val askAiUseCase: AskAiUseCase by lazy {
         AskAiUseCase(repository = repository)
+    }
+
+    val askWithPromptModeUseCase: AskWithPromptModeUseCase by lazy {
+        AskWithPromptModeUseCase(repository = repository)
     }
 }

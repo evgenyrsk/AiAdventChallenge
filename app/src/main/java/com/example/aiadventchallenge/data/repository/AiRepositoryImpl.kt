@@ -11,6 +11,7 @@ import com.example.aiadventchallenge.data.model.ReasoningConfig
 import com.example.aiadventchallenge.data.parser.ResponseParser
 import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.ChatResult
+import com.example.aiadventchallenge.domain.model.PromptMode
 import com.example.aiadventchallenge.domain.model.UserProfile
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import kotlinx.serialization.encodeToString
@@ -32,7 +33,7 @@ class AiRepositoryImpl(
             messages = messages,
             maxTokens = 60,
             stop = listOf("END"),
-            reasoning = ReasoningConfig(effort = "none", exclude = true)
+            //reasoning = ReasoningConfig(effort = "none", exclude = true)
         )
 
         return executeRequest(request)
@@ -52,6 +53,25 @@ class AiRepositoryImpl(
         return executeRequest(request)
     }
 
+    override suspend fun askWithPromptMode(
+        userInput: String,
+        profile: UserProfile?,
+        mode: PromptMode
+    ): ChatResult<Answer> {
+        if (userInput.isBlank()) {
+            return ChatResult.Error("Запрос не может быть пустым")
+        }
+
+        val messages = buildPromptModeMessages(userInput, profile, mode)
+        val request = ChatRequest(
+            model = config.model,
+            messages = messages,
+            //reasoning = ReasoningConfig(effort = "none", exclude = true),
+        )
+
+        return executeRequest(request)
+    }
+
     private fun buildLimitedMessages(userInput: String, profile: UserProfile?): List<Message> {
         val systemMessage = Message(MessageRole.SYSTEM, Prompts.LIMITED_SYSTEM_PROMPT)
         val profileSection = buildProfileSection(profile)
@@ -65,6 +85,22 @@ class AiRepositoryImpl(
 
     private fun buildUnlimitedMessages(userInput: String, profile: UserProfile?): List<Message> {
         val systemMessage = Message(MessageRole.SYSTEM, Prompts.UNLIMITED_SYSTEM_PROMPT)
+        val profileSection = buildProfileSection(profile)
+        val userContent = if (profileSection.isNotEmpty()) {
+            "$profileSection\n\n$userInput"
+        } else {
+            userInput
+        }
+        return listOf(systemMessage, Message(MessageRole.USER, userContent))
+    }
+
+    private fun buildPromptModeMessages(
+        userInput: String,
+        profile: UserProfile?,
+        mode: PromptMode
+    ): List<Message> {
+        val systemPrompt = Prompts.getPromptModeSystemPrompt(mode)
+        val systemMessage = Message(MessageRole.SYSTEM, systemPrompt)
         val profileSection = buildProfileSection(profile)
         val userContent = if (profileSection.isNotEmpty()) {
             "$profileSection\n\n$userInput"

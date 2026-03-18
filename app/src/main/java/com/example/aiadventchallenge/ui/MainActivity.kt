@@ -7,7 +7,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Compare
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,12 +27,19 @@ import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.UserProfile
 import com.example.aiadventchallenge.domain.usecase.AskMode
+import com.example.aiadventchallenge.ui.promptcomparison.PromptComparisonScreen
+import com.example.aiadventchallenge.ui.promptcomparison.PromptComparisonViewModel
+import com.example.aiadventchallenge.ui.promptcomparison.PromptComparisonViewModelFactory
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: MainViewModel by viewModels {
+    private val chatViewModel: MainViewModel by viewModels {
         MainViewModelFactory(AppDependencies.askAiUseCase)
+    }
+
+    private val promptComparisonViewModel: PromptComparisonViewModel by viewModels {
+        PromptComparisonViewModelFactory(AppDependencies.askWithPromptModeUseCase)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,11 +47,37 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AiAdventChallengeTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ChatScreen(
-                        viewModel = viewModel,
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                var selectedTab by remember { mutableStateOf(0) }
+                
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    bottomBar = {
+                        NavigationBar {
+                            NavigationBarItem(
+                                selected = selectedTab == 0,
+                                onClick = { selectedTab = 0 },
+                                icon = { Icon(Icons.Default.Chat, contentDescription = "Чат") },
+                                label = { Text("Чат") }
+                            )
+                            NavigationBarItem(
+                                selected = selectedTab == 1,
+                                onClick = { selectedTab = 1 },
+                                icon = { Icon(Icons.Default.Compare, contentDescription = "Сравнение") },
+                                label = { Text("Сравнение") }
+                            )
+                        }
+                    }
+                ) { innerPadding ->
+                    when (selectedTab) {
+                        0 -> ChatScreen(
+                            viewModel = chatViewModel,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                        1 -> PromptComparisonScreen(
+                            viewModel = promptComparisonViewModel,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
                 }
             }
         }
