@@ -1,4 +1,4 @@
-package com.example.aiadventchallenge.ui.promptcomparison
+package com.example.aiadventchallenge.ui.screens.promptcomparison
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider

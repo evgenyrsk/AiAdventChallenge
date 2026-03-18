@@ -1,4 +1,4 @@
-package com.example.aiadventchallenge.ui
+package com.example.aiadventchallenge.ui.screens.chat
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -19,6 +19,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -30,11 +34,36 @@ import com.example.aiadventchallenge.ui.components.LoadingIndicator
 import com.example.aiadventchallenge.ui.components.MessageInput
 import com.example.aiadventchallenge.ui.components.ModeSelector
 import com.example.aiadventchallenge.ui.components.UserProfileInput
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.aiadventchallenge.ui.screens.chat.AiAssistantViewModel
 
 @Composable
-fun ChatScreenContent(
+fun AiAssistantScreen(
+    viewModel: AiAssistantViewModel,
+    modifier: Modifier = Modifier
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
+    val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
+    var userInput by remember { mutableStateOf("") }
+
+    AiAssistantScreenContent(
+        userInput = userInput,
+        uiState = uiState,
+        currentMode = currentMode,
+        userProfile = userProfile,
+        onUserInputChange = { userInput = it },
+        onSendClick = { viewModel.sendMessage(userInput) },
+        onModeChange = { viewModel.setMode(it) },
+        onProfileChange = { viewModel.updateProfile(it) },
+        modifier = modifier
+    )
+}
+
+@Composable
+fun AiAssistantScreenContent(
     userInput: String,
-    uiState: MainViewModel.UiState,
+    uiState: AiAssistantViewModel.UiState,
     currentMode: AskMode,
     userProfile: UserProfile,
     onUserInputChange: (String) -> Unit,
@@ -57,7 +86,7 @@ fun ChatScreenContent(
             ModeSelector(
                 currentMode = currentMode,
                 onModeSelected = onModeChange,
-                enabled = uiState !is MainViewModel.UiState.Loading,
+                enabled = uiState !is AiAssistantViewModel.UiState.Loading,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -66,7 +95,7 @@ fun ChatScreenContent(
             UserProfileInput(
                 profile = userProfile,
                 onProfileChange = onProfileChange,
-                enabled = uiState !is MainViewModel.UiState.Loading,
+                enabled = uiState !is AiAssistantViewModel.UiState.Loading,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -74,7 +103,7 @@ fun ChatScreenContent(
 
             MessageInput(
                 value = userInput,
-                enabled = uiState !is MainViewModel.UiState.Loading,
+                enabled = uiState !is AiAssistantViewModel.UiState.Loading,
                 onValueChange = onUserInputChange,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -83,7 +112,7 @@ fun ChatScreenContent(
 
             Button(
                 onClick = onSendClick,
-                enabled = userInput.isNotBlank() && uiState !is MainViewModel.UiState.Loading,
+                enabled = userInput.isNotBlank() && uiState !is AiAssistantViewModel.UiState.Loading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -112,17 +141,17 @@ fun ChatScreenContent(
             Spacer(modifier = Modifier.height(16.dp))
 
             when (uiState) {
-                MainViewModel.UiState.Idle -> {
+                AiAssistantViewModel.UiState.Idle -> {
                     Text(
                         text = "Задайте вопрос о фитнесе, питании или здоровом образе жизни",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                MainViewModel.UiState.Loading -> {
+                AiAssistantViewModel.UiState.Loading -> {
                     LoadingIndicator()
                 }
-                is MainViewModel.UiState.Success -> {
+                is AiAssistantViewModel.UiState.Success -> {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = getModeLabel(uiState.mode),
@@ -132,7 +161,7 @@ fun ChatScreenContent(
                         AnswerDisplay(answer = uiState.answer.content)
                     }
                 }
-                is MainViewModel.UiState.Error -> {
+                is AiAssistantViewModel.UiState.Error -> {
                     Text(
                         text = uiState.message,
                         style = MaterialTheme.typography.bodyLarge,

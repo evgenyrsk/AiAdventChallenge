@@ -1,6 +1,6 @@
 package com.example.aiadventchallenge.data.parser
 
-import com.example.aiadventchallenge.data.JsonConfig
+import com.example.aiadventchallenge.data.config.JsonConfig
 import com.example.aiadventchallenge.data.model.ChatResponse
 import com.example.aiadventchallenge.data.model.ErrorResponse
 

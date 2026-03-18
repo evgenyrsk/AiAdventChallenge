@@ -1,8 +1,8 @@
 package com.example.aiadventchallenge.data.repository
 
 import com.example.aiadventchallenge.data.api.HttpClient
-import com.example.aiadventchallenge.data.JsonConfig
-import com.example.aiadventchallenge.data.Prompts
+import com.example.aiadventchallenge.data.config.JsonConfig
+import com.example.aiadventchallenge.data.config.Prompts
 import com.example.aiadventchallenge.data.api.ApiConfig
 import com.example.aiadventchallenge.data.model.ChatRequest
 import com.example.aiadventchallenge.data.model.Message

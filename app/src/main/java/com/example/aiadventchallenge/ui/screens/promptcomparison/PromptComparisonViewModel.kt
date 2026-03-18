@@ -1,58 +1,48 @@
-package com.example.aiadventchallenge.ui
+package com.example.aiadventchallenge.ui.screens.promptcomparison
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.ChatResult
-import com.example.aiadventchallenge.domain.model.UserProfile
-import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
-import com.example.aiadventchallenge.domain.usecase.AskMode
+import com.example.aiadventchallenge.domain.model.PromptMode
+import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class MainViewModel(
-    private val askAiUseCase: AskAiUseCase
+class PromptComparisonViewModel(
+    private val askWithPromptModeUseCase: AskWithPromptModeUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    private val _currentMode = MutableStateFlow(AskMode.WITHOUT_LIMITS)
-    val currentMode: StateFlow<AskMode> = _currentMode.asStateFlow()
-
-    private val _userProfile = MutableStateFlow(UserProfile())
-    val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
+    private val _currentMode = MutableStateFlow(PromptMode.DIRECT)
+    val currentMode: StateFlow<PromptMode> = _currentMode.asStateFlow()
 
     sealed interface UiState {
         data object Idle : UiState
         data object Loading : UiState
-        data class Success(val answer: Answer, val mode: AskMode) : UiState
+        data class Success(val answer: String, val mode: PromptMode) : UiState
         data class Error(val message: String) : UiState
     }
 
-    fun setMode(mode: AskMode) {
+    fun setMode(mode: PromptMode) {
         _currentMode.value = mode
-    }
-
-    fun updateProfile(profile: UserProfile) {
-        _userProfile.value = profile
     }
 
     fun sendMessage(userInput: String) {
         if (userInput.isBlank()) return
-        if (_uiState.value == UiState.Loading) return
+        if (_uiState.value is UiState.Loading) return
 
         val mode = _currentMode.value
-        val profile = _userProfile.value
 
         viewModelScope.launch {
             _uiState.value = UiState.Loading
 
-            when (val result = askAiUseCase(userInput, mode, profile)) {
+            when (val result = askWithPromptModeUseCase(userInput, null, mode)) {
                 is ChatResult.Success -> {
-                    _uiState.value = UiState.Success(result.data, mode)
+                    _uiState.value = UiState.Success(result.data.content, mode)
                 }
                 is ChatResult.Error -> {
                     _uiState.value = UiState.Error(result.message)

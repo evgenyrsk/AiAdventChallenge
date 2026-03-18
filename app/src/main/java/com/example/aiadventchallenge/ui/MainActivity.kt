@@ -27,15 +27,19 @@ import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.UserProfile
 import com.example.aiadventchallenge.domain.usecase.AskMode
-import com.example.aiadventchallenge.ui.promptcomparison.PromptComparisonScreen
-import com.example.aiadventchallenge.ui.promptcomparison.PromptComparisonViewModel
-import com.example.aiadventchallenge.ui.promptcomparison.PromptComparisonViewModelFactory
+import com.example.aiadventchallenge.ui.screens.chat.AiAssistantScreen
+import com.example.aiadventchallenge.ui.screens.chat.AiAssistantScreenContent
+import com.example.aiadventchallenge.ui.screens.chat.AiAssistantViewModel
+import com.example.aiadventchallenge.ui.screens.chat.AiAssistantViewModelFactory
+import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonScreen
+import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModel
+import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModelFactory
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val chatViewModel: MainViewModel by viewModels {
-        MainViewModelFactory(AppDependencies.askAiUseCase)
+    private val chatViewModel: AiAssistantViewModel by viewModels {
+        AiAssistantViewModelFactory(AppDependencies.askAiUseCase)
     }
 
     private val promptComparisonViewModel: PromptComparisonViewModel by viewModels {
@@ -69,7 +73,7 @@ class MainActivity : ComponentActivity() {
                     }
                 ) { innerPadding ->
                     when (selectedTab) {
-                        0 -> ChatScreen(
+                        0 -> AiAssistantScreen(
                             viewModel = chatViewModel,
                             modifier = Modifier.padding(innerPadding)
                         )
@@ -84,36 +88,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable
-fun ChatScreen(
-    viewModel: MainViewModel,
-    modifier: Modifier = Modifier
-) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
-    val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
-    var userInput by remember { mutableStateOf("") }
-
-    ChatScreenContent(
-        userInput = userInput,
-        uiState = uiState,
-        currentMode = currentMode,
-        userProfile = userProfile,
-        onUserInputChange = { userInput = it },
-        onSendClick = { viewModel.sendMessage(userInput) },
-        onModeChange = { viewModel.setMode(it) },
-        onProfileChange = { viewModel.updateProfile(it) },
-        modifier = modifier
-    )
-}
-
 @Preview(showBackground = true)
 @Composable
 fun ChatScreenPreview() {
     AiAdventChallengeTheme {
-        ChatScreenContent(
+        AiAssistantScreenContent(
             userInput = "Как правильно питаться?",
-            uiState = MainViewModel.UiState.Success(
+            uiState = AiAssistantViewModel.UiState.Success(
                 Answer("Для здорового питания важно включать в рацион овощи, белки и сложные углеводы."),
                 AskMode.WITH_LIMITS
             ),

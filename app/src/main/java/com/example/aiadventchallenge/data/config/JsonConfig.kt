@@ -1,4 +1,4 @@
-package com.example.aiadventchallenge.data
+package com.example.aiadventchallenge.data.config
 
 import kotlinx.serialization.json.Json
 

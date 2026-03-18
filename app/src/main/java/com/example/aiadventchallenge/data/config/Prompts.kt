@@ -1,4 +1,4 @@
-package com.example.aiadventchallenge.data
+package com.example.aiadventchallenge.data.config
 
 import com.example.aiadventchallenge.domain.model.PromptMode
 
