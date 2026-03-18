@@ -1,4 +1,4 @@
-package com.example.aiadventchallenge.data
+package com.example.aiadventchallenge.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
