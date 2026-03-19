@@ -1,4 +1,4 @@
-package com.example.aiadventchallenge.data
+package com.example.aiadventchallenge.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -26,10 +26,4 @@ data class ReasoningConfig(
 @Serializable
 data class ResponseFormat(
     val type: String,
-)
-
-@Serializable
-data class Message(
-    val role: String,
-    val content: String,
 )

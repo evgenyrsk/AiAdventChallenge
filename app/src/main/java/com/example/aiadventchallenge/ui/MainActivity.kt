@@ -7,58 +7,90 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Compare
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.aiadventchallenge.data.AIService
+import com.example.aiadventchallenge.di.AppDependencies
+import com.example.aiadventchallenge.ui.screens.consultation.ConsultationScreen
+import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewModel
+import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewModelFactory
+import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonScreen
+import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModel
+import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModelFactory
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: MainViewModel by viewModels()
+    private val chatViewModel: ConsultationViewModel by viewModels {
+        ConsultationViewModelFactory(AppDependencies.askAiUseCase)
+    }
+
+    private val promptComparisonViewModel: PromptComparisonViewModel by viewModels {
+        PromptComparisonViewModelFactory(
+            AppDependencies.askWithPromptModeUseCase,
+            AppDependencies.compareResultsUseCase,
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             AiAdventChallengeTheme {
-                val answer by viewModel.answer.collectAsStateWithLifecycle()
+                var selectedTab by remember { mutableStateOf(0) }
 
-                LaunchedEffect(Unit) {
-                    viewModel.loadAnswer()
-                }
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    bottomBar = {
+                        NavigationBar {
+                            NavigationBarItem(
+                                selected = selectedTab == 0,
+                                onClick = { selectedTab = 0 },
+                                icon = {
+                                    Icon(
+                                        Icons.Default.Chat,
+                                        contentDescription = "Консультация"
+                                    )
+                                },
+                                label = { Text("Консультация") }
+                            )
+                            NavigationBarItem(
+                                selected = selectedTab == 1,
+                                onClick = { selectedTab = 1 },
+                                icon = {
+                                    Icon(
+                                        Icons.Default.Compare,
+                                        contentDescription = "Сравнение"
+                                    )
+                                },
+                                label = { Text("Сравнение") }
+                            )
+                        }
+                    }
+                ) { innerPadding ->
+                    when (selectedTab) {
+                        0 -> ConsultationScreen(
+                            viewModel = chatViewModel,
+                            modifier = Modifier.padding(innerPadding)
+                        )
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        answer = answer,
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                        1 -> PromptComparisonScreen(
+                            viewModel = promptComparisonViewModel,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(answer: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "The answer is: $answer!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    AiAdventChallengeTheme {
-        Greeting("Android")
     }
 }
