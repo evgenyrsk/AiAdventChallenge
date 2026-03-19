@@ -41,6 +41,9 @@ fun TemperatureScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
     val loadingModes by viewModel.loadingModes.collectAsStateWithLifecycle()
+    val isComparing by viewModel.isComparing.collectAsStateWithLifecycle()
+    val hasAllAnswers by viewModel.hasAllAnswers.collectAsStateWithLifecycle()
+    val showingComparison by viewModel.showingComparison.collectAsStateWithLifecycle()
     var userInput by remember { mutableStateOf("") }
 
     TemperatureScreenContent(
@@ -48,8 +51,12 @@ fun TemperatureScreen(
         uiState = uiState,
         currentMode = currentMode,
         loadingModes = loadingModes,
+        isComparing = isComparing,
+        hasAllAnswers = hasAllAnswers,
+        showingComparison = showingComparison,
         onUserInputChange = { userInput = it },
         onSendClick = { viewModel.sendMessage(userInput) },
+        onCompareClick = { viewModel.compareAnswers(userInput) },
         onModeChange = { viewModel.setMode(it) },
         modifier = modifier
     )
@@ -61,8 +68,12 @@ fun TemperatureScreenContent(
     uiState: TemperatureViewModel.UiState,
     currentMode: TemperatureMode,
     loadingModes: Map<TemperatureMode, Boolean>,
+    isComparing: Boolean,
+    hasAllAnswers: Boolean,
+    showingComparison: Boolean,
     onUserInputChange: (String) -> Unit,
     onSendClick: () -> Unit,
+    onCompareClick: () -> Unit,
     onModeChange: (TemperatureMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -79,7 +90,7 @@ fun TemperatureScreenContent(
         ) {
             MessageInput(
                 value = userInput,
-                enabled = uiState !is TemperatureViewModel.UiState.Loading,
+                enabled = uiState !is TemperatureViewModel.UiState.Loading && !isComparing,
                 onValueChange = onUserInputChange,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -88,7 +99,7 @@ fun TemperatureScreenContent(
 
             Button(
                 onClick = onSendClick,
-                enabled = userInput.isNotBlank() && uiState !is TemperatureViewModel.UiState.Loading,
+                enabled = userInput.isNotBlank() && uiState !is TemperatureViewModel.UiState.Loading && !isComparing,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -116,11 +127,37 @@ fun TemperatureScreenContent(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            if (hasAllAnswers) {
+                Button(
+                    onClick = onCompareClick,
+                    enabled = uiState !is TemperatureViewModel.UiState.Loading && !isComparing,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = MaterialTheme.shapes.large,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 4.dp,
+                        pressedElevation = 8.dp
+                    )
+                ) {
+                    Text(
+                        text = "Сравнить ответы",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             PrimaryTabRow(selectedTabIndex = TemperatureMode.entries.indexOf(currentMode)) {
                 TemperatureMode.entries.forEach { mode ->
                     Tab(
                         selected = currentMode == mode,
-                        onClick = { onModeChange(mode) },
+                        onClick = { if (!isComparing) onModeChange(mode) },
                         text = { Text(mode.label) }
                     )
                 }
@@ -165,6 +202,27 @@ fun TemperatureScreenContent(
                         }
                     } else {
                         LoadingIndicator()
+                    }
+                }
+                TemperatureViewModel.UiState.ComparisonLoading -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Сравнение ответов...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LoadingIndicator()
+                    }
+                }
+                is TemperatureViewModel.UiState.ComparisonResult -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Результат сравнения",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        AnswerDisplay(answer = uiState.answer)
                     }
                 }
                 is TemperatureViewModel.UiState.Success -> {

@@ -47,7 +47,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private val temperatureViewModel: TemperatureViewModel by viewModels {
-        TemperatureViewModelFactory(AppDependencies.temperatureUseCase)
+        TemperatureViewModelFactory(
+            AppDependencies.temperatureUseCase,
+            AppDependencies.compareTemperatureResultsUseCase
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
