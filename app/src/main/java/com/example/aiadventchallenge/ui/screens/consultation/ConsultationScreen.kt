@@ -1,4 +1,4 @@
-package com.example.aiadventchallenge.ui.screens.chat
+package com.example.aiadventchallenge.ui.screens.consultation
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -35,11 +35,11 @@ import com.example.aiadventchallenge.ui.components.MessageInput
 import com.example.aiadventchallenge.ui.components.ModeSelector
 import com.example.aiadventchallenge.ui.components.UserProfileInput
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.aiadventchallenge.ui.screens.chat.AiAssistantViewModel
+import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewModel
 
 @Composable
-fun AiAssistantScreen(
-    viewModel: AiAssistantViewModel,
+fun ConsultationScreen(
+    viewModel: ConsultationViewModel,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -47,7 +47,7 @@ fun AiAssistantScreen(
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     var userInput by remember { mutableStateOf("") }
 
-    AiAssistantScreenContent(
+    ConsultationScreenContent(
         userInput = userInput,
         uiState = uiState,
         currentMode = currentMode,
@@ -61,9 +61,9 @@ fun AiAssistantScreen(
 }
 
 @Composable
-fun AiAssistantScreenContent(
+fun ConsultationScreenContent(
     userInput: String,
-    uiState: AiAssistantViewModel.UiState,
+    uiState: ConsultationViewModel.UiState,
     currentMode: AskMode,
     userProfile: UserProfile,
     onUserInputChange: (String) -> Unit,
@@ -86,7 +86,7 @@ fun AiAssistantScreenContent(
             ModeSelector(
                 currentMode = currentMode,
                 onModeSelected = onModeChange,
-                enabled = uiState !is AiAssistantViewModel.UiState.Loading,
+                enabled = uiState !is ConsultationViewModel.UiState.Loading,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -95,7 +95,7 @@ fun AiAssistantScreenContent(
             UserProfileInput(
                 profile = userProfile,
                 onProfileChange = onProfileChange,
-                enabled = uiState !is AiAssistantViewModel.UiState.Loading,
+                enabled = uiState !is ConsultationViewModel.UiState.Loading,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -103,7 +103,7 @@ fun AiAssistantScreenContent(
 
             MessageInput(
                 value = userInput,
-                enabled = uiState !is AiAssistantViewModel.UiState.Loading,
+                enabled = uiState !is ConsultationViewModel.UiState.Loading,
                 onValueChange = onUserInputChange,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -112,7 +112,7 @@ fun AiAssistantScreenContent(
 
             Button(
                 onClick = onSendClick,
-                enabled = userInput.isNotBlank() && uiState !is AiAssistantViewModel.UiState.Loading,
+                enabled = userInput.isNotBlank() && uiState !is ConsultationViewModel.UiState.Loading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -141,17 +141,17 @@ fun AiAssistantScreenContent(
             Spacer(modifier = Modifier.height(16.dp))
 
             when (uiState) {
-                AiAssistantViewModel.UiState.Idle -> {
+                ConsultationViewModel.UiState.Idle -> {
                     Text(
                         text = "Задайте вопрос о фитнесе, питании или здоровом образе жизни",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                AiAssistantViewModel.UiState.Loading -> {
+                ConsultationViewModel.UiState.Loading -> {
                     LoadingIndicator()
                 }
-                is AiAssistantViewModel.UiState.Success -> {
+                is ConsultationViewModel.UiState.Success -> {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = getModeLabel(uiState.mode),
@@ -161,7 +161,7 @@ fun AiAssistantScreenContent(
                         AnswerDisplay(answer = uiState.answer.content)
                     }
                 }
-                is AiAssistantViewModel.UiState.Error -> {
+                is ConsultationViewModel.UiState.Error -> {
                     Text(
                         text = uiState.message,
                         style = MaterialTheme.typography.bodyLarge,

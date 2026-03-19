@@ -27,10 +27,9 @@ import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.UserProfile
 import com.example.aiadventchallenge.domain.usecase.AskMode
-import com.example.aiadventchallenge.ui.screens.chat.AiAssistantScreen
-import com.example.aiadventchallenge.ui.screens.chat.AiAssistantScreenContent
-import com.example.aiadventchallenge.ui.screens.chat.AiAssistantViewModel
-import com.example.aiadventchallenge.ui.screens.chat.AiAssistantViewModelFactory
+import com.example.aiadventchallenge.ui.screens.consultation.ConsultationScreen
+import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewModel
+import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewModelFactory
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonScreen
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModel
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModelFactory
@@ -38,8 +37,8 @@ import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val chatViewModel: AiAssistantViewModel by viewModels {
-        AiAssistantViewModelFactory(AppDependencies.askAiUseCase)
+    private val chatViewModel: ConsultationViewModel by viewModels {
+        ConsultationViewModelFactory(AppDependencies.askAiUseCase)
     }
 
     private val promptComparisonViewModel: PromptComparisonViewModel by viewModels {
@@ -60,8 +59,8 @@ class MainActivity : ComponentActivity() {
                             NavigationBarItem(
                                 selected = selectedTab == 0,
                                 onClick = { selectedTab = 0 },
-                                icon = { Icon(Icons.Default.Chat, contentDescription = "Чат") },
-                                label = { Text("Чат") }
+                                icon = { Icon(Icons.Default.Chat, contentDescription = "Консультация") },
+                                label = { Text("Консультация") }
                             )
                             NavigationBarItem(
                                 selected = selectedTab == 1,
@@ -73,7 +72,7 @@ class MainActivity : ComponentActivity() {
                     }
                 ) { innerPadding ->
                     when (selectedTab) {
-                        0 -> AiAssistantScreen(
+                        0 -> ConsultationScreen(
                             viewModel = chatViewModel,
                             modifier = Modifier.padding(innerPadding)
                         )
@@ -85,25 +84,5 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun ChatScreenPreview() {
-    AiAdventChallengeTheme {
-        AiAssistantScreenContent(
-            userInput = "Как правильно питаться?",
-            uiState = AiAssistantViewModel.UiState.Success(
-                Answer("Для здорового питания важно включать в рацион овощи, белки и сложные углеводы."),
-                AskMode.WITH_LIMITS
-            ),
-            currentMode = AskMode.WITH_LIMITS,
-            userProfile = UserProfile(age = 30, weight = 75.0, height = 175),
-            onUserInputChange = {},
-            onSendClick = {},
-            onModeChange = {},
-            onProfileChange = {}
-        )
     }
 }

@@ -1,4 +1,4 @@
-package com.example.aiadventchallenge.ui.screens.chat
+package com.example.aiadventchallenge.ui.screens.consultation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class AiAssistantViewModel(
+class ConsultationViewModel(
     private val askAiUseCase: AskAiUseCase
 ) : ViewModel() {
 
