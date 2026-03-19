@@ -1,5 +1,7 @@
 package com.example.aiadventchallenge.domain.usecase
 
+import com.example.aiadventchallenge.data.config.Prompts
+import com.example.aiadventchallenge.data.model.RequestConfig
 import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.PromptMode
@@ -14,7 +16,9 @@ class AskWithPromptModeUseCase(private val repository: AiRepository) {
         profile: UserProfile?,
         mode: PromptMode
     ): ChatResult<Answer> {
-        return repository.askWithPromptMode(userInput, profile, mode)
+        val systemPrompt = Prompts.getPromptModeSystemPrompt(mode)
+        val config = RequestConfig(systemPrompt = systemPrompt)
+        return repository.ask(userInput, profile, config)
     }
 
     suspend fun askAllModes(
@@ -23,7 +27,7 @@ class AskWithPromptModeUseCase(private val repository: AiRepository) {
         onProgress: (PromptMode, Boolean) -> Unit = { _, _ -> }
     ): Map<PromptMode, Answer> {
         val results = mutableMapOf<PromptMode, Answer>()
-        
+
         PromptMode.entries.forEach { mode ->
             onProgress(mode, true)
             val result = invoke(userInput, profile, mode)
@@ -33,7 +37,7 @@ class AskWithPromptModeUseCase(private val repository: AiRepository) {
             }
             onProgress(mode, false)
         }
-        
+
         return results
     }
 

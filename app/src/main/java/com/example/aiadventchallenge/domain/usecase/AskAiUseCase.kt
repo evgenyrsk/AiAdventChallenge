@@ -1,5 +1,7 @@
 package com.example.aiadventchallenge.domain.usecase
 
+import com.example.aiadventchallenge.data.config.Prompts
+import com.example.aiadventchallenge.data.model.RequestConfig
 import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.UserProfile
@@ -18,10 +20,17 @@ class AskAiUseCase(private val repository: AiRepository) {
         mode: AskMode,
         profile: UserProfile?
     ): ChatResult<Answer> {
-        return when (mode) {
-            AskMode.WITH_LIMITS -> repository.askWithLimits(userInput, profile)
-            AskMode.WITHOUT_LIMITS -> repository.askWithoutLimits(userInput, profile)
+        val config = when (mode) {
+            AskMode.WITH_LIMITS -> RequestConfig(
+                systemPrompt = Prompts.LIMITED_SYSTEM_PROMPT,
+                maxTokens = 60,
+                stop = listOf("END")
+            )
+            AskMode.WITHOUT_LIMITS -> RequestConfig(
+                systemPrompt = Prompts.UNLIMITED_SYSTEM_PROMPT
+            )
         }
+        return repository.ask(userInput, profile, config)
     }
 
     fun saveAnswer(mode: AskMode, answer: Answer) {
