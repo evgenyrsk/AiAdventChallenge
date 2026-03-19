@@ -8,6 +8,7 @@ import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
 import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
+import com.example.aiadventchallenge.domain.usecase.TemperatureUseCase
 
 object AppDependencies {
     private val apiConfig: ApiConfig = ApiConfig()
@@ -38,5 +39,9 @@ object AppDependencies {
 
     val compareResultsUseCase: CompareResultsUseCase by lazy {
         CompareResultsUseCase(repository = repository)
+    }
+
+    val temperatureUseCase: TemperatureUseCase by lazy {
+        TemperatureUseCase(repository = repository)
     }
 }

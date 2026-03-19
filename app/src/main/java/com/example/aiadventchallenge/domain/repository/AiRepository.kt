@@ -6,5 +6,5 @@ import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.UserProfile
 
 interface AiRepository {
-    suspend fun ask(userInput: String, profile: UserProfile?, config: RequestConfig): ChatResult<Answer>
+    suspend fun ask(userInput: String, profile: UserProfile? = null, config: RequestConfig): ChatResult<Answer>
 }

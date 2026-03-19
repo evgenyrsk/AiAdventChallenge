@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Compare
+import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -27,6 +28,9 @@ import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewMod
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonScreen
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModel
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModelFactory
+import com.example.aiadventchallenge.ui.screens.temperature.TemperatureScreen
+import com.example.aiadventchallenge.ui.screens.temperature.TemperatureViewModel
+import com.example.aiadventchallenge.ui.screens.temperature.TemperatureViewModelFactory
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
@@ -40,6 +44,10 @@ class MainActivity : ComponentActivity() {
             AppDependencies.askWithPromptModeUseCase,
             AppDependencies.compareResultsUseCase,
         )
+    }
+
+    private val temperatureViewModel: TemperatureViewModel by viewModels {
+        TemperatureViewModelFactory(AppDependencies.temperatureUseCase)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,6 +83,17 @@ class MainActivity : ComponentActivity() {
                                 },
                                 label = { Text("Сравнение") }
                             )
+                            NavigationBarItem(
+                                selected = selectedTab == 2,
+                                onClick = { selectedTab = 2 },
+                                icon = {
+                                    Icon(
+                                        Icons.Default.Thermostat,
+                                        contentDescription = "Temperature"
+                                    )
+                                },
+                                label = { Text("Temperature") }
+                            )
                         }
                     }
                 ) { innerPadding ->
@@ -86,6 +105,11 @@ class MainActivity : ComponentActivity() {
 
                         1 -> PromptComparisonScreen(
                             viewModel = promptComparisonViewModel,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+
+                        2 -> TemperatureScreen(
+                            viewModel = temperatureViewModel,
                             modifier = Modifier.padding(innerPadding)
                         )
                     }
