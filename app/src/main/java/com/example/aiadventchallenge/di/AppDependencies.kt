@@ -7,6 +7,7 @@ import com.example.aiadventchallenge.data.repository.AiRepositoryImpl
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
 import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
+import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
 
 object AppDependencies {
     private val apiConfig: ApiConfig = ApiConfig()
@@ -33,5 +34,9 @@ object AppDependencies {
 
     val askWithPromptModeUseCase: AskWithPromptModeUseCase by lazy {
         AskWithPromptModeUseCase(repository = repository)
+    }
+
+    val compareResultsUseCase: CompareResultsUseCase by lazy {
+        CompareResultsUseCase(repository = repository)
     }
 }

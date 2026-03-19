@@ -7,11 +7,41 @@ import com.example.aiadventchallenge.domain.model.UserProfile
 import com.example.aiadventchallenge.domain.repository.AiRepository
 
 class AskWithPromptModeUseCase(private val repository: AiRepository) {
+    private val answerCache = mutableMapOf<PromptMode, Answer>()
+
     suspend operator fun invoke(
         userInput: String,
         profile: UserProfile?,
         mode: PromptMode
     ): ChatResult<Answer> {
         return repository.askWithPromptMode(userInput, profile, mode)
+    }
+
+    suspend fun askAllModes(
+        userInput: String,
+        profile: UserProfile?,
+        onProgress: (PromptMode, Boolean) -> Unit = { _, _ -> }
+    ): Map<PromptMode, Answer> {
+        val results = mutableMapOf<PromptMode, Answer>()
+        
+        PromptMode.entries.forEach { mode ->
+            onProgress(mode, true)
+            val result = invoke(userInput, profile, mode)
+            if (result is ChatResult.Success) {
+                results[mode] = result.data
+                answerCache[mode] = result.data
+            }
+            onProgress(mode, false)
+        }
+        
+        return results
+    }
+
+    fun saveAnswer(mode: PromptMode, answer: Answer) {
+        answerCache[mode] = answer
+    }
+
+    fun getLatestAnswer(mode: PromptMode): Answer? {
+        return answerCache[mode]
     }
 }

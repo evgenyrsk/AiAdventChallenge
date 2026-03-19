@@ -34,6 +34,12 @@ class ConsultationViewModel(
 
     fun setMode(mode: AskMode) {
         _currentMode.value = mode
+        val savedAnswer = askAiUseCase.getLatestAnswer(mode)
+        if (savedAnswer != null) {
+            _uiState.value = UiState.Success(savedAnswer, mode)
+        } else {
+            _uiState.value = UiState.Idle
+        }
     }
 
     fun updateProfile(profile: UserProfile) {
@@ -52,6 +58,7 @@ class ConsultationViewModel(
 
             when (val result = askAiUseCase(userInput, mode, profile)) {
                 is ChatResult.Success -> {
+                    askAiUseCase.saveAnswer(mode, result.data)
                     _uiState.value = UiState.Success(result.data, mode)
                 }
                 is ChatResult.Error -> {

@@ -15,18 +15,12 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.aiadventchallenge.di.AppDependencies
-import com.example.aiadventchallenge.domain.model.Answer
-import com.example.aiadventchallenge.domain.model.UserProfile
-import com.example.aiadventchallenge.domain.usecase.AskMode
 import com.example.aiadventchallenge.ui.screens.consultation.ConsultationScreen
 import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewModel
 import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewModelFactory
@@ -42,7 +36,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private val promptComparisonViewModel: PromptComparisonViewModel by viewModels {
-        PromptComparisonViewModelFactory(AppDependencies.askWithPromptModeUseCase)
+        PromptComparisonViewModelFactory(
+            AppDependencies.askWithPromptModeUseCase,
+            AppDependencies.compareResultsUseCase,
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,7 +48,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             AiAdventChallengeTheme {
                 var selectedTab by remember { mutableStateOf(0) }
-                
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {
@@ -59,13 +56,23 @@ class MainActivity : ComponentActivity() {
                             NavigationBarItem(
                                 selected = selectedTab == 0,
                                 onClick = { selectedTab = 0 },
-                                icon = { Icon(Icons.Default.Chat, contentDescription = "Консультация") },
+                                icon = {
+                                    Icon(
+                                        Icons.Default.Chat,
+                                        contentDescription = "Консультация"
+                                    )
+                                },
                                 label = { Text("Консультация") }
                             )
                             NavigationBarItem(
                                 selected = selectedTab == 1,
                                 onClick = { selectedTab = 1 },
-                                icon = { Icon(Icons.Default.Compare, contentDescription = "Сравнение") },
+                                icon = {
+                                    Icon(
+                                        Icons.Default.Compare,
+                                        contentDescription = "Сравнение"
+                                    )
+                                },
                                 label = { Text("Сравнение") }
                             )
                         }
@@ -76,6 +83,7 @@ class MainActivity : ComponentActivity() {
                             viewModel = chatViewModel,
                             modifier = Modifier.padding(innerPadding)
                         )
+
                         1 -> PromptComparisonScreen(
                             viewModel = promptComparisonViewModel,
                             modifier = Modifier.padding(innerPadding)
