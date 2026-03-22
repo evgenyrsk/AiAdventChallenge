@@ -5,3 +5,12 @@ data class Answer(
     val shortAnswer: String? = null,
     val conclusion: String? = null
 )
+
+data class AnswerWithUsage(
+    val content: String,
+    val shortAnswer: String? = null,
+    val conclusion: String? = null,
+    val promptTokens: Int?,
+    val completionTokens: Int?,
+    val totalTokens: Int?
+)

@@ -1,10 +1,9 @@
 package com.example.aiadventchallenge.domain.usecase
 
 import com.example.aiadventchallenge.data.config.Prompts
-import com.example.aiadventchallenge.data.model.ReasoningConfig
-import com.example.aiadventchallenge.data.model.RequestConfig
 import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.ChatResult
+import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.domain.repository.AiRepository
 
 class TemperatureUseCase(private val repository: AiRepository) {
@@ -13,7 +12,7 @@ class TemperatureUseCase(private val repository: AiRepository) {
         val config = RequestConfig(
             systemPrompt = Prompts.UNLIMITED_SYSTEM_PROMPT,
             temperature = temperature,
-            reasoning = ReasoningConfig(exclude = true),
+            reasoningEnabled = false
         )
         return repository.ask(userInput = userInput, config = config)
     }

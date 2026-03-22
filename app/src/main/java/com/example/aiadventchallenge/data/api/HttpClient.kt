@@ -17,9 +17,10 @@ class HttpClient private constructor(
     private val config: ApiConfig
 ) {
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(50, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(50, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     suspend fun post(requestJson: String): Result<String> = suspendCancellableCoroutine { continuation ->

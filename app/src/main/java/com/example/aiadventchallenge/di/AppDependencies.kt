@@ -7,6 +7,7 @@ import com.example.aiadventchallenge.data.repository.AiRepositoryImpl
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
 import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
+import com.example.aiadventchallenge.domain.usecase.AskModelUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareTemperatureResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.TemperatureUseCase
@@ -48,5 +49,9 @@ object AppDependencies {
 
     val compareTemperatureResultsUseCase: CompareTemperatureResultsUseCase by lazy {
         CompareTemperatureResultsUseCase(repository = repository)
+    }
+
+    val askModelUseCase: AskModelUseCase by lazy {
+        AskModelUseCase(repository = repository)
     }
 }
