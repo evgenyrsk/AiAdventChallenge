@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Compare
+import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.ModelTraining
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -27,6 +29,14 @@ import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewMod
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonScreen
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModel
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModelFactory
+import com.example.aiadventchallenge.ui.screens.temperature.TemperatureScreen
+import com.example.aiadventchallenge.ui.screens.temperature.TemperatureViewModel
+import com.example.aiadventchallenge.ui.screens.temperature.TemperatureViewModelFactory
+import com.example.aiadventchallenge.ui.screens.modelversions.ModelVersionsScreen
+import com.example.aiadventchallenge.ui.screens.modelversions.ModelVersionsViewModel
+import com.example.aiadventchallenge.ui.screens.modelversions.ModelVersionsViewModelFactory
+import com.example.aiadventchallenge.data.export.ModelResultsExporter
+import java.io.File
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
@@ -39,6 +49,27 @@ class MainActivity : ComponentActivity() {
         PromptComparisonViewModelFactory(
             AppDependencies.askWithPromptModeUseCase,
             AppDependencies.compareResultsUseCase,
+        )
+    }
+
+    private val temperatureViewModel: TemperatureViewModel by viewModels {
+        TemperatureViewModelFactory(
+            AppDependencies.temperatureUseCase,
+            AppDependencies.compareTemperatureResultsUseCase
+        )
+    }
+
+    private val outputDir by lazy {
+        android.os.Environment.getExternalStoragePublicDirectory(
+            android.os.Environment.DIRECTORY_DOWNLOADS
+        )
+    }
+
+    private val modelVersionsViewModel: ModelVersionsViewModel by viewModels {
+        ModelVersionsViewModelFactory(
+            AppDependencies.askModelUseCase,
+            ModelResultsExporter(outputDir),
+            AppDependencies.repository
         )
     }
 
@@ -75,6 +106,28 @@ class MainActivity : ComponentActivity() {
                                 },
                                 label = { Text("Сравнение") }
                             )
+                            NavigationBarItem(
+                                selected = selectedTab == 2,
+                                onClick = { selectedTab = 2 },
+                                icon = {
+                                    Icon(
+                                        Icons.Default.Thermostat,
+                                        contentDescription = "Temperature"
+                                    )
+                                },
+                                label = { Text("Temperature") }
+                            )
+                            NavigationBarItem(
+                                selected = selectedTab == 3,
+                                onClick = { selectedTab = 3 },
+                                icon = {
+                                    Icon(
+                                        Icons.Default.ModelTraining,
+                                        contentDescription = "Модели"
+                                    )
+                                },
+                                label = { Text("Модели") }
+                            )
                         }
                     }
                 ) { innerPadding ->
@@ -86,6 +139,16 @@ class MainActivity : ComponentActivity() {
 
                         1 -> PromptComparisonScreen(
                             viewModel = promptComparisonViewModel,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+
+                        2 -> TemperatureScreen(
+                            viewModel = temperatureViewModel,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+
+                        3 -> ModelVersionsScreen(
+                            viewModel = modelVersionsViewModel,
                             modifier = Modifier.padding(innerPadding)
                         )
                     }

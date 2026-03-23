@@ -7,7 +7,10 @@ import com.example.aiadventchallenge.data.repository.AiRepositoryImpl
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
 import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
+import com.example.aiadventchallenge.domain.usecase.AskModelUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
+import com.example.aiadventchallenge.domain.usecase.CompareTemperatureResultsUseCase
+import com.example.aiadventchallenge.domain.usecase.TemperatureUseCase
 
 object AppDependencies {
     private val apiConfig: ApiConfig = ApiConfig()
@@ -20,7 +23,7 @@ object AppDependencies {
         ResponseParser()
     }
 
-    private val repository: AiRepository by lazy {
+    val repository: AiRepository by lazy {
         AiRepositoryImpl(
             httpClient = httpClient,
             config = apiConfig,
@@ -38,5 +41,17 @@ object AppDependencies {
 
     val compareResultsUseCase: CompareResultsUseCase by lazy {
         CompareResultsUseCase(repository = repository)
+    }
+
+    val temperatureUseCase: TemperatureUseCase by lazy {
+        TemperatureUseCase(repository = repository)
+    }
+
+    val compareTemperatureResultsUseCase: CompareTemperatureResultsUseCase by lazy {
+        CompareTemperatureResultsUseCase(repository = repository)
+    }
+
+    val askModelUseCase: AskModelUseCase by lazy {
+        AskModelUseCase(repository = repository)
     }
 }
