@@ -68,7 +68,8 @@ class MainActivity : ComponentActivity() {
     private val modelVersionsViewModel: ModelVersionsViewModel by viewModels {
         ModelVersionsViewModelFactory(
             AppDependencies.askModelUseCase,
-            ModelResultsExporter(outputDir)
+            ModelResultsExporter(outputDir),
+            AppDependencies.repository
         )
     }
 

@@ -23,7 +23,7 @@ object AppDependencies {
         ResponseParser()
     }
 
-    private val repository: AiRepository by lazy {
+    val repository: AiRepository by lazy {
         AiRepositoryImpl(
             httpClient = httpClient,
             config = apiConfig,

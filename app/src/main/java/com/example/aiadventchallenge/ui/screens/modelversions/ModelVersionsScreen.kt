@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
@@ -46,6 +47,13 @@ import com.example.aiadventchallenge.domain.model.ModelStrength
 import com.example.aiadventchallenge.ui.components.LoadingIndicator
 import com.example.aiadventchallenge.ui.components.MessageInput
 
+private const val USD_TO_RUB_RATE = 93.0
+
+private fun formatCostUsdToRub(costUsd: Double): String {
+    val costRub = costUsd * USD_TO_RUB_RATE
+    return "${String.format("%.6f", costRub)} ₽"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelVersionsScreen(
@@ -55,11 +63,13 @@ fun ModelVersionsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val loadingModels by viewModel.loadingModels.collectAsStateWithLifecycle()
     val showConclusions by viewModel.showConclusions.collectAsStateWithLifecycle()
+    val llmAnalysisState by viewModel.llmAnalysisState.collectAsStateWithLifecycle()
+    val showLlmAnalysis by viewModel.showLlmAnalysis.collectAsStateWithLifecycle()
     var userInput by remember { mutableStateOf("") }
-    val bottomSheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
 
     val hasResults = uiState is ModelVersionsViewModel.UiState.Success
+    val isLlmAnalysisLoading = llmAnalysisState is ModelVersionsViewModel.LlmAnalysisState.Loading
 
     ModelVersionsScreenContent(
         userInput = userInput,
@@ -67,10 +77,14 @@ fun ModelVersionsScreen(
         loadingModels = loadingModels,
         showConclusions = showConclusions,
         hasResults = hasResults,
+        isLlmAnalysisLoading = isLlmAnalysisLoading,
         onUserInputChange = { userInput = it },
         onSendClick = { viewModel.sendPrompt(userInput) },
         onConclusionsClick = {
             viewModel.toggleConclusions()
+        },
+        onLlmAnalysisClick = {
+            viewModel.compareWithLLM()
         },
         modifier = modifier
     )
@@ -79,6 +93,13 @@ fun ModelVersionsScreen(
         ConclusionsBottomSheet(
             conclusions = viewModel.getConclusions(),
             onDismiss = { viewModel.toggleConclusions() }
+        )
+    }
+
+    if (showLlmAnalysis) {
+        LlmAnalysisBottomSheet(
+            state = llmAnalysisState,
+            onDismiss = { viewModel.toggleLlmAnalysis() }
         )
     }
 }
@@ -90,9 +111,11 @@ fun ModelVersionsScreenContent(
     loadingModels: Set<ModelStrength>,
     showConclusions: Boolean,
     hasResults: Boolean,
+    isLlmAnalysisLoading: Boolean,
     onUserInputChange: (String) -> Unit,
     onSendClick: () -> Unit,
     onConclusionsClick: () -> Unit,
+    onLlmAnalysisClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -191,6 +214,42 @@ fun ModelVersionsScreenContent(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onLlmAnalysisClick,
+                    enabled = !isLlmAnalysisLoading && uiState !is ModelVersionsViewModel.UiState.Loading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = MaterialTheme.shapes.large,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 4.dp,
+                        pressedElevation = 8.dp
+                    )
+                ) {
+                    if (isLlmAnalysisLoading) {
+                        LoadingIndicator(
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isLlmAnalysisLoading) "Анализируем..." else "Сравнить с помощью LLM",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             when (uiState) {
@@ -264,11 +323,6 @@ fun ModelVersionsScreenContent(
     }
 }
 
-private fun formatCostRub(costUsd: Double): String {
-    val costRub = costUsd
-    return "${String.format("%.6f", costRub)} ₽"
-}
-
 @Composable
 fun ModelResultCard(
     result: com.example.aiadventchallenge.domain.model.ModelComparisonResult
@@ -317,7 +371,7 @@ fun ModelResultCard(
             } else {
                 MetricRow("Время:", "${result.latencyMs} мс")
                 MetricRow("Токены:", "${result.totalTokens ?: "N/A"}")
-                MetricRow("Стоимость:", formatCostRub(result.cost))
+                MetricRow("Стоимость:", formatCostUsdToRub(result.cost))
                 
                 val wordCount = result.response.split(Regex("\\s+")).filter { it.isNotBlank() }.count()
                 val lineCount = result.response.lines().count()
@@ -428,6 +482,128 @@ fun ConclusionsBottomSheet(
                         .weight(1f)
                         .padding(bottom = 16.dp)
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LlmAnalysisBottomSheet(
+    state: ModelVersionsViewModel.LlmAnalysisState,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scrollState = androidx.compose.foundation.rememberScrollState()
+    val sheetState = rememberModalBottomSheetState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        scrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f),
+        modifier = modifier
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 600.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            tonalElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Анализ с помощью LLM",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Закрыть",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+
+                when (state) {
+                    is ModelVersionsViewModel.LlmAnalysisState.Loading -> {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(32.dp))
+                            LoadingIndicator()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Анализируем ответы моделей...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    is ModelVersionsViewModel.LlmAnalysisState.Error -> {
+                        Column(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .align(Alignment.CenterHorizontally)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Ошибка анализа",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = state.message,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    is ModelVersionsViewModel.LlmAnalysisState.Success -> {
+                        Text(
+                            text = state.analysis,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(scrollState)
+                                .weight(1f)
+                                .padding(bottom = 16.dp)
+                        )
+                    }
+                    is ModelVersionsViewModel.LlmAnalysisState.Idle -> {
+                        Text(
+                            text = "Нет данных для анализа",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
     }
