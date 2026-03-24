@@ -425,7 +425,7 @@ fun ConclusionsBottomSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scrollState = androidx.compose.foundation.rememberScrollState()
+    val scrollState = rememberScrollState()
     val sheetState = rememberModalBottomSheetState()
 
     ModalBottomSheet(

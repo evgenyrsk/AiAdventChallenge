@@ -8,7 +8,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Compare
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.ModelTraining
@@ -23,9 +23,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.aiadventchallenge.di.AppDependencies
-import com.example.aiadventchallenge.ui.screens.consultation.ConsultationScreen
-import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewModel
-import com.example.aiadventchallenge.ui.screens.consultation.ConsultationViewModelFactory
+import com.example.aiadventchallenge.ui.screens.chat.ChatScreen
+import com.example.aiadventchallenge.ui.screens.chat.ChatViewModel
+import com.example.aiadventchallenge.ui.screens.chat.ChatViewModelFactory
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonScreen
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModel
 import com.example.aiadventchallenge.ui.screens.promptcomparison.PromptComparisonViewModelFactory
@@ -41,8 +41,8 @@ import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val chatViewModel: ConsultationViewModel by viewModels {
-        ConsultationViewModelFactory(AppDependencies.askAiUseCase)
+    private val chatViewModel: ChatViewModel by viewModels {
+        ChatViewModelFactory(AppDependencies.chatAgent)
     }
 
     private val promptComparisonViewModel: PromptComparisonViewModel by viewModels {
@@ -89,11 +89,11 @@ class MainActivity : ComponentActivity() {
                                 onClick = { selectedTab = 0 },
                                 icon = {
                                     Icon(
-                                        Icons.Default.Chat,
-                                        contentDescription = "Консультация"
+                                        Icons.AutoMirrored.Filled.Chat,
+                                        contentDescription = "Чат"
                                     )
                                 },
-                                label = { Text("Консультация") }
+                                label = { Text("Чат") }
                             )
                             NavigationBarItem(
                                 selected = selectedTab == 1,
@@ -132,7 +132,7 @@ class MainActivity : ComponentActivity() {
                     }
                 ) { innerPadding ->
                     when (selectedTab) {
-                        0 -> ConsultationScreen(
+                        0 -> ChatScreen(
                             viewModel = chatViewModel,
                             modifier = Modifier.padding(innerPadding)
                         )
