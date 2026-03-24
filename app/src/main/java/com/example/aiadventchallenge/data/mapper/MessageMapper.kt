@@ -2,7 +2,7 @@ package com.example.aiadventchallenge.data.mapper
 
 import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.data.model.MessageRole
-import com.example.aiadventchallenge.ui.screens.chat.ChatMessage
+import com.example.aiadventchallenge.domain.model.ChatMessage
 
 object MessageMapper {
 

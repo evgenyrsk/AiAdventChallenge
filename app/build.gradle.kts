@@ -11,16 +11,14 @@ val aiApiKey = localProperties.getProperty("AI_API_KEY") ?: ""
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    kotlin("plugin.serialization") version "2.3.20"
+    alias(libs.plugins.ksp)
+    kotlin("plugin.serialization") version "2.1.0"
+    alias(libs.plugins.kotlin.android)
 }
 
 android {
     namespace = "com.example.aiadventchallenge"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.aiadventchallenge"
@@ -51,6 +49,9 @@ android {
     buildFeatures {
         compose = true
     }
+    kotlin {
+        jvmToolchain(11)
+    }
 }
 
 dependencies {
@@ -73,4 +74,7 @@ dependencies {
  implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.compose.material.iconsExtended)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 }

@@ -22,6 +22,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.example.aiadventchallenge.data.local.database.AppDatabase
+import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.ui.screens.chat.ChatScreen
 import com.example.aiadventchallenge.ui.screens.chat.ChatViewModel
@@ -41,8 +43,11 @@ import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
 
+    private val database by lazy { AppDatabase.getDatabase(this) }
+    private val chatRepository by lazy { ChatRepository(database.chatMessageDao()) }
+
     private val chatViewModel: ChatViewModel by viewModels {
-        ChatViewModelFactory(AppDependencies.chatAgent)
+        ChatViewModelFactory(AppDependencies.chatAgent, chatRepository)
     }
 
     private val promptComparisonViewModel: PromptComparisonViewModel by viewModels {
