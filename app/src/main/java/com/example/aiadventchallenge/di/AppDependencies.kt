@@ -1,5 +1,6 @@
 package com.example.aiadventchallenge.di
 
+import com.example.aiadventchallenge.data.agent.ChatAgent
 import com.example.aiadventchallenge.data.api.ApiConfig
 import com.example.aiadventchallenge.data.api.HttpClient
 import com.example.aiadventchallenge.data.parser.ResponseParser
@@ -53,5 +54,12 @@ object AppDependencies {
 
     val askModelUseCase: AskModelUseCase by lazy {
         AskModelUseCase(repository = repository)
+    }
+
+    val chatAgent: ChatAgent by lazy {
+        ChatAgent(
+            askAiUseCase = askAiUseCase,
+            repository = repository
+        )
     }
 }

@@ -47,6 +47,27 @@ class AiRepositoryImpl(
         return executeRequest(request)
     }
 
+    override suspend fun askWithContext(
+        messages: List<Message>,
+        config: DomainRequestConfig
+    ): ChatResult<Answer> {
+        if (messages.isEmpty()) {
+            return ChatResult.Error("Список сообщений не может быть пустым")
+        }
+
+        val dataConfig = toDataRequestConfig(config)
+        val request = ChatRequest(
+            model = dataConfig.modelId ?: this.config.model,
+            messages = messages,
+            temperature = dataConfig.temperature,
+            maxTokens = dataConfig.maxTokens,
+            stop = dataConfig.stop,
+            reasoning = dataConfig.reasoning
+        )
+
+        return executeRequest(request)
+    }
+
     override suspend fun askWithUsage(
         userInput: String,
         profile: UserProfile?,

@@ -13,7 +13,6 @@ enum class AskMode {
 }
 
 class AskAiUseCase(private val repository: AiRepository) {
-    private val answerCache = mutableMapOf<AskMode, Answer>()
 
     suspend operator fun invoke(
         userInput: String,
@@ -31,13 +30,5 @@ class AskAiUseCase(private val repository: AiRepository) {
             )
         }
         return repository.ask(userInput, profile, config)
-    }
-
-    fun saveAnswer(mode: AskMode, answer: Answer) {
-        answerCache[mode] = answer
-    }
-
-    fun getLatestAnswer(mode: AskMode): Answer? {
-        return answerCache[mode]
     }
 }
