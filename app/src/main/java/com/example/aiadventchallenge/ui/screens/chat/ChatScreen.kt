@@ -41,8 +41,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.aiadventchallenge.ui.screens.chat.ChatMessage
-import com.example.aiadventchallenge.ui.screens.chat.ChatViewModel
+import com.example.aiadventchallenge.domain.model.ChatMessage
 import kotlinx.coroutines.launch
 
 @Composable
