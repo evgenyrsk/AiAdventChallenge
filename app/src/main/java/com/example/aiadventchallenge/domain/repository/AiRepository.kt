@@ -12,7 +12,7 @@ interface AiRepository {
     suspend fun askWithContext(
         messages: List<Message>,
         config: RequestConfig
-    ): ChatResult<Answer>
+    ): ChatResult<AnswerWithUsage>
     suspend fun askWithUsage(
         userInput: String,
         profile: UserProfile? = null,

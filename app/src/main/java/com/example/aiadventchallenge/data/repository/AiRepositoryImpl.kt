@@ -50,7 +50,7 @@ class AiRepositoryImpl(
     override suspend fun askWithContext(
         messages: List<Message>,
         config: DomainRequestConfig
-    ): ChatResult<Answer> {
+    ): ChatResult<AnswerWithUsage> {
         if (messages.isEmpty()) {
             return ChatResult.Error("Список сообщений не может быть пустым")
         }
@@ -65,7 +65,7 @@ class AiRepositoryImpl(
             reasoning = dataConfig.reasoning
         )
 
-        return executeRequest(request)
+        return executeRequestWithUsage(request)
     }
 
     override suspend fun askWithUsage(
