@@ -36,6 +36,16 @@ class ChatAgent(
         }
     }
 
+    suspend fun processRequestWithContextAndUsage(
+        messages: List<Message>,
+        config: RequestConfig
+    ): ChatResult<com.example.aiadventchallenge.domain.model.AnswerWithUsage> {
+        return when (val result = repository.askWithContext(messages, config)) {
+            is ChatResult.Success -> ChatResult.Success(result.data)
+            is ChatResult.Error -> ChatResult.Error(result.message, result.code)
+        }
+    }
+
     fun buildRequestConfig(): RequestConfig {
         return RequestConfig(
             systemPrompt = Prompts.UNLIMITED_SYSTEM_PROMPT

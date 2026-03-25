@@ -4,13 +4,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.aiadventchallenge.data.agent.ChatAgent
 import com.example.aiadventchallenge.data.mapper.MessageMapper
+import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ChatResult
+import com.example.aiadventchallenge.domain.model.DialogTokenStats
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ChatViewModel(
     private val agent: ChatAgent,
@@ -23,8 +27,21 @@ class ChatViewModel(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _lastRequestTokens = MutableStateFlow<LastRequestTokens?>(null)
+    val lastRequestTokens: StateFlow<LastRequestTokens?> = _lastRequestTokens.asStateFlow()
+
+    private val _dialogStats = MutableStateFlow(DialogTokenStats())
+    val dialogStats: StateFlow<DialogTokenStats> = _dialogStats.asStateFlow()
+
+    data class LastRequestTokens(
+        val promptTokens: Int?,
+        val completionTokens: Int?,
+        val totalTokens: Int?
+    )
+
     init {
         loadMessagesFromDatabase()
+        loadDialogStats()
     }
 
     private fun loadMessagesFromDatabase() {
@@ -32,6 +49,12 @@ class ChatViewModel(
             chatRepository.getAllMessages().collect { messages ->
                 _messages.value = messages
             }
+        }
+    }
+
+    private fun loadDialogStats() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _dialogStats.value = chatRepository.getDialogStats()
         }
     }
 
@@ -56,15 +79,27 @@ class ChatViewModel(
             val validMessages = _messages.value.filter { !it.content.startsWith("Ошибка:") }
             val apiMessages = MessageMapper.mapToApiMessages(validMessages, config.systemPrompt)
 
-            when (val result = agent.processRequestWithContext(apiMessages, config)) {
+            when (val result = agent.processRequestWithContextAndUsage(apiMessages, config)) {
                 is ChatResult.Success -> {
+                    val answerWithUsage = result.data
+                    
+                    _lastRequestTokens.value = LastRequestTokens(
+                        promptTokens = answerWithUsage.promptTokens,
+                        completionTokens = answerWithUsage.completionTokens,
+                        totalTokens = answerWithUsage.totalTokens
+                    )
+
                     val aiMessage = ChatMessage(
                         id = (System.currentTimeMillis() + 1).toString(),
-                        content = result.data,
-                        isFromUser = false
+                        content = answerWithUsage.content,
+                        isFromUser = false,
+                        promptTokens = answerWithUsage.promptTokens,
+                        completionTokens = answerWithUsage.completionTokens,
+                        totalTokens = answerWithUsage.totalTokens
                     )
                     _messages.value += aiMessage
                     chatRepository.insertMessage(aiMessage)
+                    loadDialogStats()
                 }
                 is ChatResult.Error -> {
                     val errorMessage = ChatMessage(
@@ -83,6 +118,8 @@ class ChatViewModel(
     fun clearChat() {
         viewModelScope.launch {
             chatRepository.deleteAllMessages()
+            _dialogStats.value = DialogTokenStats()
+            _lastRequestTokens.value = null
         }
     }
 }
