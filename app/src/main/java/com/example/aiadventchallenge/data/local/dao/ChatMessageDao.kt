@@ -7,6 +7,8 @@ import androidx.room.Query
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.aiadventchallenge.data.local.entity.ChatMessageEntity
+import com.example.aiadventchallenge.data.local.entity.SummaryEntity
+import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import kotlinx.coroutines.flow.Flow
 
@@ -31,4 +33,32 @@ interface ChatMessageDao {
         WHERE isFromUser = 0
     """)
     fun getDialogStats(): DialogTokenStats
+
+    @Query("SELECT * FROM chat_messages ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentMessages(limit: Int): List<ChatMessageEntity>
+
+    @Query("SELECT * FROM summaries ORDER BY createdAt ASC")
+    suspend fun getAllSummaries(): List<SummaryEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSummary(summary: SummaryEntity)
+
+    @Query("DELETE FROM summaries WHERE messageRangeEnd = :messageRangeEnd")
+    suspend fun deleteSummaryByRangeEnd(messageRangeEnd: Long)
+
+    @Query("DELETE FROM summaries")
+    suspend fun deleteAllSummaries()
+
+    @Query("SELECT COUNT(*) FROM chat_messages")
+    suspend fun getMessageCount(): Int
+
+    @Query("""
+        SELECT cm.* FROM chat_messages cm
+        WHERE NOT EXISTS (
+            SELECT 1 FROM summaries sm
+            WHERE cm.id >= sm.messageRangeStart AND cm.id <= sm.messageRangeEnd
+        )
+        ORDER BY cm.timestamp ASC
+    """)
+    suspend fun getNonSummarizedMessages(): List<ChatMessageEntity>
 }

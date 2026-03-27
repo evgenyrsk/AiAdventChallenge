@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
     private val chatRepository by lazy { ChatRepository(database.chatMessageDao()) }
 
     private val chatViewModel: ChatViewModel by viewModels {
-        ChatViewModelFactory(AppDependencies.chatAgent, chatRepository)
+        ChatViewModelFactory(AppDependencies.chatAgent, chatRepository, AppDependencies.createSummaryUseCase)
     }
 
     private val promptComparisonViewModel: PromptComparisonViewModel by viewModels {

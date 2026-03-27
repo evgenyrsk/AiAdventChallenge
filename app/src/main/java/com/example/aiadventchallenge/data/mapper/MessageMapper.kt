@@ -3,6 +3,8 @@ package com.example.aiadventchallenge.data.mapper
 import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.data.model.MessageRole
 import com.example.aiadventchallenge.domain.model.ChatMessage
+import com.example.aiadventchallenge.domain.model.CompressedChatHistory
+import com.example.aiadventchallenge.domain.model.SummaryMessage
 
 object MessageMapper {
 
@@ -15,6 +17,26 @@ object MessageMapper {
         result.add(Message(MessageRole.SYSTEM, systemPrompt))
 
         chatMessages.forEach { chatMessage ->
+            val role = if (chatMessage.isFromUser) MessageRole.USER else MessageRole.ASSISTANT
+            result.add(Message(role, chatMessage.content))
+        }
+
+        return result
+    }
+
+    fun mapCompressedToApiMessages(
+        history: CompressedChatHistory,
+        systemPrompt: String
+    ): List<Message> {
+        val result = mutableListOf<Message>()
+
+        result.add(Message(MessageRole.SYSTEM, systemPrompt))
+
+        history.summaries.forEach { summary ->
+            result.add(Message(MessageRole.ASSISTANT, "Резюме предыдущего диалога:\n${summary.content}"))
+        }
+
+        history.recentMessages.forEach { chatMessage ->
             val role = if (chatMessage.isFromUser) MessageRole.USER else MessageRole.ASSISTANT
             result.add(Message(role, chatMessage.content))
         }
