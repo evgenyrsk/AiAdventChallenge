@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
@@ -205,6 +206,7 @@ fun ChatScreen(
                 TokenStatsDisplay(
                     lastRequestTokens = lastRequestTokens,
                     dialogStats = dialogStats,
+                    requestLogs = requestLogs,
                     onClose = { showTokenStats = false },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -274,6 +276,7 @@ fun MessageBubble(
 fun TokenStatsDisplay(
     lastRequestTokens: ChatViewModel.LastRequestTokens?,
     dialogStats: DialogTokenStats,
+    requestLogs: List<RequestLog>,
     onClose: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -359,6 +362,85 @@ fun TokenStatsDisplay(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                }
+            }
+            
+            val validLogs = requestLogs.filter { it.totalTokens != null }
+            val recentLogs = validLogs.take(10)
+            
+            if (recentLogs.isNotEmpty()) {
+                HorizontalDivider()
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "История запросов (последние 10):",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "№",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(30.dp)
+                        )
+                        Text(
+                            text = "Prompt",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "Comp",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "Всего",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    
+                    HorizontalDivider()
+                    
+                    recentLogs.forEachIndexed { index, log ->
+                        val isSummary = log.requestConfig.systemPrompt == "Summary creation"
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = if (isSummary) "📝${index + 1}" else "${index + 1}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.width(30.dp)
+                            )
+                            Text(
+                                text = "${log.promptTokens ?: 0}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "${log.completionTokens ?: 0}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "${log.totalTokens ?: 0}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                 }
             }
         }
