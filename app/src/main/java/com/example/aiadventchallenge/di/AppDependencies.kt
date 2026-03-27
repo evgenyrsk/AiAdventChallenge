@@ -12,6 +12,7 @@ import com.example.aiadventchallenge.domain.usecase.AskModelUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareTemperatureResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.TemperatureUseCase
+import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
 
 object AppDependencies {
     private val apiConfig: ApiConfig = ApiConfig()
@@ -61,5 +62,9 @@ object AppDependencies {
             askAiUseCase = askAiUseCase,
             repository = repository
         )
+    }
+
+    val createSummaryUseCase: CreateSummaryUseCase by lazy {
+        CreateSummaryUseCase(repository = repository)
     }
 }

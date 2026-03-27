@@ -1,5 +1,6 @@
 package com.example.aiadventchallenge.ui.screens.chat
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
+import com.example.aiadventchallenge.domain.model.RequestLog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,6 +79,8 @@ fun ChatScreen(
 
     val lastRequestTokens by viewModel.lastRequestTokens.collectAsStateWithLifecycle()
     val dialogStats by viewModel.dialogStats.collectAsStateWithLifecycle()
+    val requestLogs by viewModel.requestLogs.collectAsStateWithLifecycle()
+    var showDebugLog by remember { mutableStateOf(false) }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -158,9 +162,14 @@ fun ChatScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(
-                        onClick = { showTokenStats = true },
-                        modifier = Modifier.size(48.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .combinedClickable(
+                                onClick = { showTokenStats = true },
+                                onLongClick = { showDebugLog = true }
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
@@ -197,6 +206,21 @@ fun ChatScreen(
                     lastRequestTokens = lastRequestTokens,
                     dialogStats = dialogStats,
                     onClose = { showTokenStats = false },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                )
+            }
+        }
+
+        if (showDebugLog) {
+            ModalBottomSheet(
+                onDismissRequest = { showDebugLog = false },
+                sheetState = sheetState
+            ) {
+                DebugLogDisplay(
+                    requestLogs = requestLogs,
+                    onClose = { showDebugLog = false },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
