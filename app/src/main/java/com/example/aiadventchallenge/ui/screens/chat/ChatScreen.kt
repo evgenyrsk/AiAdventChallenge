@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +36,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +55,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestLog
+import com.example.aiadventchallenge.domain.model.ContextStrategyType
+import com.example.aiadventchallenge.ui.screens.chat.components.StrategySettingsBottomSheet
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,7 +86,11 @@ fun ChatScreen(
     val lastRequestTokens by viewModel.lastRequestTokens.collectAsStateWithLifecycle()
     val dialogStats by viewModel.dialogStats.collectAsStateWithLifecycle()
     val requestLogs by viewModel.requestLogs.collectAsStateWithLifecycle()
+    val activeStrategyConfig by viewModel.activeStrategyConfig.collectAsStateWithLifecycle()
     var showDebugLog by remember { mutableStateOf(false) }
+    var showStrategySettings by remember { mutableStateOf(false) }
+    var showClearChatDialog by remember { mutableStateOf(false) }
+    var pendingStrategyChange by remember { mutableStateOf<ContextStrategyType?>(null) }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -89,6 +98,31 @@ fun ChatScreen(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text("Чат")
+                            activeStrategyConfig?.let { config ->
+                                Text(
+                                    text = getStrategyDisplayName(config.type),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = { showStrategySettings = true }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Настройки стратегии",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                )
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -180,22 +214,6 @@ fun ChatScreen(
                     }
                 }
             }
-
-            FloatingActionButton(
-                onClick = {
-                    viewModel.clearChat()
-                    userInput = ""
-                    keyboardController?.hide()
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Новый чат"
-                )
-            }
         }
 
         if (showTokenStats) {
@@ -228,6 +246,68 @@ fun ChatScreen(
                         .padding(16.dp)
                 )
             }
+        }
+
+        if (showStrategySettings) {
+            ModalBottomSheet(
+                onDismissRequest = { showStrategySettings = false },
+                sheetState = sheetState
+            ) {
+                activeStrategyConfig?.let { config ->
+                    StrategySettingsBottomSheet(
+                        currentStrategy = config.type,
+                        currentWindowSize = config.windowSize,
+                        onStrategyChange = { type ->
+                            if (type != config.type) {
+                                pendingStrategyChange = type
+                                showClearChatDialog = true
+                            }
+                        },
+                        onWindowSizeChange = { size -> viewModel.setWindowSize(size) },
+                        onClose = { showStrategySettings = false },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        if (showClearChatDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    showClearChatDialog = false
+                    pendingStrategyChange = null
+                },
+                title = { Text("Сменить стратегию?") },
+                text = {
+                    Text(
+                        "При смене стратегии текущий чат будет очищен. " +
+                                "Вы хотите сменить стратегию на ${pendingStrategyChange?.let { getStrategyDisplayName(it) }}?"
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            pendingStrategyChange?.let { viewModel.setStrategyType(it) }
+                            viewModel.clearChat()
+                            showClearChatDialog = false
+                            pendingStrategyChange = null
+                            showStrategySettings = false
+                        }
+                    ) {
+                        Text("Да, сменить и очистить")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showClearChatDialog = false
+                            pendingStrategyChange = null
+                        }
+                    ) {
+                        Text("Отмена")
+                    }
+                }
+            )
         }
     }
 }
@@ -444,5 +524,13 @@ fun TokenStatsDisplay(
                 }
             }
         }
+    }
+}
+
+private fun getStrategyDisplayName(type: ContextStrategyType): String {
+    return when (type) {
+        ContextStrategyType.SLIDING_WINDOW -> "Sliding Window"
+        ContextStrategyType.STICKY_FACTS -> "Sticky Facts"
+        ContextStrategyType.BRANCHING -> "Branching"
     }
 }

@@ -17,6 +17,12 @@ interface ChatMessageDao {
     @Query("SELECT * FROM chat_messages ORDER BY timestamp ASC")
     fun getAllMessages(): Flow<List<ChatMessageEntity>>
 
+    @Query("SELECT * FROM chat_messages ORDER BY timestamp ASC")
+    suspend fun getAllMessagesList(): List<ChatMessageEntity>
+
+    @Query("SELECT * FROM chat_messages WHERE branchId = :branchId ORDER BY timestamp ASC")
+    suspend fun getMessagesByBranch(branchId: String): List<ChatMessageEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: ChatMessageEntity)
 
