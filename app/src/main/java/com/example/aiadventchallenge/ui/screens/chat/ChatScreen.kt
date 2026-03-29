@@ -57,6 +57,12 @@ import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestLog
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.ui.screens.chat.components.StrategySettingsBottomSheet
+import com.example.aiadventchallenge.ui.screens.chat.components.BranchChip
+import com.example.aiadventchallenge.ui.screens.chat.components.BranchPickerSheet
+import com.example.aiadventchallenge.ui.screens.chat.components.CreateBranchDialog
+import com.example.aiadventchallenge.ui.screens.chat.components.BranchStartDivider
+import com.example.aiadventchallenge.ui.screens.chat.components.BranchIndicatorBadge
+import com.example.aiadventchallenge.ui.screens.chat.components.BranchInputHint
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,6 +73,7 @@ fun ChatScreen(
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val chatUiState by viewModel.chatUiState.collectAsStateWithLifecycle()
     var userInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -101,7 +108,18 @@ fun ChatScreen(
                 TopAppBar(
                     title = {
                         Column {
-                            Text("Чат")
+                            Row(
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("Чат")
+                                if (chatUiState.isBranchingStrategy && chatUiState.activeBranchName != null) {
+                                    BranchChip(
+                                        branchName = chatUiState.activeBranchName!!,
+                                        onClick = { viewModel.onBranchChipClicked() }
+                                    )
+                                }
+                            }
                             activeStrategyConfig?.let { config ->
                                 Text(
                                     text = getStrategyDisplayName(config.type),
@@ -132,11 +150,40 @@ fun ChatScreen(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)
                 ) {
                     items(messages, key = { it.id }) { message ->
-                        MessageBubble(
-                            message = message.content,
-                            isFromUser = message.isFromUser,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (chatUiState.isBranchingStrategy) {
+                                val branchCount = chatUiState.getMessageBranchCount(message.id)
+                                if (branchCount > 0) {
+                                    BranchIndicatorBadge(
+                                        branchCount = branchCount,
+                                        onClick = { viewModel.onBranchIndicatorClicked(message.id) }
+                                    )
+                                }
+                            }
+                            
+                            MessageBubble(
+                                message = message.content,
+                                isFromUser = message.isFromUser,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .combinedClickable(
+                                        onClick = {},
+                                        onLongClick = {
+                                            if (chatUiState.isBranchingStrategy) {
+                                                viewModel.onCreateBranchFromMessage(message.id)
+                                            }
+                                        }
+                                    )
+                            )
+                            
+                            if (chatUiState.isBranchingStrategy && 
+                                !chatUiState.isRootBranch && 
+                                message.id == chatUiState.currentBranchCheckpointMessageId) {
+                                BranchStartDivider()
+                            }
+                        }
                     }
                     if (isLoading) {
                         item {
@@ -149,13 +196,23 @@ fun ChatScreen(
                     }
                 }
 
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedTextField(
+                    if (chatUiState.isBranchingStrategy && chatUiState.activeBranchName != null) {
+                        BranchInputHint(
+                            branchName = chatUiState.activeBranchName!!
+                        )
+                    }
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
                         value = userInput,
                         onValueChange = { userInput = it },
                         modifier = Modifier.weight(1f),
@@ -211,6 +268,7 @@ fun ChatScreen(
                             contentDescription = "Статистика токенов",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
                     }
                 }
             }
@@ -307,6 +365,25 @@ fun ChatScreen(
                         Text("Отмена")
                     }
                 }
+            )
+        }
+
+        if (chatUiState.showBranchPicker) {
+            BranchPickerSheet(
+                branches = chatUiState.availableBranches,
+                onBranchSelected = { branchId -> viewModel.onBranchSelected(branchId) },
+                onDismiss = { viewModel.onBranchPickerDismiss() }
+            )
+        }
+
+        if (chatUiState.showCreateBranchDialog) {
+            CreateBranchDialog(
+                targetMessagePreview = chatUiState.branchCreationTargetPreview ?: "Сообщение",
+                branchName = chatUiState.newBranchName,
+                error = chatUiState.newBranchError,
+                onNameChange = { name -> viewModel.onNewBranchNameChanged(name) },
+                onCreate = { switchToNew -> viewModel.onCreateBranchConfirmed(switchToNew) },
+                onDismiss = { viewModel.onCreateBranchDialogDismiss() }
             )
         }
     }
