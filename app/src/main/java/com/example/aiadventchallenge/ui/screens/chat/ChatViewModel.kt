@@ -189,10 +189,6 @@ class ChatViewModel(
 
             strategy.onUserMessage(userMessage)
 
-            if (strategyConfig.type == com.example.aiadventchallenge.domain.model.ContextStrategyType.STICKY_FACTS) {
-                updateFacts(userInput, messages)
-            }
-
             val apiMessages = strategy.buildContext(null, messages, config.systemPrompt)
 
             println("📤 API request:")
@@ -273,109 +269,6 @@ class ChatViewModel(
 
             _isLoading.value = false
         }
-    }
-
-    private suspend fun updateFacts(userMessage: String, messages: List<ChatMessage>) {
-        try {
-            val existingFacts = factRepository.getAllFacts().first()
-            factExtractor.extractAndUpdateFacts(userMessage, existingFacts)
-                .onSuccess { updatedFacts ->
-                    factRepository.clearAllFacts()
-                    updatedFacts.forEach { fact ->
-                        factRepository.insertFact(fact)
-                    }
-                }
-        } catch (e: Exception) {
-            println("Failed to update facts: ${e.message}")
-        }
-    }
-
-    private suspend fun createSummaryIfNeeded(messages: List<ChatMessage>) {
-        val messagesToSummarize = messages.takeLast(CompressionConfig.SUMMARY_INTERVAL)
-
-        val firstMessage = messagesToSummarize.firstOrNull()
-        val lastMessage = messagesToSummarize.lastOrNull()
-
-        println("📝 Summary:")
-        println("  Messages: ${messagesToSummarize.size}")
-        if (firstMessage != null) {
-            val role = if (firstMessage.isFromUser) "User" else "AI"
-            println("  First ($role): ${firstMessage.content}")
-        }
-        if (lastMessage != null && lastMessage != firstMessage) {
-            val role = if (lastMessage.isFromUser) "User" else "AI"
-            println("  Last ($role): ${lastMessage.content}")
-        }
-
-        when (val result = createSummaryUseCase(messagesToSummarize)) {
-            is ChatResult.Success -> {
-                val answerWithUsage = result.data
-
-                println("  ✓ Summary: ${answerWithUsage.content}")
-                println("  Tokens: ${answerWithUsage.totalTokens}")
-
-                val firstMessageId = messagesToSummarize.first().id.toLong()
-                val lastMessageId = messagesToSummarize.last().id.toLong()
-
-                val summary = SummaryMessage(
-                    id = "summary_${System.currentTimeMillis()}",
-                    content = answerWithUsage.content,
-                    messageRangeStart = firstMessageId,
-                    messageRangeEnd = lastMessageId,
-                    messageCount = messagesToSummarize.size
-                )
-
-                chatRepository.insertSummary(summary)
-
-                val allSummaries = chatRepository.getAllSummaries()
-                if (allSummaries.size > 5) {
-                    val summaryToDelete = allSummaries.first()
-                    println("  ✗ Delete old: ${summaryToDelete.id}")
-                    chatRepository.deleteSummaryByRangeEnd(summaryToDelete.messageRangeEnd)
-                }
-
-                addRequestLog(RequestLog(
-                    id = "summary_${System.currentTimeMillis()}",
-                    timestamp = System.currentTimeMillis(),
-                    requestConfig = RequestConfigDebug(
-                        model = null,
-                        temperature = null,
-                        maxTokens = null,
-                        systemPrompt = "Summary creation"
-                    ),
-                    requestMessages = emptyList(),
-                    responseContent = answerWithUsage.content,
-                    responseError = null,
-                    promptTokens = answerWithUsage.promptTokens,
-                    completionTokens = answerWithUsage.completionTokens,
-                    totalTokens = answerWithUsage.totalTokens
-                ))
-            }
-            is ChatResult.Error -> {
-                println("  ✗ Error: ${result.message}")
-
-                addRequestLog(RequestLog(
-                    id = "summary_${System.currentTimeMillis()}",
-                    timestamp = System.currentTimeMillis(),
-                    requestConfig = RequestConfigDebug(
-                        model = null,
-                        temperature = null,
-                        maxTokens = null,
-                        systemPrompt = "Summary creation"
-                    ),
-                    requestMessages = emptyList(),
-                    responseContent = null,
-                    responseError = result.message,
-                    promptTokens = null,
-                    completionTokens = null,
-                    totalTokens = null
-                ))
-            }
-        }
-    }
-
-    private suspend fun getCompressedHistory(): CompressedChatHistory {
-        return chatRepository.getCompressedHistory()
     }
 
     fun clearChat() {
