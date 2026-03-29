@@ -9,6 +9,13 @@ class SlidingWindowStrategy(
     private val config: ContextStrategyConfig
 ) : ContextStrategy {
 
+    private var totalMessagesCount: Int = 0
+    private var filteredMessagesCount: Int = 0
+
+    init {
+        require(config.windowSize > 0) { "windowSize must be positive, got ${config.windowSize}" }
+    }
+
     override suspend fun buildContext(
         chatId: String?,
         messages: List<ChatMessage>,
@@ -19,6 +26,14 @@ class SlidingWindowStrategy(
         result.add(Message(MessageRole.SYSTEM, systemPrompt))
 
         val windowMessages = messages.takeLast(config.windowSize)
+        filteredMessagesCount = messages.size - windowMessages.size
+
+        println("📊 SlidingWindow context:")
+        println("  Total messages: ${messages.size}")
+        println("  Window size: ${config.windowSize}")
+        println("  Messages in context: ${windowMessages.size}")
+        println("  Messages filtered: $filteredMessagesCount")
+
         windowMessages.forEach { chatMessage ->
             val role = if (chatMessage.isFromUser) MessageRole.USER else MessageRole.ASSISTANT
             result.add(Message(role, chatMessage.content))
@@ -28,15 +43,19 @@ class SlidingWindowStrategy(
     }
 
     override suspend fun onUserMessage(message: ChatMessage) {
+        println("📥 User message received: ${message.content.take(50)}...")
     }
 
     override suspend fun onAssistantMessage(message: ChatMessage) {
+        println("📤 Assistant message received: ${message.content.take(50)}...")
     }
 
     override fun getDebugInfo(): Map<String, Any> {
         return mapOf(
             "strategy" to "SlidingWindow",
-            "windowSize" to config.windowSize
+            "windowSize" to config.windowSize,
+            "filteredMessagesCount" to filteredMessagesCount,
+            "messagesInContext" to config.windowSize
         )
     }
 }

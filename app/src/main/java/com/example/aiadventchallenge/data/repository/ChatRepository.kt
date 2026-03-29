@@ -153,12 +153,6 @@ class ChatRepository(
         }
     }
 
-    suspend fun shouldCreateSummary(): Boolean {
-        val messageCount = chatMessageDao.getMessageCount()
-        return messageCount >= CompressionConfig.RECENT_MESSAGES_LIMIT &&
-               messageCount % (CompressionConfig.SUMMARY_INTERVAL) == 0
-    }
-
     suspend fun getDialogStats(): DialogTokenStats {
         return chatMessageDao.getDialogStats()
     }
