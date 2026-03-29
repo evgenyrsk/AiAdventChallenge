@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
     private val chatSettingsRepository by lazy { DataChatSettingsRepository(database.chatSettingsDao()) }
     private val factRepository by lazy { FactRepositoryImpl(database.factDao()) }
     private val branchRepository by lazy { BranchRepositoryImpl(database.branchDao()) }
-    private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository) }
+    private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository, factExtractor) }
     private val factExtractor by lazy { FactExtractor(AppDependencies.repository) }
 
     private val chatViewModel: ChatViewModel by viewModels {

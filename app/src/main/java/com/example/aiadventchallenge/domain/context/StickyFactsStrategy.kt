@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.first
 
 class StickyFactsStrategy(
     private val config: ContextStrategyConfig,
-    private val factRepository: FactRepository
+    private val factRepository: FactRepository,
+    private val factExtractor: FactExtractor
 ) : ContextStrategy {
 
     override suspend fun buildContext(
@@ -45,9 +46,26 @@ class StickyFactsStrategy(
     }
 
     override suspend fun onUserMessage(message: ChatMessage) {
+        try {
+            val existingFacts = factRepository.getAllFacts().first()
+            factExtractor.extractAndUpdateFacts(message.content, existingFacts)
+                .onSuccess { updatedFacts ->
+                    factRepository.clearAllFacts()
+                    updatedFacts.forEach { fact ->
+                        factRepository.insertFact(fact)
+                    }
+                    println("📝 StickyFacts: Updated ${updatedFacts.size} facts from user message")
+                }
+                .onFailure { error ->
+                    println("❌ StickyFacts: Failed to extract facts - ${error.message}")
+                }
+        } catch (e: Exception) {
+            println("❌ StickyFacts: Error updating facts - ${e.message}")
+        }
     }
 
     override suspend fun onAssistantMessage(message: ChatMessage) {
+        println("📤 StickyFacts: Assistant message received: ${message.content.take(50)}...")
     }
 
     override fun getDebugInfo(): Map<String, Any> {
