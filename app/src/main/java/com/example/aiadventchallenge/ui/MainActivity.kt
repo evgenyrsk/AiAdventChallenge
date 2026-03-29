@@ -24,6 +24,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.aiadventchallenge.data.local.database.AppDatabase
 import com.example.aiadventchallenge.data.repository.ChatRepository
+import com.example.aiadventchallenge.data.repository.ChatSettingsRepository as DataChatSettingsRepository
+import com.example.aiadventchallenge.data.repository.FactRepositoryImpl
+import com.example.aiadventchallenge.data.repository.BranchRepositoryImpl
 import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.ui.screens.chat.ChatScreen
 import com.example.aiadventchallenge.ui.screens.chat.ChatViewModel
@@ -38,16 +41,35 @@ import com.example.aiadventchallenge.ui.screens.modelversions.ModelVersionsScree
 import com.example.aiadventchallenge.ui.screens.modelversions.ModelVersionsViewModel
 import com.example.aiadventchallenge.ui.screens.modelversions.ModelVersionsViewModelFactory
 import com.example.aiadventchallenge.data.export.ModelResultsExporter
+import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
+import com.example.aiadventchallenge.domain.context.FactExtractor
+import com.example.aiadventchallenge.domain.repository.FactRepository
+import com.example.aiadventchallenge.domain.repository.BranchRepository
+import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import java.io.File
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
 
     private val database by lazy { AppDatabase.getDatabase(this) }
-    private val chatRepository by lazy { ChatRepository(database.chatMessageDao()) }
+    private val chatRepository by lazy { ChatRepository(database.chatMessageDao(), database.branchDao(), database.factDao()) }
+    private val chatSettingsRepository by lazy { DataChatSettingsRepository(database.chatSettingsDao()) }
+    private val factRepository by lazy { FactRepositoryImpl(database.factDao()) }
+    private val branchRepository by lazy { BranchRepositoryImpl(database.branchDao()) }
+    private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository) }
+    private val factExtractor by lazy { FactExtractor(AppDependencies.repository) }
 
     private val chatViewModel: ChatViewModel by viewModels {
-        ChatViewModelFactory(AppDependencies.chatAgent, chatRepository, AppDependencies.createSummaryUseCase)
+        ChatViewModelFactory(
+            AppDependencies.chatAgent,
+            chatRepository,
+            AppDependencies.createSummaryUseCase,
+            chatSettingsRepository,
+            contextStrategyFactory,
+            factRepository,
+            branchRepository,
+            factExtractor
+        )
     }
 
     private val promptComparisonViewModel: PromptComparisonViewModel by viewModels {

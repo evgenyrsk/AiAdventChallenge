@@ -7,27 +7,40 @@ import com.example.aiadventchallenge.data.config.CompressionConfig
 import com.example.aiadventchallenge.data.mapper.MessageMapper
 import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.data.repository.ChatRepository
+import com.example.aiadventchallenge.domain.context.ContextStrategy
+import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
 import com.example.aiadventchallenge.domain.model.AnswerWithUsage
 import com.example.aiadventchallenge.domain.model.ApiMessageDebug
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.CompressedChatHistory
+import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestConfigDebug
 import com.example.aiadventchallenge.domain.model.RequestLog
 import com.example.aiadventchallenge.domain.model.SummaryMessage
 import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
+import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
+import com.example.aiadventchallenge.domain.repository.FactRepository
+import com.example.aiadventchallenge.domain.repository.BranchRepository
+import com.example.aiadventchallenge.domain.context.FactExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ChatViewModel(
     private val agent: ChatAgent,
     private val chatRepository: ChatRepository,
-    private val createSummaryUseCase: CreateSummaryUseCase
+    private val createSummaryUseCase: CreateSummaryUseCase,
+    private val chatSettingsRepository: ChatSettingsRepository,
+    private val contextStrategyFactory: ContextStrategyFactory,
+    private val factRepository: FactRepository,
+    private val branchRepository: BranchRepository,
+    private val factExtractor: FactExtractor
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -45,6 +58,12 @@ class ChatViewModel(
     private val _requestLogs = MutableStateFlow<List<RequestLog>>(emptyList())
     val requestLogs: StateFlow<List<RequestLog>> = _requestLogs.asStateFlow()
 
+    private val _activeStrategyConfig = MutableStateFlow<ContextStrategyConfig?>(null)
+    val activeStrategyConfig: StateFlow<ContextStrategyConfig?> = _activeStrategyConfig.asStateFlow()
+
+    private val _debugInfo = MutableStateFlow<Map<String, Any>>(emptyMap())
+    val debugInfo: StateFlow<Map<String, Any>> = _debugInfo.asStateFlow()
+
     data class LastRequestTokens(
         val promptTokens: Int?,
         val completionTokens: Int?,
@@ -54,6 +73,13 @@ class ChatViewModel(
     init {
         loadMessagesFromDatabase()
         loadDialogStats()
+        loadStrategyConfig()
+    }
+
+    private fun loadStrategyConfig() {
+        viewModelScope.launch {
+            _activeStrategyConfig.value = chatSettingsRepository.getSettings()
+        }
     }
 
     private fun loadMessagesFromDatabase() {
@@ -89,17 +115,30 @@ class ChatViewModel(
         _messages.value += userMessage
 
         viewModelScope.launch {
-            chatRepository.insertMessage(userMessage)
+            val strategyConfig = chatSettingsRepository.getSettings()
+            val activeBranchId = chatRepository.getActiveBranchId()
 
+            chatRepository.insertMessage(userMessage, activeBranchId)
+
+            val strategy = contextStrategyFactory.create(strategyConfig)
+
+            val messages = chatRepository.getMessagesByBranch(activeBranchId)
             val config = agent.buildRequestConfig()
 
-            val compressedHistory = getCompressedHistory()
-            val apiMessages = MessageMapper.mapCompressedToApiMessages(compressedHistory, config.systemPrompt)
+            strategy.onUserMessage(userMessage)
+
+            if (strategyConfig.type == com.example.aiadventchallenge.domain.model.ContextStrategyType.STICKY_FACTS) {
+                updateFacts(userInput, messages)
+            }
+
+            val apiMessages = strategy.buildContext(null, messages, config.systemPrompt)
 
             println("📤 API request:")
-            println("  Summaries: ${compressedHistory.summaries.size}")
-            println("  Recent messages: ${compressedHistory.recentMessages.size}")
-            println("  Total messages: ${apiMessages.size - 1} (excluding system prompt)")
+            println("  Strategy: ${strategyConfig.type}")
+            println("  Messages: ${apiMessages.size}")
+            println("  Debug info: ${strategy.getDebugInfo()}")
+
+            _debugInfo.value = strategy.getDebugInfo()
 
             val currentLogId = System.currentTimeMillis().toString()
             val preliminaryLog = RequestLog(
@@ -111,8 +150,8 @@ class ChatViewModel(
                     maxTokens = config.maxTokens,
                     systemPrompt = config.systemPrompt
                 ),
-                requestMessages = apiMessages.map { 
-                    ApiMessageDebug(it.role, it.content) 
+                requestMessages = apiMessages.map {
+                    ApiMessageDebug(it.role, it.content)
                 },
                 responseContent = null,
                 responseError = null,
@@ -121,7 +160,7 @@ class ChatViewModel(
                 totalTokens = null
             )
 
-            when (val result = agent.processRequestWithCompressedContextAndUsage(compressedHistory, config)) {
+            when (val result = agent.processRequestWithContextAndUsage(apiMessages, config)) {
                 is ChatResult.Success -> {
                     val answerWithUsage = result.data
 
@@ -147,7 +186,9 @@ class ChatViewModel(
                         totalTokens = answerWithUsage.totalTokens
                     )
                     _messages.value += aiMessage
-                    chatRepository.insertMessage(aiMessage)
+                    chatRepository.insertMessage(aiMessage, activeBranchId)
+
+                    strategy.onAssistantMessage(aiMessage)
 
                     if (chatRepository.shouldCreateSummary()) {
                         createSummaryIfNeeded(_messages.value)
@@ -173,6 +214,21 @@ class ChatViewModel(
             }
 
             _isLoading.value = false
+        }
+    }
+
+    private suspend fun updateFacts(userMessage: String, messages: List<ChatMessage>) {
+        try {
+            val existingFacts = factRepository.getAllFacts().first()
+            factExtractor.extractAndUpdateFacts(userMessage, existingFacts)
+                .onSuccess { updatedFacts ->
+                    factRepository.clearAllFacts()
+                    updatedFacts.forEach { fact ->
+                        factRepository.insertFact(fact)
+                    }
+                }
+        } catch (e: Exception) {
+            println("Failed to update facts: ${e.message}")
         }
     }
 
@@ -270,6 +326,23 @@ class ChatViewModel(
             _dialogStats.value = DialogTokenStats()
             _lastRequestTokens.value = null
             _requestLogs.value = emptyList()
+        }
+    }
+
+    fun setStrategyType(type: com.example.aiadventchallenge.domain.model.ContextStrategyType) {
+        viewModelScope.launch {
+            chatSettingsRepository.updateStrategyType(type)
+            _activeStrategyConfig.value = chatSettingsRepository.getSettings()
+
+            factRepository.clearAllFacts()
+            branchRepository.clearAllBranches()
+        }
+    }
+
+    fun setWindowSize(windowSize: Int) {
+        viewModelScope.launch {
+            chatSettingsRepository.updateWindowSize(windowSize)
+            _activeStrategyConfig.value = chatSettingsRepository.getSettings()
         }
     }
 }

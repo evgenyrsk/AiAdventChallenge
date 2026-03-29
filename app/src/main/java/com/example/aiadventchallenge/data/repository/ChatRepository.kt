@@ -2,6 +2,8 @@ package com.example.aiadventchallenge.data.repository
 
 import com.example.aiadventchallenge.data.config.CompressionConfig
 import com.example.aiadventchallenge.data.local.dao.ChatMessageDao
+import com.example.aiadventchallenge.data.local.dao.BranchDao
+import com.example.aiadventchallenge.data.local.dao.FactDao
 import com.example.aiadventchallenge.data.local.entity.ChatMessageEntity
 import com.example.aiadventchallenge.data.local.entity.SummaryEntity
 import com.example.aiadventchallenge.domain.model.ChatMessage
@@ -12,7 +14,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
-class ChatRepository(private val chatMessageDao: ChatMessageDao) {
+class ChatRepository(
+    private val chatMessageDao: ChatMessageDao,
+    private val branchDao: BranchDao,
+    private val factDao: FactDao
+) {
 
     fun getAllMessages(): Flow<List<ChatMessage>> {
         return chatMessageDao.getAllMessages().map { entities ->
@@ -26,6 +32,25 @@ class ChatRepository(private val chatMessageDao: ChatMessageDao) {
                     totalTokens = entity.totalTokens
                 )
             }
+        }
+    }
+
+    suspend fun getMessagesByBranch(branchId: String?): List<ChatMessage> {
+        val entities = if (branchId != null) {
+            chatMessageDao.getMessagesByBranch(branchId)
+        } else {
+            chatMessageDao.getAllMessagesList()
+        }
+
+        return entities.map { entity ->
+            ChatMessage(
+                id = entity.id,
+                content = entity.content,
+                isFromUser = entity.isFromUser,
+                promptTokens = entity.promptTokens,
+                completionTokens = entity.completionTokens,
+                totalTokens = entity.totalTokens
+            )
         }
     }
 
@@ -67,19 +92,20 @@ class ChatRepository(private val chatMessageDao: ChatMessageDao) {
         )
     }
 
-    suspend fun insertMessage(message: ChatMessage) {
+    suspend fun insertMessage(message: ChatMessage, branchId: String? = null) {
         val entity = ChatMessageEntity(
             id = message.id,
             content = message.content,
             isFromUser = message.isFromUser,
             promptTokens = message.promptTokens,
             completionTokens = message.completionTokens,
-            totalTokens = message.totalTokens
+            totalTokens = message.totalTokens,
+            branchId = branchId
         )
         chatMessageDao.insertMessage(entity)
     }
 
-    suspend fun insertMessages(messages: List<ChatMessage>) {
+    suspend fun insertMessages(messages: List<ChatMessage>, branchId: String? = null) {
         val entities = messages.map { message ->
             ChatMessageEntity(
                 id = message.id,
@@ -87,10 +113,15 @@ class ChatRepository(private val chatMessageDao: ChatMessageDao) {
                 isFromUser = message.isFromUser,
                 promptTokens = message.promptTokens,
                 completionTokens = message.completionTokens,
-                totalTokens = message.totalTokens
+                totalTokens = message.totalTokens,
+                branchId = branchId
             )
         }
         entities.forEach { chatMessageDao.insertMessage(it) }
+    }
+
+    suspend fun getActiveBranchId(): String? {
+        return branchDao.getActiveBranchId()
     }
 
     suspend fun insertSummary(summary: SummaryMessage) {

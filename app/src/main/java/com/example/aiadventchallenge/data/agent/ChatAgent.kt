@@ -52,10 +52,7 @@ class ChatAgent(
         config: RequestConfig
     ): ChatResult<com.example.aiadventchallenge.domain.model.AnswerWithUsage> {
         val messages = MessageMapper.mapCompressedToApiMessages(history, config.systemPrompt)
-        return when (val result = repository.askWithContext(messages, config)) {
-            is ChatResult.Success -> ChatResult.Success(result.data)
-            is ChatResult.Error -> ChatResult.Error(result.message, result.code)
-        }
+        return processRequestWithContextAndUsage(messages, config)
     }
 
     fun buildRequestConfig(): RequestConfig {
