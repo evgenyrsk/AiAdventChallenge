@@ -12,9 +12,9 @@ class ChatUiStateTest {
     fun `canCreateBranch returns false when not branching strategy`() {
         val state = ChatUiState(
             isBranchingStrategy = false,
-            messages = listOf(ChatMessage("1", "Test", true))
+            messages = listOf(ChatMessage("1", "Test", true, "main"))
         )
-        
+
         assertFalse(state.canCreateBranch)
     }
 
@@ -32,9 +32,9 @@ class ChatUiStateTest {
     fun `canCreateBranch returns true when branching strategy and has messages`() {
         val state = ChatUiState(
             isBranchingStrategy = true,
-            messages = listOf(ChatMessage("1", "Test", true))
+            messages = listOf(ChatMessage("1", "Test", true, "main"))
         )
-        
+
         assertTrue(state.canCreateBranch)
     }
 

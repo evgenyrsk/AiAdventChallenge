@@ -265,6 +265,7 @@ class ChatViewModel(
                         id = (System.currentTimeMillis() + 1).toString(),
                         content = answerWithUsage.content,
                         isFromUser = false,
+                        branchId = activeBranchId,
                         promptTokens = answerWithUsage.promptTokens,
                         completionTokens = answerWithUsage.completionTokens,
                         totalTokens = answerWithUsage.totalTokens
@@ -292,7 +293,8 @@ class ChatViewModel(
                     val errorMessage = ChatMessage(
                         id = (System.currentTimeMillis() + 1).toString(),
                         content = "Ошибка: ${result.message}",
-                        isFromUser = false
+                        isFromUser = false,
+                        branchId = activeBranchId
                     )
                     _messages.value += errorMessage
                 }
@@ -326,6 +328,7 @@ class ChatViewModel(
 
             factRepository.clearAllFacts()
             branchRepository.clearAllBranches()
+            chatRepository.deleteMessagesByBranch("main")
 
             if (isBranching) {
                 val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())

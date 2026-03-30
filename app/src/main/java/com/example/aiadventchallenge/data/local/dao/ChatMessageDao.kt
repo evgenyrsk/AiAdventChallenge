@@ -82,4 +82,7 @@ interface ChatMessageDao {
         WHERE branchId = :sourceBranchId AND id <= :checkpointMessageId
     """)
     suspend fun copyMessagesToBranch(sourceBranchId: String, targetBranchId: String, checkpointMessageId: String)
+
+    @Query("DELETE FROM chat_messages WHERE branchId = :branchId")
+    suspend fun deleteMessagesByBranch(branchId: String)
 }
