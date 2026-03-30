@@ -3,44 +3,33 @@ package com.example.aiadventchallenge.ui.screens.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.aiadventchallenge.data.agent.ChatAgent
-import com.example.aiadventchallenge.data.config.CompressionConfig
-import com.example.aiadventchallenge.data.mapper.MessageMapper
-import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.data.repository.ChatRepository
-import com.example.aiadventchallenge.domain.context.ContextStrategy
+import com.example.aiadventchallenge.domain.context.BranchingStrategy
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
-import com.example.aiadventchallenge.domain.model.AnswerWithUsage
 import com.example.aiadventchallenge.domain.model.ApiMessageDebug
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ChatResult
-import com.example.aiadventchallenge.domain.model.CompressedChatHistory
 import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestConfigDebug
 import com.example.aiadventchallenge.domain.model.RequestLog
-import com.example.aiadventchallenge.domain.model.SummaryMessage
-import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
+import com.example.aiadventchallenge.domain.repository.BranchRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.FactRepository
-import com.example.aiadventchallenge.domain.repository.BranchRepository
-import com.example.aiadventchallenge.domain.context.FactExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class ChatViewModel(
     private val agent: ChatAgent,
     private val chatRepository: ChatRepository,
-    private val createSummaryUseCase: CreateSummaryUseCase,
     private val chatSettingsRepository: ChatSettingsRepository,
     private val contextStrategyFactory: ContextStrategyFactory,
     private val factRepository: FactRepository,
     private val branchRepository: BranchRepository,
-    private val factExtractor: FactExtractor
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -59,7 +48,8 @@ class ChatViewModel(
     val requestLogs: StateFlow<List<RequestLog>> = _requestLogs.asStateFlow()
 
     private val _activeStrategyConfig = MutableStateFlow<ContextStrategyConfig?>(null)
-    val activeStrategyConfig: StateFlow<ContextStrategyConfig?> = _activeStrategyConfig.asStateFlow()
+    val activeStrategyConfig: StateFlow<ContextStrategyConfig?> =
+        _activeStrategyConfig.asStateFlow()
 
     private val _debugInfo = MutableStateFlow<Map<String, Any>>(emptyMap())
     val debugInfo: StateFlow<Map<String, Any>> = _debugInfo.asStateFlow()
@@ -102,15 +92,23 @@ class ChatViewModel(
                         updatedAt = branch.createdAt
                     )
                 }
-                
+
                 val currentConfig = chatSettingsRepository.getSettings()
-                val isBranching = currentConfig.type == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
-                
+                val isBranching =
+                    currentConfig.type == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
+
+                val activeBranch = if (activeBranchId != null) {
+                    branchRepository.getBranchById(activeBranchId).first()
+                } else {
+                    null
+                }
+
                 _chatUiState.value = _chatUiState.value.copy(
                     isBranchingStrategy = isBranching,
                     activeBranchId = activeBranchId,
                     activeBranchName = branchUiModels.find { it.isActive }?.title ?: "Main",
-                    availableBranches = branchUiModels
+                    availableBranches = branchUiModels,
+                    currentBranchCheckpointMessageId = activeBranch?.checkpointMessageId
                 )
             }
         }
@@ -118,8 +116,9 @@ class ChatViewModel(
 
     private fun updateBranchingStrategyState() {
         val currentConfig = _activeStrategyConfig.value ?: return
-        val isBranching = currentConfig.type == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
-        
+        val isBranching =
+            currentConfig.type == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
+
         _chatUiState.value = _chatUiState.value.copy(
             isBranchingStrategy = isBranching
         )
@@ -127,20 +126,27 @@ class ChatViewModel(
 
     private fun loadMessagesFromDatabase() {
         viewModelScope.launch {
-            chatRepository.getAllMessages().collect { allMessages ->
+            val currentConfig = chatSettingsRepository.getSettings()
+            val isBranching =
+                currentConfig.type == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
+
+            if (isBranching) {
                 val activeBranchId = branchRepository.getActiveBranchId()
-                
-                val filteredMessages = if (activeBranchId != null && 
-                    _chatUiState.value.isBranchingStrategy) {
-                    allMessages.filter { it.id.startsWith(activeBranchId) }
+                if (activeBranchId != null) {
+                    val messages = chatRepository.getMessagesByBranch(activeBranchId)
+                    _messages.value = messages
+                    _chatUiState.value = _chatUiState.value.copy(messages = messages)
                 } else {
-                    allMessages
+                    chatRepository.getAllMessages().collect { messages ->
+                        _messages.value = messages
+                        _chatUiState.value = _chatUiState.value.copy(messages = messages)
+                    }
                 }
-                
-                _messages.value = filteredMessages
-                _chatUiState.value = _chatUiState.value.copy(
-                    messages = filteredMessages
-                )
+            } else {
+                chatRepository.getAllMessages().collect { messages ->
+                    _messages.value = messages
+                    _chatUiState.value = _chatUiState.value.copy(messages = messages)
+                }
             }
         }
     }
@@ -162,27 +168,33 @@ class ChatViewModel(
 
         _isLoading.value = true
 
-        val userMessage = ChatMessage(
-            id = System.currentTimeMillis().toString(),
-            content = userInput,
-            isFromUser = true
-        )
-        _messages.value += userMessage
-
         viewModelScope.launch {
             val strategyConfig = chatSettingsRepository.getSettings()
-            val activeBranchId = chatRepository.getActiveBranchId()
+            val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
 
-            chatRepository.insertMessage(userMessage, activeBranchId)
+            val userMessage = ChatMessage(
+                id = System.currentTimeMillis().toString(),
+                content = userInput,
+                isFromUser = true,
+                branchId = activeBranchId
+            )
+            _messages.value += userMessage
 
             val currentStrategyType = strategyConfig.type
-            val isBranching = currentStrategyType == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
-            
+            val isBranching =
+                currentStrategyType == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
+
             _chatUiState.value = _chatUiState.value.copy(
                 isBranchingStrategy = isBranching
             )
 
             val strategy = contextStrategyFactory.create(strategyConfig)
+
+            if (strategy is BranchingStrategy) {
+                strategy.initialize()
+            }
+
+            chatRepository.insertMessage(userMessage, activeBranchId)
 
             val messages = chatRepository.getMessagesByBranch(activeBranchId)
             val config = agent.buildRequestConfig()
@@ -228,12 +240,14 @@ class ChatViewModel(
                         totalTokens = answerWithUsage.totalTokens
                     )
 
-                    addRequestLog(preliminaryLog.copy(
-                        responseContent = answerWithUsage.content,
-                        promptTokens = answerWithUsage.promptTokens,
-                        completionTokens = answerWithUsage.completionTokens,
-                        totalTokens = answerWithUsage.totalTokens
-                    ))
+                    addRequestLog(
+                        preliminaryLog.copy(
+                            responseContent = answerWithUsage.content,
+                            promptTokens = answerWithUsage.promptTokens,
+                            completionTokens = answerWithUsage.completionTokens,
+                            totalTokens = answerWithUsage.totalTokens
+                        )
+                    )
 
                     val aiMessage = ChatMessage(
                         id = (System.currentTimeMillis() + 1).toString(),
@@ -244,19 +258,23 @@ class ChatViewModel(
                         totalTokens = answerWithUsage.totalTokens
                     )
                     _messages.value += aiMessage
+
                     chatRepository.insertMessage(aiMessage, activeBranchId)
 
                     strategy.onAssistantMessage(aiMessage)
 
                     loadDialogStats()
                 }
+
                 is ChatResult.Error -> {
-                    addRequestLog(preliminaryLog.copy(
-                        responseError = result.message,
-                        promptTokens = null,
-                        completionTokens = null,
-                        totalTokens = null
-                    ))
+                    addRequestLog(
+                        preliminaryLog.copy(
+                            responseError = result.message,
+                            promptTokens = null,
+                            completionTokens = null,
+                            totalTokens = null
+                        )
+                    )
 
                     val errorMessage = ChatMessage(
                         id = (System.currentTimeMillis() + 1).toString(),
@@ -284,14 +302,22 @@ class ChatViewModel(
         viewModelScope.launch {
             chatSettingsRepository.updateStrategyType(type)
             _activeStrategyConfig.value = chatSettingsRepository.getSettings()
-            
-            val isBranching = type == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
+
+            val isBranching =
+                type == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
             _chatUiState.value = _chatUiState.value.copy(
                 isBranchingStrategy = isBranching
             )
 
             factRepository.clearAllFacts()
             branchRepository.clearAllBranches()
+
+            if (isBranching) {
+                val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())
+                if (strategy is BranchingStrategy) {
+                    strategy.initialize()
+                }
+            }
         }
     }
 
@@ -317,17 +343,18 @@ class ChatViewModel(
     fun onBranchSelected(branchId: String) {
         viewModelScope.launch {
             branchRepository.setActiveBranchId(branchId)
-            _chatUiState.value = _chatUiState.value.copy(
-                showBranchPicker = false
-            )
-            
+
             val messages = chatRepository.getMessagesByBranch(branchId)
             _messages.value = messages
+
+            val activeBranch = branchRepository.getBranchById(branchId).first()
             _chatUiState.value = _chatUiState.value.copy(
+                showBranchPicker = false,
                 messages = messages,
                 activeBranchId = branchId,
                 activeBranchName = _chatUiState.value.availableBranches
-                    .find { it.id == branchId }?.title ?: "Unknown"
+                    .find { it.id == branchId }?.title ?: "Unknown",
+                currentBranchCheckpointMessageId = activeBranch?.checkpointMessageId
             )
         }
     }
@@ -335,9 +362,9 @@ class ChatViewModel(
     fun onCreateBranchFromMessage(messageId: String) {
         val message = _messages.value.find { it.id == messageId }
         val preview = message?.content?.take(50)?.let { "$it..." } ?: "Сообщение"
-        
+
         val branchNumber = _chatUiState.value.availableBranches.size + 1
-        
+
         _chatUiState.value = _chatUiState.value.copy(
             showCreateBranchDialog = true,
             branchCreationTargetMessageId = messageId,
@@ -356,14 +383,14 @@ class ChatViewModel(
 
     fun onCreateBranchConfirmed(switchToNew: Boolean = true) {
         val state = _chatUiState.value
-        
+
         if (state.newBranchName.isBlank()) {
             _chatUiState.value = state.copy(
                 newBranchError = "Название ветки не может быть пустым"
             )
             return
         }
-        
+
         val targetMessageId = state.branchCreationTargetMessageId
         if (targetMessageId == null) {
             _chatUiState.value = state.copy(
@@ -371,13 +398,11 @@ class ChatViewModel(
             )
             return
         }
-        
+
         viewModelScope.launch {
-            val activeBranchId = branchRepository.getActiveBranchId()
+            val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
             val newBranchId = "branch_${System.currentTimeMillis()}"
-            
-            val checkpointLabel = state.branchCreationTargetPreview
-            
+
             val newBranch = com.example.aiadventchallenge.domain.model.ChatBranch(
                 id = newBranchId,
                 parentBranchId = activeBranchId,
@@ -385,20 +410,27 @@ class ChatViewModel(
                 title = state.newBranchName,
                 createdAt = System.currentTimeMillis()
             )
-            
+
             branchRepository.createBranch(newBranch)
-            
+
+            chatRepository.copyMessagesToBranch(
+                sourceBranchId = activeBranchId,
+                targetBranchId = newBranchId,
+                checkpointMessageId = targetMessageId
+            )
+
             if (switchToNew) {
                 branchRepository.setActiveBranchId(newBranchId)
-                
+
                 val messages = chatRepository.getMessagesByBranch(newBranchId)
                 _messages.value = messages
-                
+
                 _chatUiState.value = _chatUiState.value.copy(
                     showCreateBranchDialog = false,
                     activeBranchId = newBranchId,
                     activeBranchName = state.newBranchName,
                     messages = messages,
+                    currentBranchCheckpointMessageId = targetMessageId,
                     branchCreationTargetMessageId = null,
                     branchCreationTargetPreview = null,
                     newBranchName = ""
@@ -422,6 +454,28 @@ class ChatViewModel(
             newBranchName = "",
             newBranchError = null
         )
+    }
+
+    fun onDeleteBranch(branchId: String) {
+        viewModelScope.launch {
+            val activeBranchId = branchRepository.getActiveBranchId()
+
+            branchRepository.deleteBranch(branchId)
+
+            if (activeBranchId == branchId) {
+                val mainBranch = "main"
+                branchRepository.setActiveBranchId(mainBranch)
+                val messages = chatRepository.getMessagesByBranch(mainBranch)
+                _messages.value = messages
+
+                _chatUiState.value = _chatUiState.value.copy(
+                    activeBranchId = mainBranch,
+                    activeBranchName = "Main",
+                    messages = messages,
+                    currentBranchCheckpointMessageId = null
+                )
+            }
+        }
     }
 
     fun onBranchIndicatorClicked(messageId: String) {

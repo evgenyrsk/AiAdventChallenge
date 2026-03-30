@@ -14,12 +14,10 @@ import com.example.aiadventchallenge.domain.context.FactExtractor
 class ChatViewModelFactory(
     private val agent: ChatAgent,
     private val chatRepository: ChatRepository,
-    private val createSummaryUseCase: CreateSummaryUseCase,
     private val chatSettingsRepository: ChatSettingsRepository,
     private val contextStrategyFactory: ContextStrategyFactory,
     private val factRepository: FactRepository,
     private val branchRepository: BranchRepository,
-    private val factExtractor: FactExtractor
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -27,12 +25,10 @@ class ChatViewModelFactory(
             return ChatViewModel(
                 agent,
                 chatRepository,
-                createSummaryUseCase,
                 chatSettingsRepository,
                 contextStrategyFactory,
                 factRepository,
                 branchRepository,
-                factExtractor
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

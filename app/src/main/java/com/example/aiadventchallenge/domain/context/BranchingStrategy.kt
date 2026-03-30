@@ -3,14 +3,32 @@ package com.example.aiadventchallenge.domain.context
 import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.data.model.MessageRole
 import com.example.aiadventchallenge.domain.model.ChatMessage
+import com.example.aiadventchallenge.domain.model.ChatBranch
 import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
 import com.example.aiadventchallenge.domain.repository.BranchRepository
+import com.example.aiadventchallenge.data.repository.ChatRepository
 import kotlinx.coroutines.flow.first
 
 class BranchingStrategy(
     private val config: ContextStrategyConfig,
-    private val branchRepository: BranchRepository
+    private val branchRepository: BranchRepository,
+    private val chatRepository: ChatRepository
 ) : ContextStrategy {
+
+    suspend fun initialize() {
+        val activeBranchId = branchRepository.getActiveBranchId()
+        if (activeBranchId == null) {
+            val mainBranch = ChatBranch(
+                id = "main",
+                parentBranchId = null,
+                checkpointMessageId = "",
+                title = "Main",
+                createdAt = System.currentTimeMillis()
+            )
+            branchRepository.createBranch(mainBranch)
+            branchRepository.setActiveBranchId("main")
+        }
+    }
 
     override suspend fun buildContext(
         chatId: String?,
@@ -23,7 +41,7 @@ class BranchingStrategy(
 
         val activeBranchId = branchRepository.getActiveBranchId()
         val branchMessages = if (activeBranchId != null) {
-            messages.filter { it.id.startsWith(activeBranchId) }
+            messages.filter { it.branchId == activeBranchId }
         } else {
             messages
         }

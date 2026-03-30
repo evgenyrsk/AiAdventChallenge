@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -50,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.aiadventchallenge.domain.model.ChatMessage
@@ -142,59 +144,96 @@ fun ChatScreen(
                     }
                 )
                 LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)
-                ) {
-                    items(messages, key = { it.id }) { message ->
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (chatUiState.isBranchingStrategy) {
-                                val branchCount = chatUiState.getMessageBranchCount(message.id)
-                                if (branchCount > 0) {
-                                    BranchIndicatorBadge(
-                                        branchCount = branchCount,
-                                        onClick = { viewModel.onBranchIndicatorClicked(message.id) }
+                        state = listState,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)
+                    ) {
+                        if (chatUiState.isBranchingStrategy && chatUiState.messages.isEmpty()) {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer
                                     )
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "💡 Подсказки:",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        Text(
+                                            text = "• Нажмите и удерживайте сообщение, чтобы создать новую ветку от этого места",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        Text(
+                                            text = "• Нажмите на badge с количеством веток, чтобы переключиться между ними",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        Text(
+                                            text = "• Нажмите на название ветки вверху, чтобы просмотреть все ветки",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
                                 }
                             }
-                            
-                            MessageBubble(
-                                message = message.content,
-                                isFromUser = message.isFromUser,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .combinedClickable(
-                                        onClick = {},
-                                        onLongClick = {
-                                            if (chatUiState.isBranchingStrategy) {
-                                                viewModel.onCreateBranchFromMessage(message.id)
+                        }
+
+                        items(messages, key = { it.id }) { message ->
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (chatUiState.isBranchingStrategy) {
+                                    val branchCount = chatUiState.getMessageBranchCount(message.id)
+                                    if (branchCount > 0) {
+                                        BranchIndicatorBadge(
+                                            branchCount = branchCount,
+                                            onClick = { viewModel.onBranchIndicatorClicked(message.id) }
+                                        )
+                                    }
+                                }
+
+                                MessageBubble(
+                                    message = message.content,
+                                    isFromUser = message.isFromUser,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .combinedClickable(
+                                            onClick = {},
+                                            onLongClick = {
+                                                if (chatUiState.isBranchingStrategy) {
+                                                    viewModel.onCreateBranchFromMessage(message.id)
+                                                }
                                             }
-                                        }
-                                    )
-                            )
-                            
-                            if (chatUiState.isBranchingStrategy && 
-                                !chatUiState.isRootBranch && 
-                                message.id == chatUiState.currentBranchCheckpointMessageId) {
-                                BranchStartDivider()
+                                        )
+                                )
+
+                                if (chatUiState.isBranchingStrategy &&
+                                    !chatUiState.isRootBranch &&
+                                    message.id == chatUiState.currentBranchCheckpointMessageId) {
+                                    BranchStartDivider()
+                                }
+                            }
+                        }
+                        if (isLoading) {
+                            item {
+                                MessageBubble(
+                                    message = "Печатает...",
+                                    isFromUser = false,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
                     }
-                    if (isLoading) {
-                        item {
-                            MessageBubble(
-                                message = "Печатает...",
-                                isFromUser = false,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-                }
 
                 Column(
                     modifier = Modifier
@@ -210,7 +249,7 @@ fun ChatScreen(
                     
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedTextField(
                         value = userInput,
@@ -372,7 +411,8 @@ fun ChatScreen(
             BranchPickerSheet(
                 branches = chatUiState.availableBranches,
                 onBranchSelected = { branchId -> viewModel.onBranchSelected(branchId) },
-                onDismiss = { viewModel.onBranchPickerDismiss() }
+                onDismiss = { viewModel.onBranchPickerDismiss() },
+                onDeleteBranch = { branchId -> viewModel.onDeleteBranch(branchId) }
             )
         }
 

@@ -4,6 +4,7 @@ import com.example.aiadventchallenge.data.config.Prompts
 import com.example.aiadventchallenge.data.mapper.MessageMapper
 import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.domain.agent.Agent
+import com.example.aiadventchallenge.domain.model.AnswerWithUsage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.CompressedChatHistory
 import com.example.aiadventchallenge.domain.model.RequestConfig
@@ -40,24 +41,16 @@ class ChatAgent(
     suspend fun processRequestWithContextAndUsage(
         messages: List<Message>,
         config: RequestConfig
-    ): ChatResult<com.example.aiadventchallenge.domain.model.AnswerWithUsage> {
+    ): ChatResult<AnswerWithUsage> {
         return when (val result = repository.askWithContext(messages, config)) {
             is ChatResult.Success -> ChatResult.Success(result.data)
             is ChatResult.Error -> ChatResult.Error(result.message, result.code)
         }
     }
 
-    suspend fun processRequestWithCompressedContextAndUsage(
-        history: CompressedChatHistory,
-        config: RequestConfig
-    ): ChatResult<com.example.aiadventchallenge.domain.model.AnswerWithUsage> {
-        val messages = MessageMapper.mapCompressedToApiMessages(history, config.systemPrompt)
-        return processRequestWithContextAndUsage(messages, config)
-    }
-
     fun buildRequestConfig(): RequestConfig {
         return RequestConfig(
-            systemPrompt = Prompts.UNLIMITED_SYSTEM_PROMPT
+            systemPrompt = Prompts.UNLIMITED_SYSTEM_PROMPT,
         )
     }
 }

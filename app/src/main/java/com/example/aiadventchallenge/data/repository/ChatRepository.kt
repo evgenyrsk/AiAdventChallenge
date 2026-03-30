@@ -27,6 +27,7 @@ class ChatRepository(
                     id = entity.id,
                     content = entity.content,
                     isFromUser = entity.isFromUser,
+                    branchId = entity.branchId,
                     promptTokens = entity.promptTokens,
                     completionTokens = entity.completionTokens,
                     totalTokens = entity.totalTokens
@@ -47,49 +48,12 @@ class ChatRepository(
                 id = entity.id,
                 content = entity.content,
                 isFromUser = entity.isFromUser,
+                branchId = entity.branchId,
                 promptTokens = entity.promptTokens,
                 completionTokens = entity.completionTokens,
                 totalTokens = entity.totalTokens
             )
         }
-    }
-
-    suspend fun getCompressedHistory(): CompressedChatHistory {
-        val summaryEntities = chatMessageDao.getAllSummaries()
-        val summaries = summaryEntities.map { entity ->
-            SummaryMessage(
-                id = entity.id,
-                content = entity.content,
-                messageRangeStart = entity.messageRangeStart,
-                messageRangeEnd = entity.messageRangeEnd,
-                messageCount = entity.messageCount,
-                createdAt = entity.createdAt
-            )
-        }
-
-        val nonSummarizedEntities = chatMessageDao.getNonSummarizedMessages()
-        val nonSummarizedMessages = nonSummarizedEntities.map { entity ->
-            ChatMessage(
-                id = entity.id,
-                content = entity.content,
-                isFromUser = entity.isFromUser,
-                promptTokens = entity.promptTokens,
-                completionTokens = entity.completionTokens,
-                totalTokens = entity.totalTokens
-            )
-        }
-
-        val recentMessages = nonSummarizedMessages.takeLast(CompressionConfig.RECENT_MESSAGES_LIMIT)
-
-        println("📊 Compressed history:")
-        println("  Summaries: ${summaries.size}")
-        println("  Non-summarized messages: ${nonSummarizedMessages.size}")
-        println("  Recent messages: ${recentMessages.size}")
-
-        return CompressedChatHistory(
-            summaries = summaries,
-            recentMessages = recentMessages
-        )
     }
 
     suspend fun insertMessage(message: ChatMessage, branchId: String? = null) {
@@ -111,10 +75,10 @@ class ChatRepository(
                 id = message.id,
                 content = message.content,
                 isFromUser = message.isFromUser,
+                branchId = message.branchId ?: branchId,
                 promptTokens = message.promptTokens,
                 completionTokens = message.completionTokens,
-                totalTokens = message.totalTokens,
-                branchId = branchId
+                totalTokens = message.totalTokens
             )
         }
         entities.forEach { chatMessageDao.insertMessage(it) }
@@ -124,35 +88,6 @@ class ChatRepository(
         return branchDao.getActiveBranchId()
     }
 
-    suspend fun insertSummary(summary: SummaryMessage) {
-        val entity = SummaryEntity(
-            id = summary.id,
-            content = summary.content,
-            messageRangeStart = summary.messageRangeStart,
-            messageRangeEnd = summary.messageRangeEnd,
-            messageCount = summary.messageCount,
-            createdAt = summary.createdAt
-        )
-        chatMessageDao.insertSummary(entity)
-    }
-
-    suspend fun deleteSummaryByRangeEnd(messageRangeEnd: Long) {
-        chatMessageDao.deleteSummaryByRangeEnd(messageRangeEnd)
-    }
-
-    suspend fun getAllSummaries(): List<SummaryMessage> {
-        return chatMessageDao.getAllSummaries().map { entity ->
-            SummaryMessage(
-                id = entity.id,
-                content = entity.content,
-                messageRangeStart = entity.messageRangeStart,
-                messageRangeEnd = entity.messageRangeEnd,
-                messageCount = entity.messageCount,
-                createdAt = entity.createdAt
-            )
-        }
-    }
-
     suspend fun getDialogStats(): DialogTokenStats {
         return chatMessageDao.getDialogStats()
     }
@@ -160,5 +95,10 @@ class ChatRepository(
     suspend fun deleteAllMessages() {
         chatMessageDao.deleteAllMessages()
         chatMessageDao.deleteAllSummaries()
+    }
+
+    suspend fun copyMessagesToBranch(sourceBranchId: String, targetBranchId: String, checkpointMessageId: String?) {
+        val checkpoint = checkpointMessageId ?: sourceBranchId
+        chatMessageDao.copyMessagesToBranch(sourceBranchId, targetBranchId, checkpoint)
     }
 }

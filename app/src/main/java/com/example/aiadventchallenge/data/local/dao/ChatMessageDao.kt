@@ -67,4 +67,19 @@ interface ChatMessageDao {
         ORDER BY cm.timestamp ASC
     """)
     suspend fun getNonSummarizedMessages(): List<ChatMessageEntity>
+
+    @Query("""
+        SELECT * FROM chat_messages 
+        WHERE branchId = :branchId AND id <= :checkpointMessageId
+        ORDER BY timestamp ASC
+    """)
+    suspend fun getMessagesBeforeCheckpoint(branchId: String, checkpointMessageId: String): List<ChatMessageEntity>
+
+    @Query("""
+        INSERT INTO chat_messages (id, content, isFromUser, timestamp, promptTokens, completionTokens, totalTokens, branchId)
+        SELECT id, content, isFromUser, timestamp, promptTokens, completionTokens, totalTokens, :targetBranchId
+        FROM chat_messages
+        WHERE branchId = :sourceBranchId AND id <= :checkpointMessageId
+    """)
+    suspend fun copyMessagesToBranch(sourceBranchId: String, targetBranchId: String, checkpointMessageId: String)
 }
