@@ -34,34 +34,38 @@ class FactExtractor(
         existingFacts: List<FactEntry>
     ): Result<List<FactEntry>> {
         return try {
-            val systemPrompt = """You are a fact extraction assistant. 
-Your task is to update the conversation facts based on the user's message.
+            val systemPrompt = """Вы помощник по извлечению фактов.
+Ваша задача - обновить факты разговора на основе сообщения пользователя.
 
-IMPORTANT:
-- Return ONLY valid JSON with this structure: {"facts": [{"key": "...", "value": "..."}], "action": "update/create/delete"}
-- Keys should be short and descriptive (e.g., "user_name", "goal", "preference")
-- Values should be concise
-- If no new facts are found, return the existing facts unchanged
-- Always include all existing facts in the response (don't remove them unless they become irrelevant)
-- If a fact is no longer relevant, set action to "delete" for that fact
+ВАЖНО:
+- Верните ТОЛЬКО валидный JSON со структурой: {"facts": [{"key": "...", "value": "..."}], "action": "update/create/delete"}
+- Ключи должны быть краткими и описательными (например, "user_name", "goal", "preference")
+- Значения должны быть лаконичными
+- Если новые факты не найдены, верните существующие факты без изменений
+- Всегда включайте все существующие факты в ответ (не удаляйте их, если они не стали неактуальными)
+- Если факт больше не актуален, установите action в "delete" для этого факта
+- НЕ используйте HTML, XML, Markdown или другие теги форматирования
+- НЕ добавляйте никаких объяснений или дополнительного текста
+- Ответ должен начинаться с { и заканчиваться }
 
-Response format (strict JSON):
+Формат ответа (строгий JSON):
 {
   "facts": [
-    {"key": "fact_key", "value": "fact_value", "source": "EXTRACTED", "updatedAt": 1234567890, "confidence": 0.9, "isOptional": false}
+    {"key": "user_name", "value": "Иван"},
+    {"key": "goal", "value": "изучить Android"}
   ],
   "action": "update"
 }"""
 
-            val prompt = """Extract or update facts from the user message.
+            val prompt = """Извлеките или обновите факты из сообщения пользователя.
 
-Existing facts:
+Существующие факты:
 ${existingFacts.joinToString("\n") { "- ${it.key}: ${it.value}" }}
 
-User message:
+Сообщение пользователя:
 $userMessage
 
-Return updated facts as JSON."""
+Верните обновленные факты в формате JSON."""
 
             val config = RequestConfig(
                 systemPrompt = systemPrompt,
@@ -87,6 +91,11 @@ Return updated facts as JSON."""
         existingFacts: List<FactEntry>
     ): Result<List<FactEntry>> {
         return try {
+            if (response.trim().startsWith("<")) {
+                println("AI returned HTML/XML instead of JSON. Response: $response")
+                return Result.success(existingFacts)
+            }
+
             val cleanedResponse = response
                 .trim()
                 .let { if (it.startsWith("```")) it.substringAfter("```").substringBefore("```") else it }
