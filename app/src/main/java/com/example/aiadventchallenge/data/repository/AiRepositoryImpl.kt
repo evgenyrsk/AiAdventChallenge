@@ -7,6 +7,7 @@ import com.example.aiadventchallenge.data.model.ChatRequest
 import com.example.aiadventchallenge.data.model.DataRequestConfig
 import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.data.model.MessageRole
+import com.example.aiadventchallenge.data.model.ReasoningConfig
 import com.example.aiadventchallenge.data.parser.ResponseParser
 import com.example.aiadventchallenge.data.parser.ResponseParserWithUsage
 import com.example.aiadventchallenge.domain.model.Answer
@@ -98,10 +99,14 @@ class AiRepositoryImpl(
             temperature = domainConfig.temperature,
             maxTokens = domainConfig.maxTokens,
             stop = domainConfig.stop,
-            reasoning = if (domainConfig.reasoningEnabled == false) {
-                com.example.aiadventchallenge.data.model.ReasoningConfig(exclude = true)
+            reasoning = if (!domainConfig.reasoningEnabled) {
+                ReasoningConfig(
+                    exclude = true,
+                    effort = "none",
+                    enabled = false,
+                )
             } else {
-                null
+                ReasoningConfig(exclude = true)
             }
         )
     }

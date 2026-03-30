@@ -6,5 +6,5 @@ data class RequestConfig(
     val temperature: Double? = null,
     val maxTokens: Int? = null,
     val stop: List<String>? = null,
-    val reasoningEnabled: Boolean? = null
+    val reasoningEnabled: Boolean = false,
 )

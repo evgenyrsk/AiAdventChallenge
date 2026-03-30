@@ -18,6 +18,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,19 +57,17 @@ class MainActivity : ComponentActivity() {
     private val chatSettingsRepository by lazy { DataChatSettingsRepository(database.chatSettingsDao()) }
     private val factRepository by lazy { FactRepositoryImpl(database.factDao()) }
     private val branchRepository by lazy { BranchRepositoryImpl(database.branchDao()) }
-    private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository, factExtractor) }
     private val factExtractor by lazy { FactExtractor(AppDependencies.repository) }
+    private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository, factExtractor, chatRepository) }
 
     private val chatViewModel: ChatViewModel by viewModels {
         ChatViewModelFactory(
             AppDependencies.chatAgent,
             chatRepository,
-            AppDependencies.createSummaryUseCase,
             chatSettingsRepository,
             contextStrategyFactory,
             factRepository,
             branchRepository,
-            factExtractor
         )
     }
 
@@ -105,7 +104,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AiAdventChallengeTheme {
-                var selectedTab by remember { mutableStateOf(0) }
+                var selectedTab by remember { mutableIntStateOf(0) }
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),

@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -37,6 +38,7 @@ fun BranchPickerSheet(
     branches: List<BranchUiModel>,
     onBranchSelected: (String) -> Unit,
     onDismiss: () -> Unit,
+    onDeleteBranch: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(
@@ -88,7 +90,8 @@ fun BranchPickerSheet(
                     items(branches, key = { it.id }) { branch ->
                         BranchListItem(
                             branch = branch,
-                            onClick = { onBranchSelected(branch.id) }
+                            onClick = { onBranchSelected(branch.id) },
+                            onDeleteBranch = onDeleteBranch
                         )
                     }
                 }
@@ -101,6 +104,7 @@ fun BranchPickerSheet(
 private fun BranchListItem(
     branch: BranchUiModel,
     onClick: () -> Unit,
+    onDeleteBranch: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -130,14 +134,33 @@ private fun BranchListItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                
-                if (branch.isActive) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Активная ветка",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (branch.isActive) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Активная ветка",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    if (!branch.isActive && branch.parentBranchId != null) {
+                        IconButton(
+                            onClick = { onDeleteBranch(branch.id) },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Удалить ветку",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                 }
             }
             
