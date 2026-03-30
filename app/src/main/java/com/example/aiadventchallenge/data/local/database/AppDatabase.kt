@@ -10,11 +10,13 @@ import com.example.aiadventchallenge.data.local.dao.ChatMessageDao
 import com.example.aiadventchallenge.data.local.dao.FactDao
 import com.example.aiadventchallenge.data.local.dao.BranchDao
 import com.example.aiadventchallenge.data.local.dao.ChatSettingsDao
+import com.example.aiadventchallenge.data.local.dao.AiRequestDao
 import com.example.aiadventchallenge.data.local.entity.ChatMessageEntity
 import com.example.aiadventchallenge.data.local.entity.SummaryEntity
 import com.example.aiadventchallenge.data.local.entity.FactEntity
 import com.example.aiadventchallenge.data.local.entity.BranchEntity
 import com.example.aiadventchallenge.data.local.entity.ChatSettingsEntity
+import com.example.aiadventchallenge.data.local.entity.AiRequestEntity
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 
 @Database(
@@ -23,9 +25,10 @@ import com.example.aiadventchallenge.domain.model.DialogTokenStats
         SummaryEntity::class,
         FactEntity::class,
         BranchEntity::class,
-        ChatSettingsEntity::class
+        ChatSettingsEntity::class,
+        AiRequestEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,6 +36,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun factDao(): FactDao
     abstract fun branchDao(): BranchDao
     abstract fun chatSettingsDao(): ChatSettingsDao
+    abstract fun aiRequestDao(): AiRequestDao
 
     companion object {
         @Volatile
@@ -116,6 +120,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS ai_requests (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        requestType TEXT NOT NULL,
+                        model TEXT,
+                        prompt TEXT,
+                        response TEXT,
+                        promptTokens INTEGER,
+                        completionTokens INTEGER,
+                        totalTokens INTEGER
+                    )"""
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -123,7 +145,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
                 INSTANCE = instance
                 instance

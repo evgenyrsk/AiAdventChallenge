@@ -9,6 +9,7 @@ import com.example.aiadventchallenge.domain.model.ModelComparisonResult
 import com.example.aiadventchallenge.domain.model.ModelStrength
 import com.example.aiadventchallenge.domain.model.ModelVersion
 import com.example.aiadventchallenge.domain.model.RequestConfig
+import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -62,7 +63,7 @@ class AskModelUseCase(
                 maxTokens = 3000,
             )
 
-            val result = repository.askWithUsage(prompt, null, config)
+            val result = repository.askWithUsage(prompt, null, config, RequestType.MODEL_TEST)
             
             val latencyMs = System.currentTimeMillis() - startTime
 

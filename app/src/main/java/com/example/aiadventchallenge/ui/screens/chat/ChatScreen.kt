@@ -94,6 +94,7 @@ fun ChatScreen(
 
     val lastRequestTokens by viewModel.lastRequestTokens.collectAsStateWithLifecycle()
     val dialogStats by viewModel.dialogStats.collectAsStateWithLifecycle()
+    val allTimeStats by viewModel.allTimeStats.collectAsStateWithLifecycle()
     val requestLogs by viewModel.requestLogs.collectAsStateWithLifecycle()
     val activeStrategyConfig by viewModel.activeStrategyConfig.collectAsStateWithLifecycle()
     var showDebugLog by remember { mutableStateOf(false) }
@@ -321,6 +322,7 @@ fun ChatScreen(
                 TokenStatsDisplay(
                     lastRequestTokens = lastRequestTokens,
                     dialogStats = dialogStats,
+                    allTimeStats = allTimeStats,
                     requestLogs = requestLogs,
                     onClose = { showTokenStats = false },
                     modifier = Modifier
@@ -473,6 +475,7 @@ fun MessageBubble(
 fun TokenStatsDisplay(
     lastRequestTokens: ChatViewModel.LastRequestTokens?,
     dialogStats: DialogTokenStats,
+    allTimeStats: DialogTokenStats,
     requestLogs: List<RequestLog>,
     onClose: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -561,7 +564,33 @@ fun TokenStatsDisplay(
                     )
                 }
             }
-            
+
+            if (allTimeStats.requestsCount > 0) {
+                HorizontalDivider()
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "За всё время (${allTimeStats.requestsCount} запросов):",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "• Prompt: ${allTimeStats.totalPromptTokens} ток.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "• Completion: ${allTimeStats.totalCompletionTokens} ток.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "• Всего: ${allTimeStats.totalTokens} ток.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
             val validLogs = requestLogs.filter { it.totalTokens != null }
             val recentLogs = validLogs.take(10)
             
