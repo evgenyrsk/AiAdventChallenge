@@ -36,12 +36,8 @@ class ChatRepository(
         }
     }
 
-    suspend fun getMessagesByBranch(branchId: String?): List<ChatMessage> {
-        val entities = if (branchId != null) {
-            chatMessageDao.getMessagesByBranch(branchId)
-        } else {
-            chatMessageDao.getAllMessagesList()
-        }
+    suspend fun getMessagesByBranch(branchId: String = "main"): List<ChatMessage> {
+        val entities = chatMessageDao.getMessagesByBranch(branchId)
 
         return entities.map { entity ->
             ChatMessage(
@@ -56,7 +52,7 @@ class ChatRepository(
         }
     }
 
-    suspend fun insertMessage(message: ChatMessage, branchId: String? = null) {
+    suspend fun insertMessage(message: ChatMessage, branchId: String = "main") {
         val entity = ChatMessageEntity(
             id = message.id,
             content = message.content,
@@ -69,13 +65,13 @@ class ChatRepository(
         chatMessageDao.insertMessage(entity)
     }
 
-    suspend fun insertMessages(messages: List<ChatMessage>, branchId: String? = null) {
+    suspend fun insertMessages(messages: List<ChatMessage>, branchId: String = "main") {
         val entities = messages.map { message ->
             ChatMessageEntity(
                 id = message.id,
                 content = message.content,
                 isFromUser = message.isFromUser,
-                branchId = message.branchId ?: branchId,
+                branchId = branchId,
                 promptTokens = message.promptTokens,
                 completionTokens = message.completionTokens,
                 totalTokens = message.totalTokens
@@ -95,6 +91,10 @@ class ChatRepository(
     suspend fun deleteAllMessages() {
         chatMessageDao.deleteAllMessages()
         chatMessageDao.deleteAllSummaries()
+    }
+
+    suspend fun deleteMessagesByBranch(branchId: String) {
+        chatMessageDao.deleteMessagesByBranch(branchId)
     }
 
     suspend fun copyMessagesToBranch(sourceBranchId: String, targetBranchId: String, checkpointMessageId: String?) {

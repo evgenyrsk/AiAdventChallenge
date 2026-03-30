@@ -17,7 +17,6 @@ import com.example.aiadventchallenge.data.local.entity.FactEntity
 import com.example.aiadventchallenge.data.local.entity.BranchEntity
 import com.example.aiadventchallenge.data.local.entity.ChatSettingsEntity
 import com.example.aiadventchallenge.data.local.entity.AiRequestEntity
-import com.example.aiadventchallenge.domain.model.DialogTokenStats
 
 @Database(
     entities = [
@@ -28,7 +27,7 @@ import com.example.aiadventchallenge.domain.model.DialogTokenStats
         ChatSettingsEntity::class,
         AiRequestEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -138,6 +137,41 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "UPDATE chat_messages SET branchId = 'main' WHERE branchId IS NULL"
+                )
+
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS chat_messages_new (
+                        id TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        isFromUser INTEGER NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        promptTokens INTEGER,
+                        completionTokens INTEGER,
+                        totalTokens INTEGER,
+                        branchId TEXT NOT NULL,
+                        PRIMARY KEY (id, branchId)
+                    )"""
+                )
+
+                db.execSQL(
+                    """INSERT INTO chat_messages_new (id, content, isFromUser, timestamp, promptTokens, completionTokens, totalTokens, branchId)
+                       SELECT id, content, isFromUser, timestamp, promptTokens, completionTokens, totalTokens, branchId
+                       FROM chat_messages"""
+                )
+
+                db.execSQL("DROP TABLE chat_messages")
+
+                db.execSQL("ALTER TABLE chat_messages_new RENAME TO chat_messages")
+
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_chat_messages_branchId ON chat_messages(branchId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_chat_messages_timestamp ON chat_messages(timestamp)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -145,7 +179,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build()
                 INSTANCE = instance
                 instance

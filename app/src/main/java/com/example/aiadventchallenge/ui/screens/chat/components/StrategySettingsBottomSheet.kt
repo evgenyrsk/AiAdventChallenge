@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
+import kotlin.math.roundToInt
 
 @Composable
 fun StrategySettingsBottomSheet(
@@ -20,7 +21,7 @@ fun StrategySettingsBottomSheet(
     modifier: Modifier = Modifier
 ) {
     var selectedStrategy by remember { mutableStateOf(currentStrategy) }
-    var windowSize by remember { mutableStateOf(currentWindowSize) }
+    var windowSize by remember { mutableIntStateOf(currentWindowSize) }
 
     Column(
         modifier = modifier
@@ -91,9 +92,9 @@ fun StrategySettingsBottomSheet(
 
         Slider(
             value = windowSize.toFloat(),
-            onValueChange = { windowSize = it.toInt() },
+            onValueChange = { windowSize = ((it / 5f).roundToInt() * 5).coerceIn(5, 50) },
             valueRange = 5f..50f,
-            steps = 9
+            steps = 8
         )
 
         Text(
