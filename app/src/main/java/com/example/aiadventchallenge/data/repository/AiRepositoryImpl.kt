@@ -100,13 +100,9 @@ class AiRepositoryImpl(
             maxTokens = domainConfig.maxTokens,
             stop = domainConfig.stop,
             reasoning = if (!domainConfig.reasoningEnabled) {
-                ReasoningConfig(
-                    exclude = true,
-                    effort = "none",
-                    enabled = false,
-                )
-            } else {
                 ReasoningConfig(exclude = true)
+            } else {
+                ReasoningConfig()
             }
         )
     }
