@@ -28,6 +28,7 @@ import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.data.repository.ChatSettingsRepository as DataChatSettingsRepository
 import com.example.aiadventchallenge.data.repository.FactRepositoryImpl
 import com.example.aiadventchallenge.data.repository.BranchRepositoryImpl
+import com.example.aiadventchallenge.data.repository.AiRequestRepository
 import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.ui.screens.chat.ChatScreen
 import com.example.aiadventchallenge.ui.screens.chat.ChatViewModel
@@ -57,6 +58,7 @@ class MainActivity : ComponentActivity() {
     private val chatSettingsRepository by lazy { DataChatSettingsRepository(database.chatSettingsDao()) }
     private val factRepository by lazy { FactRepositoryImpl(database.factDao()) }
     private val branchRepository by lazy { BranchRepositoryImpl(database.branchDao()) }
+    private val aiRequestRepository by lazy { AiRequestRepository(database.aiRequestDao()) }
     private val factExtractor by lazy { FactExtractor(AppDependencies.repository) }
     private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository, factExtractor, chatRepository) }
 
@@ -68,6 +70,7 @@ class MainActivity : ComponentActivity() {
             contextStrategyFactory,
             factRepository,
             branchRepository,
+            aiRequestRepository,
         )
     }
 
@@ -101,6 +104,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppDependencies.init(this)
         enableEdgeToEdge()
         setContent {
             AiAdventChallengeTheme {

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.aiadventchallenge.data.agent.ChatAgent
 import com.example.aiadventchallenge.data.repository.ChatRepository
+import com.example.aiadventchallenge.data.repository.AiRequestRepository
 import com.example.aiadventchallenge.domain.context.BranchingStrategy
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
 import com.example.aiadventchallenge.domain.model.ApiMessageDebug
@@ -30,6 +31,7 @@ class ChatViewModel(
     private val contextStrategyFactory: ContextStrategyFactory,
     private val factRepository: FactRepository,
     private val branchRepository: BranchRepository,
+    private val aiRequestRepository: AiRequestRepository
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -43,6 +45,9 @@ class ChatViewModel(
 
     private val _dialogStats = MutableStateFlow(DialogTokenStats())
     val dialogStats: StateFlow<DialogTokenStats> = _dialogStats.asStateFlow()
+
+    private val _allTimeStats = MutableStateFlow(DialogTokenStats())
+    val allTimeStats: StateFlow<DialogTokenStats> = _allTimeStats.asStateFlow()
 
     private val _requestLogs = MutableStateFlow<List<RequestLog>>(emptyList())
     val requestLogs: StateFlow<List<RequestLog>> = _requestLogs.asStateFlow()
@@ -66,6 +71,7 @@ class ChatViewModel(
     init {
         loadMessagesFromDatabase()
         loadDialogStats()
+        loadAllTimeStats()
         loadStrategyConfig()
         loadBranchState()
     }
@@ -154,6 +160,12 @@ class ChatViewModel(
     private fun loadDialogStats() {
         viewModelScope.launch(Dispatchers.IO) {
             _dialogStats.value = chatRepository.getDialogStats()
+        }
+    }
+
+    private fun loadAllTimeStats() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _allTimeStats.value = aiRequestRepository.getAllTimeStats()
         }
     }
 
@@ -264,6 +276,7 @@ class ChatViewModel(
                     strategy.onAssistantMessage(aiMessage)
 
                     loadDialogStats()
+                    loadAllTimeStats()
                 }
 
                 is ChatResult.Error -> {
@@ -292,7 +305,9 @@ class ChatViewModel(
     fun clearChat() {
         viewModelScope.launch {
             chatRepository.deleteAllMessages()
+            aiRequestRepository.clearAllRequests()
             _dialogStats.value = DialogTokenStats()
+            _allTimeStats.value = DialogTokenStats()
             _lastRequestTokens.value = null
             _requestLogs.value = emptyList()
         }

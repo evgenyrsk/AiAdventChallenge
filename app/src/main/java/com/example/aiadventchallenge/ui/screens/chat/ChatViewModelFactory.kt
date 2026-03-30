@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.aiadventchallenge.data.agent.ChatAgent
 import com.example.aiadventchallenge.data.repository.ChatRepository
+import com.example.aiadventchallenge.data.repository.AiRequestRepository
 import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
@@ -18,6 +19,7 @@ class ChatViewModelFactory(
     private val contextStrategyFactory: ContextStrategyFactory,
     private val factRepository: FactRepository,
     private val branchRepository: BranchRepository,
+    private val aiRequestRepository: AiRequestRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -29,6 +31,7 @@ class ChatViewModelFactory(
                 contextStrategyFactory,
                 factRepository,
                 branchRepository,
+                aiRequestRepository,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

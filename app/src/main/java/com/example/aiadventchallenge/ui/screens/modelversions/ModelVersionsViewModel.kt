@@ -12,6 +12,7 @@ import com.example.aiadventchallenge.data.config.ModelVersionsConfig
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.RequestConfig
+import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.data.config.Prompts
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -120,7 +121,7 @@ class ModelVersionsViewModel(
                     maxTokens = 3000
                 )
 
-                val result = aiRepository.ask(analysisPrompt, null, config)
+                val result = aiRepository.askWithUsage(analysisPrompt, null, config, RequestType.COMPARISON)
 
                 when (result) {
                     is ChatResult.Success -> {

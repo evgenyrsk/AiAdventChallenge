@@ -5,6 +5,8 @@ import com.example.aiadventchallenge.data.api.ApiConfig
 import com.example.aiadventchallenge.data.api.HttpClient
 import com.example.aiadventchallenge.data.parser.ResponseParser
 import com.example.aiadventchallenge.data.repository.AiRepositoryImpl
+import com.example.aiadventchallenge.data.repository.AiRequestRepository
+import com.example.aiadventchallenge.data.local.database.AppDatabase
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
 import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
@@ -13,8 +15,15 @@ import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareTemperatureResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.TemperatureUseCase
 import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
+import android.content.Context
 
 object AppDependencies {
+    private lateinit var context: Context
+
+    fun init(context: Context) {
+        this.context = context.applicationContext
+    }
+
     private val apiConfig: ApiConfig = ApiConfig()
 
     private val httpClient: HttpClient by lazy {
@@ -25,11 +34,22 @@ object AppDependencies {
         ResponseParser()
     }
 
+    private val database: AppDatabase by lazy {
+        AppDatabase.getDatabase(context)
+    }
+
+    private val aiRequestRepository: AiRequestRepository by lazy {
+        AiRequestRepository(
+            aiRequestDao = database.aiRequestDao()
+        )
+    }
+
     val repository: AiRepository by lazy {
         AiRepositoryImpl(
             httpClient = httpClient,
             config = apiConfig,
-            responseParser = responseParser
+            responseParser = responseParser,
+            aiRequestRepository = aiRequestRepository
         )
     }
 

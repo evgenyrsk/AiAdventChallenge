@@ -3,6 +3,7 @@ package com.example.aiadventchallenge.domain.context
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.FactEntry
 import com.example.aiadventchallenge.domain.model.RequestConfig
+import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -72,7 +73,7 @@ $userMessage
                 temperature = 0.1
             )
 
-            when (val result = repository.askWithUsage(prompt, null, config)) {
+            when (val result = repository.askWithUsage(prompt, null, config, RequestType.FACT_EXTRACTION)) {
                 is ChatResult.Success -> {
                     val responseContent = result.data.content
                     parseFactResponse(responseContent, existingFacts)

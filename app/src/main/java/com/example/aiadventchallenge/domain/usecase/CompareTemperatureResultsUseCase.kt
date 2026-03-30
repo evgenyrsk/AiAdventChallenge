@@ -4,6 +4,7 @@ import com.example.aiadventchallenge.data.config.Prompts
 import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.RequestConfig
+import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.domain.repository.AiRepository
 
 class CompareTemperatureResultsUseCase(private val repository: AiRepository) {
@@ -13,7 +14,10 @@ class CompareTemperatureResultsUseCase(private val repository: AiRepository) {
         val config = RequestConfig(
             systemPrompt = Prompts.UNLIMITED_SYSTEM_PROMPT
         )
-        return repository.ask(prompt, null, config)
+        return when (val result = repository.askWithUsage(prompt, null, config, RequestType.COMPARISON)) {
+            is ChatResult.Success -> ChatResult.Success(Answer(content = result.data.content))
+            is ChatResult.Error -> result
+        }
     }
 
     private fun buildComparisonPrompt(answers: Map<Double, Answer>): String {

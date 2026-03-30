@@ -14,6 +14,7 @@ import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.AnswerWithUsage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.RequestConfig as DomainRequestConfig
+import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.domain.model.UserProfile
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import kotlinx.serialization.encodeToString
@@ -21,7 +22,8 @@ import kotlinx.serialization.encodeToString
 class AiRepositoryImpl(
     private val httpClient: HttpClient,
     private val config: ApiConfig,
-    private val responseParser: ResponseParser
+    private val responseParser: ResponseParser,
+    private val aiRequestRepository: AiRequestRepository
 ) : AiRepository {
     private val responseParserWithUsage = ResponseParserWithUsage()
 
@@ -66,7 +68,7 @@ class AiRepositoryImpl(
             reasoning = dataConfig.reasoning
         )
 
-        return executeRequestWithUsage(request)
+        return executeRequestWithUsage(request, messages)
     }
 
     override suspend fun askWithUsage(
@@ -89,7 +91,7 @@ class AiRepositoryImpl(
             reasoning = dataConfig.reasoning
         )
 
-        return executeRequestWithUsage(request)
+        return executeRequestWithUsage(request, messages)
     }
 
     private fun toDataRequestConfig(domainConfig: DomainRequestConfig): DataRequestConfig {
@@ -131,6 +133,12 @@ class AiRepositoryImpl(
         }.trim()
     }
 
+    private fun buildPromptText(messages: List<Message>): String {
+        return messages.joinToString("\n\n") { message ->
+            "${message.role}: ${message.content}"
+        }
+    }
+
     private suspend fun executeRequest(request: ChatRequest): ChatResult<Answer> {
         val requestJson = JsonConfig.json.encodeToString(request)
 
@@ -151,7 +159,10 @@ class AiRepositoryImpl(
         )
     }
 
-    private suspend fun executeRequestWithUsage(request: ChatRequest): ChatResult<AnswerWithUsage> {
+    private suspend fun executeRequestWithUsage(
+        request: ChatRequest,
+        messages: List<Message>
+    ): ChatResult<AnswerWithUsage> {
         val requestJson = JsonConfig.json.encodeToString(request)
 
         return httpClient.post(requestJson).fold(
@@ -174,5 +185,91 @@ class AiRepositoryImpl(
                 }
             }
         )
+    }
+
+    private suspend fun executeRequestWithUsage(
+        request: ChatRequest,
+        messages: List<Message>,
+        requestType: RequestType
+    ): ChatResult<AnswerWithUsage> {
+        val requestJson = JsonConfig.json.encodeToString(request)
+
+        return httpClient.post(requestJson).fold(
+            onSuccess = { responseBody ->
+                val parsed = responseParserWithUsage.parse(responseBody)
+
+                aiRequestRepository.recordRequest(
+                    type = requestType,
+                    model = request.model,
+                    prompt = buildPromptText(messages),
+                    response = parsed.content,
+                    promptTokens = parsed.promptTokens,
+                    completionTokens = parsed.completionTokens,
+                    totalTokens = parsed.totalTokens
+                )
+
+                ChatResult.Success(AnswerWithUsage(
+                    content = parsed.content,
+                    promptTokens = parsed.promptTokens,
+                    completionTokens = parsed.completionTokens,
+                    totalTokens = parsed.totalTokens
+                ))
+            },
+            onFailure = { error ->
+                when (error) {
+                    is HttpClient.HttpException -> {
+                        val errorMessage = responseParserWithUsage.parseError(error.code, error.body)
+                        ChatResult.Error(errorMessage, error.code)
+                    }
+                    else -> ChatResult.Error(error.message ?: "Network error")
+                }
+            }
+        )
+    }
+
+    override suspend fun askWithContext(
+        messages: List<Message>,
+        config: DomainRequestConfig,
+        requestType: RequestType
+    ): ChatResult<AnswerWithUsage> {
+        if (messages.isEmpty()) {
+            return ChatResult.Error("Список сообщений не может быть пустым")
+        }
+
+        val dataConfig = toDataRequestConfig(config)
+        val request = ChatRequest(
+            model = dataConfig.modelId ?: this.config.model,
+            messages = messages,
+            temperature = dataConfig.temperature,
+            maxTokens = dataConfig.maxTokens,
+            stop = dataConfig.stop,
+            reasoning = dataConfig.reasoning
+        )
+
+        return executeRequestWithUsage(request, messages, requestType)
+    }
+
+    override suspend fun askWithUsage(
+        userInput: String,
+        profile: UserProfile?,
+        config: DomainRequestConfig,
+        requestType: RequestType
+    ): ChatResult<AnswerWithUsage> {
+        if (userInput.isBlank()) {
+            return ChatResult.Error("Запрос не может быть пустым")
+        }
+
+        val messages = buildMessages(userInput, profile, config.systemPrompt)
+        val dataConfig = toDataRequestConfig(config)
+        val request = ChatRequest(
+            model = dataConfig.modelId ?: this.config.model,
+            messages = messages,
+            temperature = dataConfig.temperature,
+            maxTokens = dataConfig.maxTokens,
+            stop = dataConfig.stop,
+            reasoning = dataConfig.reasoning
+        )
+
+        return executeRequestWithUsage(request, messages, requestType)
     }
 }

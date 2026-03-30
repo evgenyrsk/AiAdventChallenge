@@ -4,6 +4,7 @@ import com.example.aiadventchallenge.data.config.Prompts
 import com.example.aiadventchallenge.domain.model.Answer
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.RequestConfig
+import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.domain.repository.AiRepository
 
 class TemperatureUseCase(private val repository: AiRepository) {
@@ -14,6 +15,9 @@ class TemperatureUseCase(private val repository: AiRepository) {
             temperature = temperature,
             reasoningEnabled = false
         )
-        return repository.ask(userInput = userInput, config = config)
+        return when (val result = repository.askWithUsage(userInput = userInput, profile = null, config = config, requestType = RequestType.CHAT)) {
+            is ChatResult.Success -> ChatResult.Success(Answer(content = result.data.content))
+            is ChatResult.Error -> result
+        }
     }
 }

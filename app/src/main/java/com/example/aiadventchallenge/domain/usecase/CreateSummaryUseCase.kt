@@ -5,6 +5,7 @@ import com.example.aiadventchallenge.domain.model.AnswerWithUsage
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.RequestConfig
+import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.domain.repository.AiRepository
 
 class CreateSummaryUseCase(
@@ -35,7 +36,7 @@ class CreateSummaryUseCase(
             systemPrompt = buildSystemPrompt()
         )
 
-        return when (val result = repository.askWithUsage(summaryPrompt, null, config)) {
+        return when (val result = repository.askWithUsage(summaryPrompt, null, config, RequestType.SUMMARY)) {
             is ChatResult.Success -> {
                 println("  ✓ Tokens: ${result.data.totalTokens}")
                 ChatResult.Success(result.data)

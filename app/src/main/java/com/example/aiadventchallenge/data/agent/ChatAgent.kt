@@ -8,6 +8,7 @@ import com.example.aiadventchallenge.domain.model.AnswerWithUsage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.CompressedChatHistory
 import com.example.aiadventchallenge.domain.model.RequestConfig
+import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.domain.model.UserProfile
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
@@ -42,7 +43,7 @@ class ChatAgent(
         messages: List<Message>,
         config: RequestConfig
     ): ChatResult<AnswerWithUsage> {
-        return when (val result = repository.askWithContext(messages, config)) {
+        return when (val result = repository.askWithContext(messages, config, RequestType.CHAT)) {
             is ChatResult.Success -> ChatResult.Success(result.data)
             is ChatResult.Error -> ChatResult.Error(result.message, result.code)
         }
