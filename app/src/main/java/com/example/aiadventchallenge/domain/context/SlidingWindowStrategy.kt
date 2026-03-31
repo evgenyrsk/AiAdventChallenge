@@ -50,6 +50,10 @@ class SlidingWindowStrategy(
         println("📤 Assistant message received: ${message.content.take(50)}...")
     }
 
+    override suspend fun onConversationPair(userMessage: ChatMessage, assistantMessage: ChatMessage) {
+        println("📥 Conversation pair received")
+    }
+
     override fun getDebugInfo(): Map<String, Any> {
         return mapOf(
             "strategy" to "SlidingWindow",

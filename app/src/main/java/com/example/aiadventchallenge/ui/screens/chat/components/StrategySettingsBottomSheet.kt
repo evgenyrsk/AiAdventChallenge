@@ -66,6 +66,7 @@ fun StrategySettingsBottomSheet(
                                 ContextStrategyType.SLIDING_WINDOW -> "Sliding Window"
                                 ContextStrategyType.STICKY_FACTS -> "Sticky Facts"
                                 ContextStrategyType.BRANCHING -> "Branching"
+                                ContextStrategyType.MEMORY_BASED -> "Memory Based"
                             },
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -74,6 +75,7 @@ fun StrategySettingsBottomSheet(
                                 ContextStrategyType.SLIDING_WINDOW -> "Сохраняет только последние N сообщений"
                                 ContextStrategyType.STICKY_FACTS -> "Извлекает и хранит ключевые факты из диалога"
                                 ContextStrategyType.BRANCHING -> "Позволяет создавать альтернативные ветки диалога"
+                                ContextStrategyType.MEMORY_BASED -> "Управляет многослойной памятью ассистента"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

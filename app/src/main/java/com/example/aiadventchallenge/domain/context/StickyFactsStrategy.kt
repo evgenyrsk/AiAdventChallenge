@@ -68,6 +68,10 @@ class StickyFactsStrategy(
         println("📤 StickyFacts: Assistant message received: ${message.content.take(50)}...")
     }
 
+    override suspend fun onConversationPair(userMessage: ChatMessage, assistantMessage: ChatMessage) {
+        println("📥 StickyFacts: Conversation pair received")
+    }
+
     override fun getDebugInfo(): Map<String, Any> {
         return mapOf(
             "strategy" to "StickyFacts",

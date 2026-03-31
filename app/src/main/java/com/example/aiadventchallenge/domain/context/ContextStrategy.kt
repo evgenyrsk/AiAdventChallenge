@@ -15,5 +15,7 @@ interface ContextStrategy {
 
     suspend fun onAssistantMessage(message: ChatMessage)
 
+    suspend fun onConversationPair(userMessage: ChatMessage, assistantMessage: ChatMessage)
+
     fun getDebugInfo(): Map<String, Any>
 }
