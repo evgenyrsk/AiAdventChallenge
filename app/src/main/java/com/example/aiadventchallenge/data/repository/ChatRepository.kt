@@ -25,6 +25,7 @@ class ChatRepository(
             entities.map { entity ->
                 ChatMessage(
                     id = entity.id,
+                    parentMessageId = entity.parentMessageId,
                     content = entity.content,
                     isFromUser = entity.isFromUser,
                     branchId = entity.branchId,
@@ -42,6 +43,7 @@ class ChatRepository(
         return entities.map { entity ->
             ChatMessage(
                 id = entity.id,
+                parentMessageId = entity.parentMessageId,
                 content = entity.content,
                 isFromUser = entity.isFromUser,
                 branchId = entity.branchId,
@@ -52,9 +54,10 @@ class ChatRepository(
         }
     }
 
-    suspend fun insertMessage(message: ChatMessage, branchId: String = "main") {
+    suspend fun insertMessage(message: ChatMessage, branchId: String = "main", parentMessageId: String? = null) {
         val entity = ChatMessageEntity(
             id = message.id,
+            parentMessageId = parentMessageId,
             content = message.content,
             isFromUser = message.isFromUser,
             promptTokens = message.promptTokens,
@@ -69,6 +72,7 @@ class ChatRepository(
         val entities = messages.map { message ->
             ChatMessageEntity(
                 id = message.id,
+                parentMessageId = message.parentMessageId,
                 content = message.content,
                 isFromUser = message.isFromUser,
                 branchId = branchId,
@@ -97,8 +101,65 @@ class ChatRepository(
         chatMessageDao.deleteMessagesByBranch(branchId)
     }
 
-    suspend fun copyMessagesToBranch(sourceBranchId: String, targetBranchId: String, checkpointMessageId: String?) {
-        val checkpoint = checkpointMessageId ?: sourceBranchId
-        chatMessageDao.copyMessagesToBranch(sourceBranchId, targetBranchId, checkpoint)
+    suspend fun getMessageById(messageId: String): ChatMessage? {
+        val entity = chatMessageDao.getMessageById(messageId) ?: return null
+        return ChatMessage(
+            id = entity.id,
+            parentMessageId = entity.parentMessageId,
+            content = entity.content,
+            isFromUser = entity.isFromUser,
+            branchId = entity.branchId,
+            promptTokens = entity.promptTokens,
+            completionTokens = entity.completionTokens,
+            totalTokens = entity.totalTokens
+        )
+    }
+
+    suspend fun getPathToRoot(messageId: String): List<ChatMessage> {
+        val entities = chatMessageDao.getPathToRoot(messageId)
+        return entities.map { entity ->
+            ChatMessage(
+                id = entity.id,
+                parentMessageId = entity.parentMessageId,
+                content = entity.content,
+                isFromUser = entity.isFromUser,
+                branchId = entity.branchId,
+                promptTokens = entity.promptTokens,
+                completionTokens = entity.completionTokens,
+                totalTokens = entity.totalTokens
+            )
+        }
+    }
+
+    suspend fun getActivePath(branchId: String): List<ChatMessage> {
+        val entities = chatMessageDao.getFullBranchPath(branchId)
+        return entities.map { entity ->
+            ChatMessage(
+                id = entity.id,
+                parentMessageId = entity.parentMessageId,
+                content = entity.content,
+                isFromUser = entity.isFromUser,
+                branchId = entity.branchId,
+                promptTokens = entity.promptTokens,
+                completionTokens = entity.completionTokens,
+                totalTokens = entity.totalTokens
+            )
+        }
+    }
+
+    suspend fun getBranchPathWithCheckpoint(branchId: String): List<ChatMessage> {
+        val entities = chatMessageDao.getBranchPathWithCheckpoint(branchId)
+        return entities.map { entity ->
+            ChatMessage(
+                id = entity.id,
+                parentMessageId = entity.parentMessageId,
+                content = entity.content,
+                isFromUser = entity.isFromUser,
+                branchId = entity.branchId,
+                promptTokens = entity.promptTokens,
+                completionTokens = entity.completionTokens,
+                totalTokens = entity.totalTokens
+            )
+        }
     }
 }

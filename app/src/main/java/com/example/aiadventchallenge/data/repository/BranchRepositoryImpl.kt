@@ -18,6 +18,7 @@ class BranchRepositoryImpl(
                     id = entity.id,
                     parentBranchId = entity.parentBranchId,
                     checkpointMessageId = entity.checkpointMessageId,
+                    lastMessageId = entity.lastMessageId,
                     title = entity.title,
                     createdAt = entity.createdAt
                 )
@@ -34,6 +35,7 @@ class BranchRepositoryImpl(
                         id = entity.id,
                         parentBranchId = entity.parentBranchId,
                         checkpointMessageId = entity.checkpointMessageId,
+                        lastMessageId = entity.lastMessageId,
                         title = entity.title,
                         createdAt = entity.createdAt
                     )
@@ -58,6 +60,7 @@ class BranchRepositoryImpl(
             id = branch.id,
             parentBranchId = branch.parentBranchId,
             checkpointMessageId = branch.checkpointMessageId,
+            lastMessageId = branch.lastMessageId,
             title = branch.title,
             createdAt = branch.createdAt,
             isActive = false
@@ -71,11 +74,20 @@ class BranchRepositoryImpl(
             id = branch.id,
             parentBranchId = branch.parentBranchId,
             checkpointMessageId = branch.checkpointMessageId,
+            lastMessageId = branch.lastMessageId,
             title = branch.title,
             createdAt = branch.createdAt,
             isActive = existing.isActive
         )
         branchDao.updateBranch(entity)
+    }
+
+    override suspend fun updateLastMessage(branchId: String, messageId: String) {
+        branchDao.updateLastMessage(branchId, messageId)
+    }
+
+    override suspend fun getLastMessageId(branchId: String): String? {
+        return branchDao.getLastMessageId(branchId)
     }
 
     override suspend fun deleteBranch(branchId: String) {

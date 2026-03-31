@@ -68,21 +68,45 @@ interface ChatMessageDao {
     """)
     suspend fun getNonSummarizedMessages(): List<ChatMessageEntity>
 
-    @Query("""
-        SELECT * FROM chat_messages 
-        WHERE branchId = :branchId AND id <= :checkpointMessageId
-        ORDER BY timestamp ASC
-    """)
-    suspend fun getMessagesBeforeCheckpoint(branchId: String, checkpointMessageId: String): List<ChatMessageEntity>
-
-    @Query("""
-        INSERT INTO chat_messages (id, content, isFromUser, timestamp, promptTokens, completionTokens, totalTokens, branchId)
-        SELECT id, content, isFromUser, timestamp, promptTokens, completionTokens, totalTokens, :targetBranchId
-        FROM chat_messages
-        WHERE branchId = :sourceBranchId AND id <= :checkpointMessageId
-    """)
-    suspend fun copyMessagesToBranch(sourceBranchId: String, targetBranchId: String, checkpointMessageId: String)
-
     @Query("DELETE FROM chat_messages WHERE branchId = :branchId")
     suspend fun deleteMessagesByBranch(branchId: String)
+
+    @Query("SELECT * FROM chat_messages WHERE id = :messageId LIMIT 1")
+    suspend fun getMessageById(messageId: String): ChatMessageEntity?
+
+    @Query("""
+        WITH RECURSIVE message_path AS (
+            SELECT * FROM chat_messages WHERE id = :messageId
+            UNION ALL
+            SELECT m.* FROM chat_messages m
+            INNER JOIN message_path mp ON m.id = mp.parentMessageId
+            WHERE mp.parentMessageId IS NOT NULL
+        )
+        SELECT * FROM message_path ORDER BY timestamp ASC
+    """)
+    suspend fun getPathToRoot(messageId: String): List<ChatMessageEntity>
+
+    @Query("""
+        WITH RECURSIVE message_path AS (
+            SELECT * FROM chat_messages
+            WHERE branchId = :branchId
+            UNION ALL
+            SELECT m.* FROM chat_messages m
+            INNER JOIN message_path mp ON m.id = mp.parentMessageId
+            WHERE mp.parentMessageId IS NOT NULL AND m.branchId != :branchId
+        )
+        SELECT DISTINCT * FROM message_path
+        ORDER BY timestamp ASC
+    """)
+    suspend fun getFullBranchPath(branchId: String): List<ChatMessageEntity>
+
+    @Query("""
+        SELECT * FROM chat_messages WHERE branchId = :branchId
+        UNION
+        SELECT cm.* FROM chat_messages cm
+        INNER JOIN branches b ON cm.id = b.checkpointMessageId
+        WHERE b.id = :branchId AND b.checkpointMessageId IS NOT NULL AND b.checkpointMessageId != ''
+        ORDER BY timestamp ASC
+    """)
+    suspend fun getBranchPathWithCheckpoint(branchId: String): List<ChatMessageEntity>
 }

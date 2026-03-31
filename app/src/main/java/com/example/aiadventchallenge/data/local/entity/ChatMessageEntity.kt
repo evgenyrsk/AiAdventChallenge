@@ -5,14 +5,16 @@ import androidx.room.Index
 
 @Entity(
     tableName = "chat_messages",
-    primaryKeys = ["id", "branchId"],
+    primaryKeys = ["id"],
     indices = [
         Index(value = ["branchId"], name = "index_chat_messages_branchId"),
+        Index(value = ["parentMessageId"], name = "index_chat_messages_parentMessageId"),
         Index(value = ["timestamp"], name = "index_chat_messages_timestamp")
     ]
 )
 data class ChatMessageEntity(
     val id: String,
+    val parentMessageId: String?,
     val content: String,
     val isFromUser: Boolean,
     val timestamp: Long = System.currentTimeMillis(),

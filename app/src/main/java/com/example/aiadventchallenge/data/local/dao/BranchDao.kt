@@ -37,4 +37,10 @@ interface BranchDao {
 
     @Query("DELETE FROM branches")
     suspend fun clearAllBranches()
+
+    @Query("UPDATE branches SET lastMessageId = :messageId WHERE id = :branchId")
+    suspend fun updateLastMessage(branchId: String, messageId: String)
+
+    @Query("SELECT lastMessageId FROM branches WHERE id = :branchId LIMIT 1")
+    suspend fun getLastMessageId(branchId: String): String?
 }

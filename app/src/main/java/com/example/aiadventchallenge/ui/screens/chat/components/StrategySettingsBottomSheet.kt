@@ -83,27 +83,29 @@ fun StrategySettingsBottomSheet(
             }
         }
 
-        HorizontalDivider()
+        if (selectedStrategy != ContextStrategyType.BRANCHING) {
+            HorizontalDivider()
 
-        Text(
-            text = "Размер окна (N): $windowSize",
-            style = MaterialTheme.typography.labelLarge
-        )
+            Text(
+                text = "Размер окна (N): $windowSize",
+                style = MaterialTheme.typography.labelLarge
+            )
 
-        Slider(
-            value = windowSize.toFloat(),
-            onValueChange = { windowSize = ((it / 5f).roundToInt() * 5).coerceIn(5, 50) },
-            valueRange = 5f..50f,
-            steps = 8
-        )
+            Slider(
+                value = windowSize.toFloat(),
+                onValueChange = { windowSize = ((it / 5f).roundToInt() * 5).coerceIn(5, 50) },
+                valueRange = 5f..50f,
+                steps = 8
+            )
 
-        Text(
-            text = "Значение: $windowSize сообщений",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            Text(
+                text = "Значение: $windowSize сообщений",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-        HorizontalDivider()
+            HorizontalDivider()
+        }
 
         Button(
             onClick = {
