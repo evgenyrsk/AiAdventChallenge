@@ -29,6 +29,8 @@ import com.example.aiadventchallenge.data.repository.ChatSettingsRepository as D
 import com.example.aiadventchallenge.data.repository.FactRepositoryImpl
 import com.example.aiadventchallenge.data.repository.BranchRepositoryImpl
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
+import com.example.aiadventchallenge.data.repository.MemoryRepositoryImpl
+import com.example.aiadventchallenge.data.repository.MemoryClassificationRepositoryImpl
 import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.ui.screens.chat.ChatScreen
 import com.example.aiadventchallenge.ui.screens.chat.ChatViewModel
@@ -48,6 +50,9 @@ import com.example.aiadventchallenge.domain.context.FactExtractor
 import com.example.aiadventchallenge.domain.repository.FactRepository
 import com.example.aiadventchallenge.domain.repository.BranchRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
+import com.example.aiadventchallenge.domain.repository.MemoryRepository
+import com.example.aiadventchallenge.domain.repository.AiRepository
+import com.example.aiadventchallenge.domain.repository.MemoryClassificationRepository
 import java.io.File
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
@@ -58,9 +63,11 @@ class MainActivity : ComponentActivity() {
     private val chatSettingsRepository by lazy { DataChatSettingsRepository(database.chatSettingsDao()) }
     private val factRepository by lazy { FactRepositoryImpl(database.factDao()) }
     private val branchRepository by lazy { BranchRepositoryImpl(database.branchDao()) }
+    private val memoryRepository by lazy { MemoryRepositoryImpl(database.memoryEntriesDao()) }
+    private val memoryClassificationRepository by lazy { MemoryClassificationRepositoryImpl(database.memoryClassificationDao()) }
     private val aiRequestRepository by lazy { AiRequestRepository(database.aiRequestDao()) }
     private val factExtractor by lazy { FactExtractor(AppDependencies.repository) }
-    private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository, factExtractor, chatRepository) }
+    private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository, factExtractor, chatRepository, memoryRepository, AppDependencies.repository, memoryClassificationRepository) }
 
     private val chatViewModel: ChatViewModel by viewModels {
         ChatViewModelFactory(
@@ -70,6 +77,8 @@ class MainActivity : ComponentActivity() {
             contextStrategyFactory,
             factRepository,
             branchRepository,
+            memoryRepository,
+            memoryClassificationRepository,
             aiRequestRepository,
         )
     }

@@ -678,5 +678,6 @@ private fun getStrategyDisplayName(type: ContextStrategyType): String {
         ContextStrategyType.SLIDING_WINDOW -> "Sliding Window"
         ContextStrategyType.STICKY_FACTS -> "Sticky Facts"
         ContextStrategyType.BRANCHING -> "Branching"
+        ContextStrategyType.MEMORY_BASED -> "Memory Based"
     }
 }

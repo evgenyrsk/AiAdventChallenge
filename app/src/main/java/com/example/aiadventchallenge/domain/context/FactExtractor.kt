@@ -5,6 +5,7 @@ import com.example.aiadventchallenge.domain.model.FactEntry
 import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.domain.repository.AiRepository
+import com.example.aiadventchallenge.domain.utils.JsonUtils
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
@@ -97,10 +98,7 @@ $userMessage
                 return Result.success(existingFacts)
             }
 
-            val cleanedResponse = response
-                .trim()
-                .let { if (it.startsWith("```")) it.substringAfter("```").substringBefore("```") else it }
-                .trim()
+            val cleanedResponse = JsonUtils.extractJson(response)
 
             val factResponse = json.decodeFromString<FactUpdateResponse>(cleanedResponse)
 

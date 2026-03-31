@@ -19,6 +19,7 @@ import com.example.aiadventchallenge.domain.model.RequestLog
 import com.example.aiadventchallenge.domain.repository.BranchRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.FactRepository
+import com.example.aiadventchallenge.domain.repository.MemoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,7 @@ class ChatViewModel(
     private val contextStrategyFactory: ContextStrategyFactory,
     private val factRepository: FactRepository,
     private val branchRepository: BranchRepository,
+    private val memoryRepository: MemoryRepository,
     private val aiRequestRepository: AiRequestRepository
 ) : ViewModel() {
 
@@ -234,8 +236,6 @@ class ChatViewModel(
             val activeMessages = chatRepository.getMessagesByBranch(activeBranchId)
             val config = agent.buildRequestConfig()
 
-            strategy.onUserMessage(userMessage)
-
             val apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
 
             println("📤 API request:")
@@ -302,7 +302,7 @@ class ChatViewModel(
                         branchRepository.updateLastMessage(activeBranchId, aiMessage.id)
                     }
 
-                    strategy.onAssistantMessage(aiMessage)
+                    _isLoading.value = false
 
                     loadDialogStats()
                     loadAllTimeStats()
@@ -310,6 +310,10 @@ class ChatViewModel(
                     val updatedMessages = chatRepository.getBranchPathWithCheckpoint(activeBranchId)
                     _messages.value = updatedMessages
                     _chatUiState.value = _chatUiState.value.copy(messages = updatedMessages)
+
+                    viewModelScope.launch {
+                        strategy.onConversationPair(userMessage, aiMessage)
+                    }
                 }
 
                 is ChatResult.Error -> {
@@ -330,10 +334,10 @@ class ChatViewModel(
                         branchId = activeBranchId
                     )
                     _messages.value += errorMessage
+
+                    _isLoading.value = false
                 }
             }
-
-            _isLoading.value = false
         }
     }
 
