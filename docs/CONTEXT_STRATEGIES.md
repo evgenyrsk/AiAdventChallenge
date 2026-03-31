@@ -50,20 +50,24 @@ data class FactEntry(
 
 ### 3. Branching
 
-**Описание:** Позволяет создавать альтернативные ветки диалога.
+**Описание:** Позволяет создавать альтернативные ветки диалога с деревом сообщений.
 
 **Файл:** `domain/context/BranchingStrategy.kt`
 
 **Поведение:**
-- Можно создать checkpoint в диалоге
-- От checkpoint можно создать 2 независимые ветки
+- Сообщения образуют дерево через `parentMessageId`
+- Каждое сообщение принадлежит одной ветке (нет дублирования)
+- Можно создать checkpoint в любом сообщении
+- От checkpoint можно создать несколько независимых веток
 - Каждая ветка продолжается отдельно
 - Можно переключаться между ветками
+- Контекст для LLM формируется из полного пути активной ветки (от корня до leaf)
 
 **Настройка:**
-- `windowSize`: количество сообщений для контекста в активной ветке
 - `branches`: список веток
 - `activeBranchId`: ID активной ветки
+
+**Примечание:** Параметр `windowSize` не применяется для стратегии Branching - все сообщения активной ветки включаются в контекст.
 
 **Модель ветки:**
 ```kotlin
@@ -71,8 +75,23 @@ data class ChatBranch(
     val id: String,
     val parentBranchId: String?,
     val checkpointMessageId: String,
+    val lastMessageId: String?,
     val title: String,
     val createdAt: Long
+)
+```
+
+**Модель сообщения:**
+```kotlin
+data class ChatMessage(
+    val id: String,
+    val parentMessageId: String?,
+    val content: String,
+    val isFromUser: Boolean,
+    val branchId: String = "main",
+    val promptTokens: Int?,
+    val completionTokens: Int?,
+    val totalTokens: Int?
 )
 ```
 
@@ -131,6 +150,7 @@ enum class ContextStrategyType {
 
 **chat_messages:**
 - `id` (String, PRIMARY KEY)
+- `parentMessageId` (String?) - NEW
 - `content` (String)
 - `isFromUser` (Boolean)
 - `timestamp` (Long)
@@ -151,6 +171,7 @@ enum class ContextStrategyType {
 - `id` (String, PRIMARY KEY)
 - `parentBranchId` (String?)
 - `checkpointMessageId` (String)
+- `lastMessageId` (String?) - NEW
 - `title` (String)
 - `createdAt` (Long)
 - `isActive` (Boolean)
@@ -172,6 +193,20 @@ enum class ContextStrategyType {
 
 ### Migration 4 → 5
 - Зарезервирована для будущих изменений
+
+### Migration 5 → 6
+- Добавлена таблица `ai_requests` для хранения логов запросов
+
+### Migration 6 → 7
+- Обновлен primary key для chat_messages на составной (id, branchId)
+- Добавлена поддержка веток
+
+### Migration 7 → 8
+- Добавлено поле `parentMessageId` в chat_messages (для построения дерева сообщений)
+- Изменен primary key chat_messages обратно на id (удален составной)
+- Добавлено поле `lastMessageId` в branches
+- Очищены дубликаты сообщений между ветками (оставлена только main ветка)
+- Сообщения теперь уникальны и образуют дерево через parentMessageId
 
 ## Репозитории
 
@@ -260,9 +295,9 @@ enum class ContextStrategyType {
 - Факты не удаляются автоматически
 
 ### Branching
-- Копирование сообщений между ветками может занимать много памяти
 - Нет визуального отображения древовидной структуры
 - Переключение веток пересобирает контекст
+- Все сообщения активной ветки включаются в контекст (без ограничения по количеству)
 
 ### Общие
 - Все стратегии используют один размер окна (`windowSize`)
@@ -298,19 +333,31 @@ val context = strategy.buildContext(null, messages, systemPrompt)
 
 ### Branching
 ```kotlin
-// Создание новой ветки
+// Создание новой ветки от сообщения
 val newBranch = ChatBranch(
     id = "branch_${System.currentTimeMillis()}",
     parentBranchId = currentBranch.id,
     checkpointMessageId = messageId,
+    lastMessageId = messageId,
     title = "Альтернативный сценарий"
 )
 branchRepository.createBranch(newBranch)
 branchRepository.setActiveBranchId(newBranch.id)
 
-// Получение контекста активной ветки
-val branchMessages = chatRepository.getMessagesByBranch(newBranch.id)
-val context = strategy.buildContext(null, branchMessages, systemPrompt)
+// Получение полного пути активной ветки (включая родительские ветки)
+val fullPath = chatRepository.getActivePath(newBranch.id)
+val context = strategy.buildContext(null, fullPath, systemPrompt)
+
+// Создание сообщения с родительской связью
+val userMessage = ChatMessage(
+    id = System.currentTimeMillis().toString(),
+    parentMessageId = lastMessage?.id,
+    content = userInput,
+    isFromUser = true,
+    branchId = activeBranchId
+)
+chatRepository.insertMessage(userMessage, activeBranchId, userMessage.parentMessageId)
+branchRepository.updateLastMessage(activeBranchId, userMessage.id)
 ```
 
 ## Следующие шаги

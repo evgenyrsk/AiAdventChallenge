@@ -7,6 +7,7 @@ data class ChatBranch(
     val id: String,
     val parentBranchId: String? = null,
     val checkpointMessageId: String,
+    val lastMessageId: String?,
     val title: String,
     val createdAt: Long = System.currentTimeMillis()
 )

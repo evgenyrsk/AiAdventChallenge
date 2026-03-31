@@ -9,6 +9,7 @@ data class BranchEntity(
     val id: String,
     val parentBranchId: String? = null,
     val checkpointMessageId: String,
+    val lastMessageId: String?,
     val title: String,
     val createdAt: Long,
     val isActive: Boolean = false

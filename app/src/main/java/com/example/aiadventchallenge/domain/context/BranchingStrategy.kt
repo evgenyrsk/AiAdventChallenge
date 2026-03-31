@@ -15,6 +15,10 @@ class BranchingStrategy(
     private val chatRepository: ChatRepository
 ) : ContextStrategy {
 
+    private var activeBranchId: String? = null
+    private var totalMessages: Int = 0
+    private var messagesInContext: Int = 0
+
     suspend fun initialize() {
         val activeBranchId = branchRepository.getActiveBranchId()
         if (activeBranchId == null) {
@@ -22,11 +26,15 @@ class BranchingStrategy(
                 id = "main",
                 parentBranchId = null,
                 checkpointMessageId = "",
+                lastMessageId = null,
                 title = "Main",
                 createdAt = System.currentTimeMillis()
             )
             branchRepository.createBranch(mainBranch)
             branchRepository.setActiveBranchId("main")
+            println("🌿 Branching: Created main branch")
+        } else {
+            println("🌿 Branching: Active branch: $activeBranchId")
         }
     }
 
@@ -39,14 +47,24 @@ class BranchingStrategy(
 
         result.add(Message(MessageRole.SYSTEM, systemPrompt))
 
-        val activeBranchId = branchRepository.getActiveBranchId()
-        val branchMessages = if (activeBranchId != null) {
-            messages.filter { it.branchId == activeBranchId }
+        val currentActiveBranchId = branchRepository.getActiveBranchId()
+        activeBranchId = currentActiveBranchId
+
+        val activePath = if (currentActiveBranchId != null) {
+            chatRepository.getBranchPathWithCheckpoint(currentActiveBranchId)
         } else {
             messages
         }
 
-        branchMessages.forEach { chatMessage ->
+        totalMessages = messages.size
+        messagesInContext = activePath.size
+
+        println("📊 Branching context:")
+        println("  Active branch: $activeBranchId")
+        println("  Total messages in DB: $totalMessages")
+        println("  Messages in active path: $messagesInContext")
+
+        activePath.forEach { chatMessage ->
             val role = if (chatMessage.isFromUser) MessageRole.USER else MessageRole.ASSISTANT
             result.add(Message(role, chatMessage.content))
         }
@@ -55,15 +73,19 @@ class BranchingStrategy(
     }
 
     override suspend fun onUserMessage(message: ChatMessage) {
+        println("📥 Branching: User message received: ${message.content.take(50)}... (branch: ${message.branchId})")
     }
 
     override suspend fun onAssistantMessage(message: ChatMessage) {
+        println("📤 Branching: Assistant message received: ${message.content.take(50)}... (branch: ${message.branchId})")
     }
 
     override fun getDebugInfo(): Map<String, Any> {
         return mapOf(
             "strategy" to "Branching",
-            "windowSize" to config.windowSize
+            "activeBranchId" to (activeBranchId ?: "none"),
+            "totalMessages" to totalMessages,
+            "messagesInContext" to messagesInContext
         )
     }
 }

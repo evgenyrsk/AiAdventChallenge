@@ -19,4 +19,8 @@ interface BranchRepository {
     suspend fun deleteBranch(branchId: String)
 
     suspend fun clearAllBranches()
+
+    suspend fun updateLastMessage(branchId: String, messageId: String)
+
+    suspend fun getLastMessageId(branchId: String): String?
 }
