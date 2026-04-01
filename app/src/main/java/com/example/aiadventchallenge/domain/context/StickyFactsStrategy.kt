@@ -45,16 +45,16 @@ class StickyFactsStrategy(
         return result
     }
 
-    override suspend fun onUserMessage(message: ChatMessage) {
+    override suspend fun onConversationPair(userMessage: ChatMessage, assistantMessage: ChatMessage) {
         try {
             val existingFacts = factRepository.getAllFacts().first()
-            factExtractor.extractAndUpdateFacts(message.content, existingFacts)
+            factExtractor.extractAndUpdateFacts(userMessage.content, existingFacts)
                 .onSuccess { updatedFacts ->
                     factRepository.clearAllFacts()
                     updatedFacts.forEach { fact ->
                         factRepository.insertFact(fact)
                     }
-                    println("📝 StickyFacts: Updated ${updatedFacts.size} facts from user message")
+                    println("📝 StickyFacts: Updated ${updatedFacts.size} facts from conversation pair")
                 }
                 .onFailure { error ->
                     println("❌ StickyFacts: Failed to extract facts - ${error.message}")
@@ -62,14 +62,6 @@ class StickyFactsStrategy(
         } catch (e: Exception) {
             println("❌ StickyFacts: Error updating facts - ${e.message}")
         }
-    }
-
-    override suspend fun onAssistantMessage(message: ChatMessage) {
-        println("📤 StickyFacts: Assistant message received: ${message.content.take(50)}...")
-    }
-
-    override suspend fun onConversationPair(userMessage: ChatMessage, assistantMessage: ChatMessage) {
-        println("📥 StickyFacts: Conversation pair received")
     }
 
     override fun getDebugInfo(): Map<String, Any> {

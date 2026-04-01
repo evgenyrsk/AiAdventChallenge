@@ -11,10 +11,6 @@ interface ContextStrategy {
         systemPrompt: String
     ): List<Message>
 
-    suspend fun onUserMessage(message: ChatMessage)
-
-    suspend fun onAssistantMessage(message: ChatMessage)
-
     suspend fun onConversationPair(userMessage: ChatMessage, assistantMessage: ChatMessage)
 
     fun getDebugInfo(): Map<String, Any>

@@ -30,6 +30,7 @@ data class AiClassifierConfig(
 data class ConversationPairMultiClassification(
     val userResults: List<ClassificationResult>,
     val assistantResults: List<ClassificationResult>,
+    val newTaskDetected: Boolean,
     val metrics: MemoryClassificationMetrics
 )
 
@@ -43,12 +44,14 @@ data class ConversationPairRequest(
 @kotlinx.serialization.Serializable
 data class ConversationPairResponse(
     val user: List<SingleClassificationItem>? = null,
-    val assistant: List<SingleClassificationItem>? = null
+    val assistant: List<SingleClassificationItem>? = null,
+    val new_task_detected: Boolean = false
 )
 
 data class ConversationPairResult(
     val userResults: List<ClassificationResult>,
-    val assistantResults: List<ClassificationResult>
+    val assistantResults: List<ClassificationResult>,
+    val newTaskDetected: Boolean = false
 )
 
 class AiMemoryClassifier(
@@ -59,77 +62,6 @@ class AiMemoryClassifier(
     private val json = kotlinx.serialization.json.Json {
         ignoreUnknownKeys = true
         isLenient = true
-    }
-
-    suspend fun classifyUserMessage(
-        message: ChatMessage,
-        existingWorkingMemory: List<MemoryEntry>,
-        existingLongTermMemory: List<MemoryEntry>
-    ): Result<com.example.aiadventchallenge.domain.model.MultipleClassificationResult> {
-        return try {
-            val startTime = System.currentTimeMillis()
-
-            val request = buildRequest(message, existingWorkingMemory, existingLongTermMemory)
-            val response = callLlm(request)
-            val executionTime = System.currentTimeMillis() - startTime
-
-            val classificationResults = parseResponse(response)
-
-            val metrics = MemoryClassificationMetrics(
-                promptTokens = response.promptTokens,
-                completionTokens = response.completionTokens,
-                totalTokens = response.totalTokens,
-                executionTimeMs = executionTime
-            )
-
-            logClassification(classificationResults, metrics)
-
-            Result.success(
-                com.example.aiadventchallenge.domain.model.MultipleClassificationResult(
-                    results = classificationResults,
-                    metrics = metrics
-                )
-            )
-
-        } catch (e: Exception) {
-            println("❌ AiMemoryClassifier: Error classifying message - ${e.message}")
-            Result.failure(e)
-        }
-    }
-
-    suspend fun classifyAssistantMessage(
-        message: ChatMessage,
-        workingMemory: List<MemoryEntry>
-    ): Result<com.example.aiadventchallenge.domain.model.MultipleClassificationResult> {
-        return try {
-            val startTime = System.currentTimeMillis()
-
-            val request = buildAssistantRequest(message, workingMemory)
-            val response = callLlm(request)
-            val executionTime = System.currentTimeMillis() - startTime
-
-            val results = parseAssistantResponse(response)
-
-            val metrics = MemoryClassificationMetrics(
-                promptTokens = response.promptTokens,
-                completionTokens = response.completionTokens,
-                totalTokens = response.totalTokens,
-                executionTimeMs = executionTime
-            )
-
-            logAssistantClassification(results, metrics)
-
-            Result.success(
-                com.example.aiadventchallenge.domain.model.MultipleClassificationResult(
-                    results = results,
-                    metrics = metrics
-                )
-            )
-
-        } catch (e: Exception) {
-            println("❌ AiMemoryClassifier: Error classifying assistant message - ${e.message}")
-            Result.failure(e)
-        }
     }
 
     suspend fun classifyConversationPair(
@@ -160,6 +92,7 @@ class AiMemoryClassifier(
                 ConversationPairMultiClassification(
                     userResults = pairResult.userResults,
                     assistantResults = pairResult.assistantResults,
+                    newTaskDetected = pairResult.newTaskDetected,
                     metrics = metrics
                 )
             )
@@ -167,31 +100,6 @@ class AiMemoryClassifier(
         } catch (e: Exception) {
             println("❌ AiMemoryClassifier: Error classifying conversation pair - ${e.message}")
             Result.failure(e)
-        }
-    }
-
-    private suspend fun callLlm(request: MemoryClassificationRequest): LlmResponse {
-        val systemPrompt = buildSystemPrompt()
-        val userPrompt = buildUserPrompt(request)
-
-        val config = RequestConfig(
-            systemPrompt = systemPrompt,
-            temperature = config.temperature.toDouble(),
-            maxTokens = config.maxTokens
-        )
-
-        return when (val result = repository.askWithUsage(userPrompt, null, config, RequestType.MEMORY_CLASSIFICATION)) {
-            is ChatResult.Success -> {
-                LlmResponse(
-                    content = result.data.content,
-                    promptTokens = result.data.promptTokens,
-                    completionTokens = result.data.completionTokens,
-                    totalTokens = result.data.totalTokens
-                )
-            }
-            is ChatResult.Error -> {
-                throw Exception("LLM error: ${result.message}")
-            }
         }
     }
 
@@ -220,97 +128,6 @@ class AiMemoryClassifier(
         }
     }
 
-    private fun buildSystemPrompt(): String {
-        return """Вы эксперт по классификации сообщений в многослойную память ассистента.
-
-ВАЖНЫЕ ПРАВИЛА:
-1. Верните ТОЛЬКО валидный JSON. Никакого дополнительного текста.
-2. Классифицируйте важные фрагменты сообщения (их может быть несколько) в один из слоев памяти:
-   - WORKING: данные текущей задачи (цели, параметры, ограничения)
-   - LONG_TERM: профиль пользователя, устойчивые предпочтения, подтвержденные факты
-3. Определите reason из списка: TASK_GOAL, TASK_PARAMETER, ACTIVE_ENTITY, INTERMEDIATE_OUTPUT, USER_NAME, USER_PREFERENCE, CONFIRMED_FACT, USER_PROFILE_DATA
-4. Определите importance (0.0 - 1.0) - насколько важна информация для будущих диалогов
-5. action может быть:
-   - "create": создать новую запись
-   - "skip": не сохранять (для коротких сообщений, филлеров, приветствий)
-6. value - извлеченное значение (краткое, 1-3 слова максимум)
-7. key - предложенный ключ для хранения (user_name, task_goal и т.д.)
-8. Вы можете вернуть НОЛЬ ИЛИ БОЛЕЕ классификаций для одного сообщения.
-9. Если сообщений для сохранения нет, верните пустой массив: {"classifications": []}
-10. Каждая классификация в массиве обрабатывается независимо
-
-ПРИМЕРЫ JSON-ОТВЕТА:
-
-1. Одна классификация:
-{
-  "classifications": [
-    {
-      "action": "create",
-      "memoryType": "working",
-      "reason": "TASK_GOAL",
-      "importance": 0.9,
-      "value": "составить план обучения",
-      "key": "task_goal"
-    }
-  ]
-}
-
-2. Несколько классификаций:
-{
-  "classifications": [
-    {
-      "action": "create",
-      "memoryType": "working",
-      "reason": "TASK_GOAL",
-      "importance": 0.9,
-      "value": "создать приложение",
-      "key": "task_goal"
-    },
-    {
-      "action": "create",
-      "memoryType": "working",
-      "reason": "TASK_PARAMETER",
-      "importance": 0.7,
-      "value": "Android",
-      "key": "platform"
-    }
-  ]
-}
-
-3. Имя пользователя:
-{
-  "classifications": [
-    {
-      "action": "create",
-      "memoryType": "long_term",
-      "reason": "USER_NAME",
-      "importance": 0.9,
-      "value": "Иван",
-      "key": "user_name"
-    }
-  ]
-}
-
-4. Пустой результат:
-{
-  "classifications": []
-}
-
-СТРОГИЙ ФОРМАТ JSON:
-{
-  "classifications": [
-    {
-      "action": "create" | "skip",
-      "memoryType": "working" | "long_term" | null,
-      "reason": "TASK_GOAL" | ... | null,
-      "importance": 0.0 - 1.0 | null,
-      "value": "извлеченное значение" | null,
-      "key": "предложенный ключ" | null
-    }
-  ]
-}"""
-    }
-
     private fun buildConversationSystemPrompt(): String {
         return """Вы эксперт по классификации диалога пользователя и ассистента в многослойную память.
 
@@ -333,7 +150,10 @@ class AiMemoryClassifier(
 12. Вы можете вернуть НОЛЬ ИЛИ БОЛЕЕ классификаций для каждого сообщения
 13. Если сообщений для сохранения нет, верните пустые массивы
 14. Поле "assistant" может быть пустым массивом [] или содержать записи
-15. Каждая классификация в массиве обрабатывается независимо
+15. Каждая классификация в массиве обрабатывается independently
+16. ОПРЕДЕЛИТЕ new_task_detected (true/false) - пользователь начал НОВУЮ задачу:
+    - true: "Теперь другая задача", "Перейдём к новой теме", "Есть другой вопрос", цель изменилась радикально
+    - false: уточнение текущей задачи, добавление ограничений, продолжение обсуждения
 
 ПРИМЕРЫ JSON-ОТВЕТА:
 
@@ -358,7 +178,8 @@ class AiMemoryClassifier(
       "value": "Kotlin",
       "key": "language"
     }
-  ]
+  ],
+  "new_task_detected": false
 }
 
 2. Только пользовательское сообщение:
@@ -373,13 +194,22 @@ class AiMemoryClassifier(
       "key": "lifestyle"
     }
   ],
-  "assistant": []
+  "assistant": [],
+  "new_task_detected": false
 }
 
-3. Пустой результат:
+3. Новая задача:
 {
   "user": [],
-  "assistant": []
+  "assistant": [],
+  "new_task_detected": true
+}
+
+4. Пустой результат без смены задачи:
+{
+  "user": [],
+  "assistant": [],
+  "new_task_detected": false
 }
 
 СТРОГИЙ ФОРМАТ JSON:
@@ -403,35 +233,9 @@ class AiMemoryClassifier(
       "value": "извлеченное значение" | null,
       "key": "предложенный ключ" | null
     }
-  ]
+  ],
+  "new_task_detected": true | false
 }"""
-    }
-
-    private fun buildUserPrompt(request: MemoryClassificationRequest): String {
-        val workingMemoryText = if (request.existingWorkingMemory.isNotEmpty()) {
-            request.existingWorkingMemory.joinToString("\n") { "- ${it.key}: ${it.value} (${it.reason})" }
-        } else {
-            "(пусто)"
-        }
-
-        val longTermMemoryText = if (request.existingLongTermMemory.isNotEmpty()) {
-            request.existingLongTermMemory.joinToString("\n") { "- ${it.key}: ${it.value} (${it.reason})" }
-        } else {
-            "(пусто)"
-        }
-
-        return """Классифицируйте следующее сообщение пользователя в многослойную память.
-
-Существующая WORKING память:
-$workingMemoryText
-
-Существующая LONG-TERM память:
-$longTermMemoryText
-
-Сообщение пользователя:
-${request.userMessage}
-
-Верните классификацию в формате JSON."""
     }
 
     private fun buildConversationPrompt(request: ConversationPairRequest): String {
@@ -463,40 +267,6 @@ $longTermMemoryText
 Верните классификацию для обоих сообщений в формате JSON."""
     }
 
-    private fun parseResponse(response: LlmResponse): List<ClassificationResult> {
-        val cleanedContent = JsonUtils.extractJson(response.content)
-
-        val jsonResponse = try {
-            json.decodeFromString<MemoryClassificationResponse>(cleanedContent)
-        } catch (e: Exception) {
-            println("⚠️ AiMemoryClassifier: Failed to parse JSON (content: $cleanedContent), returning empty list")
-            return emptyList()
-        }
-
-        val classifications = jsonResponse.classifications ?: return emptyList()
-
-        return classifications.mapNotNull { item ->
-            parseSingleClassificationItem(item, MemorySource.USER_EXTRACTED)
-        }
-    }
-
-    private fun parseAssistantResponse(response: LlmResponse): List<ClassificationResult> {
-        val cleanedContent = JsonUtils.extractJson(response.content)
-
-        val jsonResponse = try {
-            json.decodeFromString<MemoryClassificationResponse>(cleanedContent)
-        } catch (e: Exception) {
-            println("⚠️ AiMemoryClassifier: Failed to parse assistant JSON (content: $cleanedContent), returning empty list")
-            return emptyList()
-        }
-
-        val classifications = jsonResponse.classifications ?: return emptyList()
-
-        return classifications.mapNotNull { item ->
-            parseSingleClassificationItem(item, MemorySource.ASSISTANT_CONFIRMED)
-        }
-    }
-
     private fun parseConversationResponse(response: LlmResponse): ConversationPairResult {
         val cleanedContent = JsonUtils.extractJson(response.content)
 
@@ -521,13 +291,15 @@ $longTermMemoryText
                     println("❌ AiMemoryClassifier: Failed to parse fixed JSON - ${e2.message}")
                     return ConversationPairResult(
                         userResults = emptyList(),
-                        assistantResults = emptyList()
+                        assistantResults = emptyList(),
+                        newTaskDetected = false
                     )
                 }
             } else {
                 return ConversationPairResult(
                     userResults = emptyList(),
-                    assistantResults = emptyList()
+                    assistantResults = emptyList(),
+                    newTaskDetected = false
                 )
             }
         }
@@ -540,13 +312,17 @@ $longTermMemoryText
             parseSingleClassificationItem(item, MemorySource.ASSISTANT_CONFIRMED)
         } ?: emptyList()
 
+        val newTaskDetected = jsonResponse.new_task_detected ?: false
+
         println("✅ AiMemoryClassifier: Successfully parsed conversation response")
         println("   User classifications: ${userResults.size}")
         println("   Assistant classifications: ${assistantResults.size}")
+        println("   New task detected: $newTaskDetected")
 
         return ConversationPairResult(
             userResults = userResults,
-            assistantResults = assistantResults
+            assistantResults = assistantResults,
+            newTaskDetected = newTaskDetected
         )
     }
 
@@ -593,29 +369,6 @@ $longTermMemoryText
         }
     }
 
-    private fun buildRequest(
-        message: ChatMessage,
-        workingMemory: List<MemoryEntry>,
-        longTermMemory: List<MemoryEntry>
-    ): MemoryClassificationRequest {
-        return MemoryClassificationRequest(
-            userMessage = message.content,
-            existingWorkingMemory = workingMemory.map { toCompact(it) },
-            existingLongTermMemory = longTermMemory.map { toCompact(it) }
-        )
-    }
-
-    private fun buildAssistantRequest(
-        message: ChatMessage,
-        workingMemory: List<MemoryEntry>
-    ): MemoryClassificationRequest {
-        return MemoryClassificationRequest(
-            userMessage = message.content,
-            existingWorkingMemory = workingMemory.map { toCompact(it) },
-            existingLongTermMemory = emptyList() // для assistant messages не используем long-term
-        )
-    }
-
     private fun buildConversationRequest(
         userMessage: ChatMessage,
         assistantMessage: ChatMessage,
@@ -636,48 +389,6 @@ $longTermMemoryText
             value = entry.value,
             reason = entry.reason.name
         )
-    }
-
-    private fun logClassification(results: List<ClassificationResult>, metrics: MemoryClassificationMetrics) {
-        if (results.isEmpty()) {
-            println("🤖 AiMemoryClassifier: Classification - EMPTY")
-            println("   Tokens: ${metrics.promptTokens?.plus(metrics.completionTokens ?: 0) ?: 0}")
-            println("   Time: ${metrics.executionTimeMs}ms")
-            return
-        }
-
-        val actionsStr = results.joinToString { r ->
-            when (r) {
-                is ClassificationResult.Create -> "${r.memoryType.name} (${r.reason.name})"
-                is ClassificationResult.Skip -> "SKIP"
-            }
-        }
-
-        println("🤖 AiMemoryClassifier: Classification - [$actionsStr]")
-        println("   Count: ${results.size}")
-        println("   Tokens: ${metrics.promptTokens?.plus(metrics.completionTokens ?: 0) ?: 0}")
-        println("   Time: ${metrics.executionTimeMs}ms")
-    }
-
-    private fun logAssistantClassification(results: List<ClassificationResult>, metrics: MemoryClassificationMetrics) {
-        if (results.isEmpty()) {
-            println("🤖 AiMemoryClassifier: Assistant Classification - EMPTY")
-            println("   Tokens: ${metrics.promptTokens?.plus(metrics.completionTokens ?: 0) ?: 0}")
-            println("   Time: ${metrics.executionTimeMs}ms")
-            return
-        }
-
-        val actionsStr = results.joinToString { r ->
-            when (r) {
-                is ClassificationResult.Create -> "${r.memoryType.name} (${r.reason.name})"
-                is ClassificationResult.Skip -> "SKIP"
-            }
-        }
-
-        println("🤖 AiMemoryClassifier: Assistant Classification - [$actionsStr]")
-        println("   Count: ${results.size}")
-        println("   Tokens: ${metrics.promptTokens?.plus(metrics.completionTokens ?: 0) ?: 0}")
-        println("   Time: ${metrics.executionTimeMs}ms")
     }
 
     private fun logConversationClassification(result: ConversationPairResult, metrics: MemoryClassificationMetrics) {

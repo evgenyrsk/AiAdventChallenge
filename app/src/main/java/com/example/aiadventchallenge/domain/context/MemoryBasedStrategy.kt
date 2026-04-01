@@ -7,6 +7,7 @@ import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
 import com.example.aiadventchallenge.domain.model.MemoryConfig
 import com.example.aiadventchallenge.domain.memory.AiMemoryClassifier
+import com.example.aiadventchallenge.domain.memory.MemoryConsolidator
 import com.example.aiadventchallenge.domain.memory.MemoryManager
 import com.example.aiadventchallenge.domain.repository.MemoryRepository
 import com.example.aiadventchallenge.domain.repository.MemoryClassificationRepository
@@ -19,11 +20,17 @@ class MemoryBasedStrategy(
     private val classificationRepository: MemoryClassificationRepository
 ) : ContextStrategy {
 
+    private val memoryConfig = config.memoryConfig ?: defaultMemoryConfig()
+    
+    private val consolidator = MemoryConsolidator(
+        aiClassifier,
+        memoryConfig
+    )
+    
     private val memoryManager = MemoryManager(
         memoryRepository,
         chatRepository,
-        aiClassifier,
-        config.memoryConfig ?: defaultMemoryConfig(),
+        consolidator,
         classificationRepository
     )
 
@@ -91,14 +98,6 @@ class MemoryBasedStrategy(
         return result
     }
 
-    override suspend fun onUserMessage(message: ChatMessage) {
-        memoryManager.onUserMessage(message)
-    }
-
-    override suspend fun onAssistantMessage(message: ChatMessage) {
-        memoryManager.onAssistantMessage(message)
-    }
-
     override suspend fun onConversationPair(userMessage: ChatMessage, assistantMessage: ChatMessage) {
         memoryManager.onConversationPair(userMessage, assistantMessage)
     }
@@ -109,7 +108,7 @@ class MemoryBasedStrategy(
             "strategy" to "MemoryBased (AI)",
             "longTermMemoryCount" to (lastContext?.longTermMemory?.size ?: 0),
             "workingMemoryCount" to (lastContext?.workingMemory?.size ?: 0),
-            "shortTermWindow" to (config.memoryConfig?.shortTermWindow ?: 10),
+            "shortTermWindow" to memoryConfig.shortTermWindow,
             "totalMessages" to totalMessages,
             "messagesInContext" to messagesInContext
         )
