@@ -53,6 +53,7 @@ import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.MemoryRepository
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.repository.MemoryClassificationRepository
+import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 import java.io.File
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
@@ -68,6 +69,7 @@ class MainActivity : ComponentActivity() {
     private val aiRequestRepository by lazy { AiRequestRepository(database.aiRequestDao()) }
     private val factExtractor by lazy { FactExtractor(AppDependencies.repository) }
     private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository, factExtractor, chatRepository, memoryRepository, AppDependencies.repository, memoryClassificationRepository) }
+    private val fitnessProfileManager by lazy { FitnessProfileManager(chatSettingsRepository) }
 
     private val chatViewModel: ChatViewModel by viewModels {
         ChatViewModelFactory(
@@ -80,6 +82,7 @@ class MainActivity : ComponentActivity() {
             memoryRepository,
             memoryClassificationRepository,
             aiRequestRepository,
+            fitnessProfileManager,
         )
     }
 

@@ -14,12 +14,14 @@ import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
+import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.RequestConfigDebug
 import com.example.aiadventchallenge.domain.model.RequestLog
 import com.example.aiadventchallenge.domain.repository.BranchRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.FactRepository
 import com.example.aiadventchallenge.domain.repository.MemoryRepository
+import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +37,8 @@ class ChatViewModel(
     private val factRepository: FactRepository,
     private val branchRepository: BranchRepository,
     private val memoryRepository: MemoryRepository,
-    private val aiRequestRepository: AiRequestRepository
+    private val aiRequestRepository: AiRequestRepository,
+    private val fitnessProfileManager: FitnessProfileManager
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -81,6 +84,7 @@ class ChatViewModel(
         loadAllTimeStats()
         loadStrategyConfig()
         loadBranchState()
+        loadFitnessProfile()
     }
 
     private fun loadStrategyConfig() {
@@ -96,6 +100,15 @@ class ChatViewModel(
                     _strategyInitialized.value = true
                 }
             }
+        }
+    }
+
+    private fun loadFitnessProfile() {
+        viewModelScope.launch {
+            val profile = fitnessProfileManager.getActiveProfile()
+            _chatUiState.value = _chatUiState.value.copy(
+                fitnessProfile = profile
+            )
         }
     }
 
@@ -234,7 +247,7 @@ class ChatViewModel(
             chatRepository.insertMessage(userMessage, activeBranchId, parentMessageId)
 
             val activeMessages = chatRepository.getMessagesByBranch(activeBranchId)
-            val config = agent.buildRequestConfig()
+            val config = agent.buildRequestConfig(fitnessProfile = _chatUiState.value.fitnessProfile)
 
             val apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
 
@@ -551,5 +564,14 @@ class ChatViewModel(
             showBranchActionsForMessageId = messageId,
             branchesForMessage = branches
         )
+    }
+
+    fun setFitnessProfile(profile: FitnessProfileType) {
+        viewModelScope.launch {
+            fitnessProfileManager.setActiveProfile(profile)
+            _chatUiState.value = _chatUiState.value.copy(
+                fitnessProfile = profile
+            )
+        }
     }
 }

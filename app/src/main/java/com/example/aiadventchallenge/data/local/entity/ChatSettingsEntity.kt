@@ -9,5 +9,6 @@ data class ChatSettingsEntity(
     val id: Int = 1,
     val strategyType: String,
     val windowSize: Int,
-    val settingsJson: String? = null
+    val settingsJson: String? = null,
+    val fitnessProfile: String? = null
 )
