@@ -17,9 +17,9 @@ class HttpClient private constructor(
     private val config: ApiConfig
 ) {
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(50, TimeUnit.SECONDS)
+        .connectTimeout(120, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
-        .writeTimeout(50, TimeUnit.SECONDS)
+        .writeTimeout(120, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .build()
 

@@ -4,6 +4,7 @@ import com.example.aiadventchallenge.data.local.dao.ChatSettingsDao
 import com.example.aiadventchallenge.data.local.entity.ChatSettingsEntity
 import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
+import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 
 class ChatSettingsRepository(
@@ -73,6 +74,34 @@ class ChatSettingsRepository(
                 id = 1,
                 strategyType = ContextStrategyType.SLIDING_WINDOW.name,
                 windowSize = windowSize
+            )
+        }
+        chatSettingsDao.insertSettings(entity)
+    }
+
+    override suspend fun getFitnessProfile(): FitnessProfileType {
+        val entity = chatSettingsDao.getSettings()
+        return if (entity?.fitnessProfile != null) {
+            try {
+                FitnessProfileType.valueOf(entity.fitnessProfile)
+            } catch (e: IllegalArgumentException) {
+                FitnessProfileType.INTERMEDIATE
+            }
+        } else {
+            FitnessProfileType.INTERMEDIATE
+        }
+    }
+
+    override suspend fun setFitnessProfile(profile: FitnessProfileType) {
+        val existing = chatSettingsDao.getSettings()
+        val entity = if (existing != null) {
+            existing.copy(fitnessProfile = profile.name)
+        } else {
+            ChatSettingsEntity(
+                id = 1,
+                strategyType = ContextStrategyType.SLIDING_WINDOW.name,
+                windowSize = 10,
+                fitnessProfile = profile.name
             )
         }
         chatSettingsDao.insertSettings(entity)

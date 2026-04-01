@@ -13,6 +13,7 @@ import com.example.aiadventchallenge.domain.repository.BranchRepository
 import com.example.aiadventchallenge.domain.repository.MemoryRepository
 import com.example.aiadventchallenge.domain.repository.MemoryClassificationRepository
 import com.example.aiadventchallenge.domain.context.FactExtractor
+import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 
 class ChatViewModelFactory(
     private val agent: ChatAgent,
@@ -24,6 +25,7 @@ class ChatViewModelFactory(
     private val memoryRepository: MemoryRepository,
     private val classificationRepository: MemoryClassificationRepository,
     private val aiRequestRepository: AiRequestRepository,
+    private val fitnessProfileManager: FitnessProfileManager,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -37,6 +39,7 @@ class ChatViewModelFactory(
                 branchRepository,
                 memoryRepository,
                 aiRequestRepository,
+                fitnessProfileManager,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

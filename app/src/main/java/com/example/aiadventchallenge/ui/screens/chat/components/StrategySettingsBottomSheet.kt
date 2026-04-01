@@ -9,19 +9,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
+import com.example.aiadventchallenge.domain.model.FitnessProfileType
+import com.example.aiadventchallenge.ui.components.FitnessProfileSelector
 import kotlin.math.roundToInt
 
 @Composable
 fun StrategySettingsBottomSheet(
     currentStrategy: ContextStrategyType,
     currentWindowSize: Int,
+    currentFitnessProfile: FitnessProfileType,
     onStrategyChange: (ContextStrategyType) -> Unit,
     onWindowSizeChange: (Int) -> Unit,
+    onFitnessProfileChange: (FitnessProfileType) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedStrategy by remember { mutableStateOf(currentStrategy) }
     var windowSize by remember { mutableIntStateOf(currentWindowSize) }
+    var selectedFitnessProfile by remember { mutableStateOf(currentFitnessProfile) }
 
     Column(
         modifier = modifier
@@ -109,10 +114,34 @@ fun StrategySettingsBottomSheet(
             HorizontalDivider()
         }
 
+        HorizontalDivider()
+
+        Text(
+            text = "Уровень подготовки:",
+            style = MaterialTheme.typography.labelLarge
+        )
+
+        FitnessProfileSelector(
+            currentProfile = selectedFitnessProfile,
+            onProfileSelected = { selectedFitnessProfile = it },
+            enabled = true
+        )
+
+        Text(
+            text = when (selectedFitnessProfile) {
+                FitnessProfileType.BEGINNER -> "Для новичков с подробными объяснениями"
+                FitnessProfileType.INTERMEDIATE -> "Для опытных атлетов с фокусом на технику"
+                FitnessProfileType.EXPERT -> "Продвинутые методы и периодизация"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
         Button(
             onClick = {
                 onStrategyChange(selectedStrategy)
                 onWindowSizeChange(windowSize)
+                onFitnessProfileChange(selectedFitnessProfile)
                 onClose()
             },
             modifier = Modifier.fillMaxWidth()

@@ -356,6 +356,7 @@ fun ChatScreen(
                     StrategySettingsBottomSheet(
                         currentStrategy = config.type,
                         currentWindowSize = config.windowSize,
+                        currentFitnessProfile = chatUiState.fitnessProfile,
                         onStrategyChange = { type ->
                             if (type != config.type) {
                                 pendingStrategyChange = type
@@ -363,6 +364,7 @@ fun ChatScreen(
                             }
                         },
                         onWindowSizeChange = { size -> viewModel.setWindowSize(size) },
+                        onFitnessProfileChange = { profile -> viewModel.setFitnessProfile(profile) },
                         onClose = { showStrategySettings = false },
                         modifier = Modifier.fillMaxWidth()
                     )

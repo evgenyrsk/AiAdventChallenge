@@ -7,6 +7,7 @@ import com.example.aiadventchallenge.domain.agent.Agent
 import com.example.aiadventchallenge.domain.model.AnswerWithUsage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.CompressedChatHistory
+import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.domain.model.UserProfile
@@ -49,9 +50,16 @@ class ChatAgent(
         }
     }
 
-    fun buildRequestConfig(): RequestConfig {
+    fun buildRequestConfig(fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE): RequestConfig {
+        val profilePrompt = Prompts.getFitnessProfilePrompt(fitnessProfile)
+        val combinedPrompt = """
+${Prompts.UNLIMITED_SYSTEM_PROMPT}
+
+$profilePrompt
+""".trimIndent()
+
         return RequestConfig(
-            systemPrompt = Prompts.UNLIMITED_SYSTEM_PROMPT,
+            systemPrompt = combinedPrompt,
         )
     }
 }
