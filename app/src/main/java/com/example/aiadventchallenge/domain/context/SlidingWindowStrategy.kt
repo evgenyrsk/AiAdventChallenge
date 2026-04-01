@@ -42,14 +42,6 @@ class SlidingWindowStrategy(
         return result
     }
 
-    override suspend fun onUserMessage(message: ChatMessage) {
-        println("📥 User message received: ${message.content.take(50)}...")
-    }
-
-    override suspend fun onAssistantMessage(message: ChatMessage) {
-        println("📤 Assistant message received: ${message.content.take(50)}...")
-    }
-
     override suspend fun onConversationPair(userMessage: ChatMessage, assistantMessage: ChatMessage) {
         println("📥 Conversation pair received")
     }

@@ -72,14 +72,6 @@ class BranchingStrategy(
         return result
     }
 
-    override suspend fun onUserMessage(message: ChatMessage) {
-        println("📥 Branching: User message received: ${message.content.take(50)}... (branch: ${message.branchId})")
-    }
-
-    override suspend fun onAssistantMessage(message: ChatMessage) {
-        println("📤 Branching: Assistant message received: ${message.content.take(50)}... (branch: ${message.branchId})")
-    }
-
     override suspend fun onConversationPair(userMessage: ChatMessage, assistantMessage: ChatMessage) {
         println("📥 Branching: Conversation pair received")
     }

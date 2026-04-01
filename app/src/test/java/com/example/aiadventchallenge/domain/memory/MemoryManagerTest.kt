@@ -29,48 +29,43 @@ class MemoryManagerTest {
     private lateinit var chatRepository: ChatRepository
 
     @Mock
-    private lateinit var aiClassifier: AiMemoryClassifier
+    private lateinit var consolidator: MemoryConsolidator
 
     @Mock
     private lateinit var classificationRepository: MemoryClassificationRepository
 
-    private lateinit var config: MemoryConfig
     private lateinit var memoryManager: MemoryManager
 
     @Before
     fun setup() {
         MockitoAnnotations.openMocks(this)
-        config = MemoryConfig(
-            shortTermWindow = 10,
-            workingMemoryTTL = 30 * 60 * 1000,
-            longTermImportanceThreshold = 0.7f
-        )
         memoryManager = MemoryManager(
             memoryRepository,
             chatRepository,
-            aiClassifier,
-            config,
+            consolidator,
             classificationRepository
         )
     }
 
     @Test
-    fun `test onUserMessage saves when classification succeeds`() = runTest {
+    fun `test onConversationPair saves working memory entries`() = runTest {
         // Arrange
-        val message = ChatMessage(
+        val userMessage = ChatMessage(
             id = "1",
             parentMessageId = null,
             content = "Хочу составить план обучения",
             isFromUser = true,
             branchId = "main"
         )
-        val metrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
-            promptTokens = 50,
-            completionTokens = 30,
-            totalTokens = 80,
-            executionTimeMs = 150
+        val assistantMessage = ChatMessage(
+            id = "2",
+            parentMessageId = "1",
+            content = "Отлично! Давайте составим план.",
+            isFromUser = false,
+            branchId = "main"
         )
-        val createResult = ClassificationResult.Create(
+        
+        val workingUpdate = ClassificationResult.Create(
             memoryType = MemoryType.WORKING,
             reason = MemoryReason.TASK_GOAL,
             importance = 0.9f,
@@ -78,17 +73,37 @@ class MemoryManagerTest {
             source = MemorySource.USER_EXTRACTED,
             key = "task_goal"
         )
-        val classificationResult = kotlinx.coroutines.Pair(createResult, metrics)
+        
+        val consolidationResult = ConsolidationResult(
+            workingMemoryUpdates = listOf(workingUpdate),
+            longTermUpdates = emptyList(),
+            skippedCount = 0,
+            newTaskDetected = false,
+            metrics = ConsolidationMetrics(
+                userClassifications = 1,
+                assistantClassifications = 0,
+                workingUpdates = 1,
+                longTermUpdates = 0,
+                skippedCount = 0,
+                llmMetrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
+                    promptTokens = 50,
+                    completionTokens = 30,
+                    totalTokens = 80,
+                    executionTimeMs = 150
+                )
+            )
+        )
 
         whenever(memoryRepository.getWorkingMemory("main")).thenReturn(flowOf(emptyList()))
         whenever(memoryRepository.getLongTermMemory("main")).thenReturn(flowOf(emptyList()))
         whenever(memoryRepository.deactivateExpiredEntries()).thenReturn(Unit)
-        whenever(aiClassifier.classifyUserMessage(any(), any(), any()))
-            .thenReturn(kotlin.coroutines.Result.success(classificationResult))
+        whenever(consolidator.consolidateConversationPair(any(), any(), any(), any()))
+            .thenReturn(consolidationResult)
+        whenever(memoryRepository.getEntryByKey(any(), any())).thenReturn(null)
         whenever(classificationRepository.saveClassificationMetrics(any())).thenReturn(Unit)
 
         // Act
-        memoryManager.onUserMessage(message)
+        memoryManager.onConversationPair(userMessage, assistantMessage)
 
         // Assert
         verify(memoryRepository).deactivateExpiredEntries()
@@ -97,80 +112,24 @@ class MemoryManagerTest {
     }
 
     @Test
-    fun `test onUserMessage skips when classification is Skip`() = runTest {
+    fun `test onConversationPair saves long-term entries`() = runTest {
         // Arrange
-        val message = ChatMessage(
-            id = "1",
-            parentMessageId = null,
-            content = "Ок, понял",
-            isFromUser = true,
-            branchId = "main"
-        )
-        val metrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
-            promptTokens = 40,
-            completionTokens = 20,
-            totalTokens = 60,
-            executionTimeMs = 100
-        )
-        val skipResult = kotlinx.coroutines.Pair(ClassificationResult.Skip, metrics)
-
-        whenever(memoryRepository.getWorkingMemory("main")).thenReturn(flowOf(emptyList()))
-        whenever(memoryRepository.getLongTermMemory("main")).thenReturn(flowOf(emptyList()))
-        whenever(memoryRepository.deactivateExpiredEntries()).thenReturn(Unit)
-        whenever(aiClassifier.classifyUserMessage(any(), any(), any()))
-            .thenReturn(kotlin.coroutines.Result.success(skipResult))
-        whenever(classificationRepository.saveClassificationMetrics(any())).thenReturn(Unit)
-
-        // Act
-        memoryManager.onUserMessage(message)
-
-        // Assert
-        verify(memoryRepository, never()).insertEntry(any())
-        verify(classificationRepository).saveClassificationMetrics(any())
-    }
-
-    @Test
-    fun `test onUserMessage does not save when classification fails`() = runTest {
-        // Arrange
-        val message = ChatMessage(
-            id = "1",
-            parentMessageId = null,
-            content = "Test message",
-            isFromUser = true,
-            branchId = "main"
-        )
-
-        whenever(memoryRepository.getWorkingMemory("main")).thenReturn(flowOf(emptyList()))
-        whenever(memoryRepository.getLongTermMemory("main")).thenReturn(flowOf(emptyList()))
-        whenever(memoryRepository.deactivateExpiredEntries()).thenReturn(Unit)
-        whenever(aiClassifier.classifyUserMessage(any(), any(), any()))
-            .thenReturn(kotlin.coroutines.Result.failure(Exception("LLM error")))
-
-        // Act
-        memoryManager.onUserMessage(message)
-
-        // Assert - НЕ сохраняем при ошибке
-        verify(memoryRepository, never()).insertEntry(any())
-        verify(classificationRepository, never()).saveClassificationMetrics(any())
-    }
-
-    @Test
-    fun `test onUserMessage saves to long-term with sufficient importance`() = runTest {
-        // Arrange
-        val message = ChatMessage(
+        val userMessage = ChatMessage(
             id = "1",
             parentMessageId = null,
             content = "Меня зовут Иван",
             isFromUser = true,
             branchId = "main"
         )
-        val metrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
-            promptTokens = 45,
-            completionTokens = 25,
-            totalTokens = 70,
-            executionTimeMs = 120
+        val assistantMessage = ChatMessage(
+            id = "2",
+            parentMessageId = "1",
+            content = "Приятно познакомиться, Иван!",
+            isFromUser = false,
+            branchId = "main"
         )
-        val createResult = ClassificationResult.Create(
+        
+        val longTermUpdate = ClassificationResult.Create(
             memoryType = MemoryType.LONG_TERM,
             reason = MemoryReason.USER_NAME,
             importance = 0.9f,
@@ -178,114 +137,167 @@ class MemoryManagerTest {
             source = MemorySource.USER_EXTRACTED,
             key = "user_name"
         )
-        val classificationResult = kotlinx.coroutines.Pair(createResult, metrics)
+
+        val consolidationResult = ConsolidationResult(
+            workingMemoryUpdates = emptyList(),
+            longTermUpdates = listOf(longTermUpdate),
+            skippedCount = 0,
+            newTaskDetected = false,
+            metrics = ConsolidationMetrics(
+                userClassifications = 1,
+                assistantClassifications = 0,
+                workingUpdates = 0,
+                longTermUpdates = 1,
+                skippedCount = 0,
+                llmMetrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
+                    promptTokens = 45,
+                    completionTokens = 25,
+                    totalTokens = 70,
+                    executionTimeMs = 120
+                )
+            )
+        )
 
         whenever(memoryRepository.getWorkingMemory("main")).thenReturn(flowOf(emptyList()))
         whenever(memoryRepository.getLongTermMemory("main")).thenReturn(flowOf(emptyList()))
-        whenever(memoryRepository.getEntryByKey(any(), any())).thenReturn(null)
         whenever(memoryRepository.deactivateExpiredEntries()).thenReturn(Unit)
-        whenever(aiClassifier.classifyUserMessage(any(), any(), any()))
-            .thenReturn(kotlin.coroutines.Result.success(classificationResult))
+        whenever(consolidator.consolidateConversationPair(any(), any(), any(), any()))
+            .thenReturn(consolidationResult)
+        whenever(memoryRepository.getEntryByKey(any(), any())).thenReturn(null)
         whenever(classificationRepository.saveClassificationMetrics(any())).thenReturn(Unit)
 
         // Act
-        memoryManager.onUserMessage(message)
+        memoryManager.onConversationPair(userMessage, assistantMessage)
 
         // Assert
         verify(memoryRepository).insertEntry(any())
+        verify(classificationRepository).saveClassificationMetrics(any())
     }
 
     @Test
-    fun `test onUserMessage skips long-term with insufficient importance`() = runTest {
+    fun `test onConversationPair skips existing long-term entries`() = runTest {
         // Arrange
-        val message = ChatMessage(
+        val userMessage = ChatMessage(
             id = "1",
             parentMessageId = null,
-            content = "Какая-то информация",
+            content = "Меня зовут Иван",
             isFromUser = true,
             branchId = "main"
         )
-        val metrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
-            promptTokens = 40,
-            completionTokens = 20,
-            totalTokens = 60,
-            executionTimeMs = 100
+        val assistantMessage = ChatMessage(
+            id = "2",
+            parentMessageId = "1",
+            content = "Приятно познакомиться, Иван!",
+            isFromUser = false,
+            branchId = "main"
         )
-        val createResult = ClassificationResult.Create(
+        
+        val longTermUpdate = ClassificationResult.Create(
             memoryType = MemoryType.LONG_TERM,
-            reason = MemoryReason.TASK_PARAMETER,
-            importance = 0.5f, // ниже порога 0.7
-            value = "информация",
+            reason = MemoryReason.USER_NAME,
+            importance = 0.9f,
+            value = "Иван",
             source = MemorySource.USER_EXTRACTED,
-            key = "info"
+            key = "user_name"
         )
-        val classificationResult = kotlinx.coroutines.Pair(createResult, metrics)
+        
+        val existingEntry = MemoryEntry(
+            id = "existing",
+            key = "user_name",
+            value = "Иван",
+            memoryType = MemoryType.LONG_TERM,
+            reason = MemoryReason.USER_NAME,
+            source = MemorySource.USER_EXTRACTED,
+            importance = 0.9f,
+            branchId = "main",
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
+
+        val consolidationResult = ConsolidationResult(
+            workingMemoryUpdates = emptyList(),
+            longTermUpdates = listOf(longTermUpdate),
+            skippedCount = 0,
+            newTaskDetected = false,
+            metrics = ConsolidationMetrics(
+                userClassifications = 1,
+                assistantClassifications = 0,
+                workingUpdates = 0,
+                longTermUpdates = 1,
+                skippedCount = 0,
+                llmMetrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
+                    promptTokens = 45,
+                    completionTokens = 25,
+                    totalTokens = 70,
+                    executionTimeMs = 120
+                )
+            )
+        )
 
         whenever(memoryRepository.getWorkingMemory("main")).thenReturn(flowOf(emptyList()))
         whenever(memoryRepository.getLongTermMemory("main")).thenReturn(flowOf(emptyList()))
         whenever(memoryRepository.deactivateExpiredEntries()).thenReturn(Unit)
-        whenever(aiClassifier.classifyUserMessage(any(), any(), any()))
-            .thenReturn(kotlin.coroutines.Result.success(classificationResult))
-        whenever(classificationRepository.saveClassificationMetrics(any())).thenReturn(Unit)
+        whenever(consolidator.consolidateConversationPair(any(), any(), any(), any()))
+            .thenReturn(consolidationResult)
+        whenever(memoryRepository.getEntryByKey("user_name", "main")).thenReturn(existingEntry)
 
         // Act
-        memoryManager.onUserMessage(message)
+        memoryManager.onConversationPair(userMessage, assistantMessage)
 
         // Assert
         verify(memoryRepository, never()).insertEntry(any())
     }
 
     @Test
-    fun `test onAssistantMessage promotes to long-term memory`() = runTest {
+    fun `test onConversationPair skips when no updates`() = runTest {
         // Arrange
-        val workingMemory = listOf(
-            MemoryEntry(
-                id = "w1",
-                key = "topic",
-                value = "Android разработка",
-                memoryType = MemoryType.WORKING,
-                reason = MemoryReason.TASK_PARAMETER,
-                source = MemorySource.USER_EXTRACTED,
-                importance = 0.8f,
-                branchId = "main",
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
-            )
+        val userMessage = ChatMessage(
+            id = "1",
+            parentMessageId = null,
+            content = "Ок, понял",
+            isFromUser = true,
+            branchId = "main"
         )
-        val message = ChatMessage(
+        val assistantMessage = ChatMessage(
             id = "2",
             parentMessageId = "1",
-            content = "Отлично! Android разработка - хорошая тема",
+            content = "Хорошо!",
             isFromUser = false,
             branchId = "main"
         )
-        val metrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
-            promptTokens = 50,
-            completionTokens = 30,
-            totalTokens = 80,
-            executionTimeMs = 150
-        )
-        val createResult = ClassificationResult.Create(
-            memoryType = MemoryType.LONG_TERM,
-            reason = MemoryReason.CONFIRMED_FACT,
-            importance = 0.9f,
-            value = "Android разработка",
-            source = MemorySource.ASSISTANT_CONFIRMED,
-            key = "confirmed_topic"
-        )
-        val classificationResult = kotlinx.coroutines.Pair(createResult, metrics)
 
-        whenever(memoryRepository.getWorkingMemory("main")).thenReturn(flowOf(workingMemory))
-        whenever(memoryRepository.getEntryByKey(any(), any())).thenReturn(null)
-        whenever(aiClassifier.classifyAssistantMessage(any(), any()))
-            .thenReturn(kotlin.coroutines.Result.success(listOf(classificationResult)))
-        whenever(classificationRepository.saveClassificationMetrics(any())).thenReturn(Unit)
+        val consolidationResult = ConsolidationResult(
+            workingMemoryUpdates = emptyList(),
+            longTermUpdates = emptyList(),
+            skippedCount = 2,
+            newTaskDetected = false,
+            metrics = ConsolidationMetrics(
+                userClassifications = 0,
+                assistantClassifications = 0,
+                workingUpdates = 0,
+                longTermUpdates = 0,
+                skippedCount = 2,
+                llmMetrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
+                    promptTokens = 40,
+                    completionTokens = 20,
+                    totalTokens = 60,
+                    executionTimeMs = 100
+                )
+            )
+        )
+
+        whenever(memoryRepository.getWorkingMemory("main")).thenReturn(flowOf(emptyList()))
+        whenever(memoryRepository.getLongTermMemory("main")).thenReturn(flowOf(emptyList()))
+        whenever(memoryRepository.deactivateExpiredEntries()).thenReturn(Unit)
+        whenever(consolidator.consolidateConversationPair(any(), any(), any(), any()))
+            .thenReturn(consolidationResult)
 
         // Act
-        memoryManager.onAssistantMessage(message)
+        memoryManager.onConversationPair(userMessage, assistantMessage)
 
         // Assert
-        verify(memoryRepository).insertEntry(any())
+        verify(memoryRepository, never()).insertEntry(any())
+        verify(classificationRepository, never()).saveClassificationMetrics(any())
     }
 
     @Test
@@ -382,5 +394,216 @@ class MemoryManagerTest {
         // Assert
         verify(memoryRepository).clearAllMemory("main")
         verify(classificationRepository).clearClassifications("main")
+    }
+
+    @Test
+    fun `test onConversationPair clears working memory when new task detected`() = runTest {
+        // Arrange
+        val userMessage = ChatMessage(
+            id = "1",
+            parentMessageId = null,
+            content = "Теперь другая задача",
+            isFromUser = true,
+            branchId = "main"
+        )
+        val assistantMessage = ChatMessage(
+            id = "2",
+            parentMessageId = "1",
+            content = "Понял, какая новая задача?",
+            isFromUser = false,
+            branchId = "main"
+        )
+
+        val existingWorkingMemory = listOf(
+            MemoryEntry(
+                id = "existing",
+                key = "old_goal",
+                value = "старая задача",
+                memoryType = MemoryType.WORKING,
+                reason = MemoryReason.TASK_GOAL,
+                source = MemorySource.USER_EXTRACTED,
+                importance = 0.9f,
+                branchId = "main",
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+
+        val consolidationResult = ConsolidationResult(
+            workingMemoryUpdates = emptyList(),
+            longTermUpdates = emptyList(),
+            skippedCount = 0,
+            newTaskDetected = true,
+            metrics = ConsolidationMetrics(
+                userClassifications = 0,
+                assistantClassifications = 0,
+                workingUpdates = 0,
+                longTermUpdates = 0,
+                skippedCount = 0,
+                llmMetrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
+                    promptTokens = 30,
+                    completionTokens = 10,
+                    totalTokens = 40,
+                    executionTimeMs = 80
+                )
+            )
+        )
+
+        whenever(memoryRepository.getWorkingMemory("main")).thenReturn(flowOf(existingWorkingMemory))
+        whenever(memoryRepository.getLongTermMemory("main")).thenReturn(flowOf(emptyList()))
+        whenever(memoryRepository.deactivateExpiredEntries()).thenReturn(Unit)
+        whenever(consolidator.consolidateConversationPair(any(), any(), any(), any()))
+            .thenReturn(consolidationResult)
+
+        // Act
+        memoryManager.onConversationPair(userMessage, assistantMessage)
+
+        // Assert
+        verify(memoryRepository).clearWorkingMemory("main")
+    }
+
+    @Test
+    fun `test onConversationPair preserves working memory when same task`() = runTest {
+        // Arrange
+        val userMessage = ChatMessage(
+            id = "1",
+            parentMessageId = null,
+            content = "А если добавить параметр?",
+            isFromUser = true,
+            branchId = "main"
+        )
+        val assistantMessage = ChatMessage(
+            id = "2",
+            parentMessageId = "1",
+            content = "Хорошо, добавим параметр",
+            isFromUser = false,
+            branchId = "main"
+        )
+
+        val existingWorkingMemory = listOf(
+            MemoryEntry(
+                id = "existing",
+                key = "old_goal",
+                value = "старая задача",
+                memoryType = MemoryType.WORKING,
+                reason = MemoryReason.TASK_GOAL,
+                source = MemorySource.USER_EXTRACTED,
+                importance = 0.9f,
+                branchId = "main",
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+
+        val newParameter = ClassificationResult.Create(
+            memoryType = MemoryType.WORKING,
+            reason = MemoryReason.TASK_PARAMETER,
+            importance = 0.8f,
+            value = "параметр",
+            source = MemorySource.USER_EXTRACTED,
+            key = "param"
+        )
+
+        val consolidationResult = ConsolidationResult(
+            workingMemoryUpdates = listOf(newParameter),
+            longTermUpdates = emptyList(),
+            skippedCount = 0,
+            newTaskDetected = false,
+            metrics = ConsolidationMetrics(
+                userClassifications = 1,
+                assistantClassifications = 0,
+                workingUpdates = 1,
+                longTermUpdates = 0,
+                skippedCount = 0,
+                llmMetrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
+                    promptTokens = 40,
+                    completionTokens = 20,
+                    totalTokens = 60,
+                    executionTimeMs = 100
+                )
+            )
+        )
+
+        whenever(memoryRepository.getWorkingMemory("main")).thenReturn(flowOf(existingWorkingMemory))
+        whenever(memoryRepository.getLongTermMemory("main")).thenReturn(flowOf(emptyList()))
+        whenever(memoryRepository.deactivateExpiredEntries()).thenReturn(Unit)
+        whenever(consolidator.consolidateConversationPair(any(), any(), any(), any()))
+            .thenReturn(consolidationResult)
+        whenever(memoryRepository.getEntryByKey(any(), any())).thenReturn(null)
+        whenever(classificationRepository.saveClassificationMetrics(any())).thenReturn(Unit)
+
+        // Act
+        memoryManager.onConversationPair(userMessage, assistantMessage)
+
+        // Assert
+        verify(memoryRepository, never()).clearWorkingMemory("main")
+        verify(memoryRepository).insertEntry(any())
+    }
+
+    @Test
+    fun `test onConversationPair preserves long-term memory on new task`() = runTest {
+        // Arrange
+        val userMessage = ChatMessage(
+            id = "1",
+            parentMessageId = null,
+            content = "Теперь другая задача",
+            isFromUser = true,
+            branchId = "main"
+        )
+        val assistantMessage = ChatMessage(
+            id = "2",
+            parentMessageId = "1",
+            content = "Понял, какая новая задача?",
+            isFromUser = false,
+            branchId = "main"
+        )
+
+        val existingLongTermMemory = listOf(
+            MemoryEntry(
+                id = "existing",
+                key = "user_name",
+                value = "Иван",
+                memoryType = MemoryType.LONG_TERM,
+                reason = MemoryReason.USER_NAME,
+                source = MemorySource.USER_EXTRACTED,
+                importance = 0.9f,
+                branchId = "main",
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+
+        val consolidationResult = ConsolidationResult(
+            workingMemoryUpdates = emptyList(),
+            longTermUpdates = emptyList(),
+            skippedCount = 0,
+            newTaskDetected = true,
+            metrics = ConsolidationMetrics(
+                userClassifications = 0,
+                assistantClassifications = 0,
+                workingUpdates = 0,
+                longTermUpdates = 0,
+                skippedCount = 0,
+                llmMetrics = com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics(
+                    promptTokens = 30,
+                    completionTokens = 10,
+                    totalTokens = 40,
+                    executionTimeMs = 80
+                )
+            )
+        )
+
+        whenever(memoryRepository.getWorkingMemory("main")).thenReturn(flowOf(emptyList()))
+        whenever(memoryRepository.getLongTermMemory("main")).thenReturn(flowOf(existingLongTermMemory))
+        whenever(memoryRepository.deactivateExpiredEntries()).thenReturn(Unit)
+        whenever(consolidator.consolidateConversationPair(any(), any(), any(), any()))
+            .thenReturn(consolidationResult)
+
+        // Act
+        memoryManager.onConversationPair(userMessage, assistantMessage)
+
+        // Assert
+        verify(memoryRepository).clearWorkingMemory("main")
+        verify(memoryRepository, never()).clearLongTermMemory("main")
     }
 }

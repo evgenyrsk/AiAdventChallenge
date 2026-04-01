@@ -3,7 +3,6 @@ package com.example.aiadventchallenge.domain.memory
 import com.example.aiadventchallenge.data.local.entity.toEntity
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.model.ChatMessage
-import com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics
 import com.example.aiadventchallenge.domain.model.MemoryConfig
 import com.example.aiadventchallenge.domain.model.MemoryContext
 import com.example.aiadventchallenge.domain.model.MemoryDebugInfo
@@ -13,41 +12,83 @@ import com.example.aiadventchallenge.domain.repository.MemoryClassificationRepos
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
+private fun createClassificationEntity(
+    message: ChatMessage,
+    metrics: com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics,
+    isMultiple: Boolean = false
+): com.example.aiadventchallenge.data.local.entity.MemoryClassificationEntity {
+    val requestId = if (isMultiple) "req_${System.currentTimeMillis()}_${(0..9999).random()}" else null
+
+    return com.example.aiadventchallenge.data.local.entity.MemoryClassificationEntity(
+        id = "class_${System.currentTimeMillis()}_${(0..9999).random()}",
+        userMessage = message.content,
+        branchId = message.branchId,
+        action = "create",
+        memoryType = null,
+        reason = null,
+        importance = null,
+        createdAt = System.currentTimeMillis(),
+        executionTimeMs = metrics.executionTimeMs,
+        promptTokens = metrics.promptTokens,
+        completionTokens = metrics.completionTokens,
+        totalTokens = metrics.totalTokens,
+        isMultiple = isMultiple,
+        requestId = requestId
+    )
+}
+
+fun ClassificationResult.toEntity(
+    message: ChatMessage,
+    metrics: com.example.aiadventchallenge.domain.model.MemoryClassificationMetrics,
+    isMultiple: Boolean = false
+): com.example.aiadventchallenge.data.local.entity.MemoryClassificationEntity {
+    val action: String
+    val memoryTypeStr: String?
+    val reasonStr: String?
+    val importanceVal: Float?
+
+    when (this) {
+        is ClassificationResult.Create -> {
+            action = "create"
+            memoryTypeStr = memoryType.name.lowercase()
+            reasonStr = reason.name
+            importanceVal = importance
+        }
+        is ClassificationResult.Skip -> {
+            action = "skip"
+            memoryTypeStr = null
+            reasonStr = null
+            importanceVal = null
+        }
+    }
+
+    val requestId = if (isMultiple) "req_${System.currentTimeMillis()}_${(0..9999).random()}" else null
+
+    return com.example.aiadventchallenge.data.local.entity.MemoryClassificationEntity(
+        id = "class_${System.currentTimeMillis()}_${(0..9999).random()}",
+        userMessage = message.content,
+        branchId = message.branchId,
+        action = action,
+        memoryType = memoryTypeStr,
+        reason = reasonStr,
+        importance = importanceVal,
+        createdAt = System.currentTimeMillis(),
+        executionTimeMs = metrics.executionTimeMs,
+        promptTokens = metrics.promptTokens,
+        completionTokens = metrics.completionTokens,
+        totalTokens = metrics.totalTokens,
+        isMultiple = isMultiple,
+        requestId = requestId
+    )
+}
+
 class MemoryManager(
     private val memoryRepository: MemoryRepository,
     private val chatRepository: ChatRepository,
-    private val aiClassifier: AiMemoryClassifier,
-    private val config: MemoryConfig,
-    private val classificationRepository: MemoryClassificationRepository
+    private val consolidator: MemoryConsolidator,
+    private val classificationRepository: MemoryClassificationRepository,
+    private val shortTermWindow: Int = 10
 ) {
-
-    suspend fun onUserMessage(message: ChatMessage) {
-        println("🧠 MemoryManager: Processing user message...")
-
-        memoryRepository.deactivateExpiredEntries()
-
-        val workingMemory = memoryRepository.getWorkingMemory(message.branchId).first()
-        val longTermMemory = memoryRepository.getLongTermMemory(message.branchId).first()
-
-        val result = aiClassifier.classifyUserMessage(message, workingMemory, longTermMemory)
-        if (result.isSuccess) {
-            val multiResult = result.getOrNull()!!
-
-            multiResult.results.forEach { classificationResult ->
-                processClassificationResult(classificationResult, message)
-            }
-
-            if (multiResult.results.isNotEmpty()) {
-                val classificationEntity = multiResult.results.first().toEntity(
-                    message, multiResult.metrics, isMultiple = multiResult.results.size > 1
-                )
-                classificationRepository.saveClassificationMetrics(classificationEntity)
-            }
-        } else {
-            println("❌ MemoryManager: Failed to classify message - ${result.exceptionOrNull()?.message}")
-            println("   Message: ${message.content}")
-        }
-    }
 
     suspend fun onConversationPair(userMessage: ChatMessage, assistantMessage: ChatMessage) {
         println("🧠 MemoryManager: Processing conversation pair...")
@@ -62,132 +103,79 @@ class MemoryManager(
         println("   Working memory size: ${workingMemory.size}")
         println("   Long-term memory size: ${longTermMemory.size}")
 
-        val result = aiClassifier.classifyConversationPair(userMessage, assistantMessage, workingMemory, longTermMemory)
-        if (result.isSuccess) {
-            val pairClassification = result.getOrNull()!!
+        val consolidationResult = consolidator.consolidateConversationPair(
+            userMessage,
+            assistantMessage,
+            workingMemory,
+            longTermMemory
+        )
 
-            pairClassification.userResults.forEach { classificationResult ->
-                processClassificationResult(classificationResult, userMessage)
-            }
-
-            pairClassification.assistantResults.forEach { classificationResult ->
-                processClassificationResult(classificationResult, assistantMessage)
-            }
-
-            println("✅ MemoryManager: Successfully processed conversation pair")
-            println("   User classifications: ${pairClassification.userResults.size}")
-            println("   Assistant classifications: ${pairClassification.assistantResults.size}")
-
-            if (pairClassification.userResults.isNotEmpty()) {
-                val classificationEntity = pairClassification.userResults.first().toEntity(
-                    userMessage, pairClassification.metrics, isMultiple = true
-                )
-                classificationRepository.saveClassificationMetrics(classificationEntity)
-            }
-        } else {
-            println("❌ MemoryManager: Failed to classify conversation pair")
-            println("   Error: ${result.exceptionOrNull()?.message}")
-            println("   User message length: ${userMessage.content.length}")
-            println("   Assistant message length: ${assistantMessage.content.length}")
-            result.exceptionOrNull()?.printStackTrace()
+        if (consolidationResult.newTaskDetected) {
+            println("🔄 MemoryManager: New task detected, clearing working memory for branch ${userMessage.branchId}")
+            memoryRepository.clearWorkingMemory(userMessage.branchId)
         }
+
+        consolidationResult.workingMemoryUpdates.forEach { result ->
+            val entry = createMemoryEntry(result, userMessage, MemoryType.WORKING)
+            memoryRepository.insertEntry(entry)
+            println("✅ MemoryManager: Saved to working memory - ${entry.reason.name}: ${entry.value}")
+        }
+
+        consolidationResult.longTermUpdates.forEach { result ->
+            val existing = memoryRepository.getEntryByKey(
+                result.key ?: "fact_${result.value.hashCode()}",
+                userMessage.branchId
+            )
+
+            if (existing == null) {
+                val entry = createMemoryEntry(result, userMessage, MemoryType.LONG_TERM)
+                memoryRepository.insertEntry(entry)
+                println("✅ MemoryManager: Saved to long-term memory - ${entry.reason.name}: ${entry.value}")
+            } else {
+                println("⚠️ MemoryManager: Entry already exists - ${existing.key}")
+            }
+        }
+
+        if (consolidationResult.workingMemoryUpdates.isNotEmpty() || consolidationResult.longTermUpdates.isNotEmpty()) {
+            val classificationEntity = createClassificationEntity(
+                userMessage,
+                consolidationResult.metrics.llmMetrics,
+                isMultiple = consolidationResult.workingMemoryUpdates.size + consolidationResult.longTermUpdates.size > 1
+            )
+            classificationRepository.saveClassificationMetrics(classificationEntity)
+        }
+
+        println("✅ MemoryManager: Conversation pair consolidation complete")
+        println("   Working updates: ${consolidationResult.workingMemoryUpdates.size}")
+        println("   Long-term updates: ${consolidationResult.longTermUpdates.size}")
+        println("   Skipped: ${consolidationResult.skippedCount}")
     }
 
-    private suspend fun processClassificationResult(
-        classificationResult: ClassificationResult,
-        message: ChatMessage
-    ) {
-        when (classificationResult) {
-            is ClassificationResult.Create -> {
-                val sourceValue = classificationResult.source
-                val importanceValue = classificationResult.importance
-
-                when (classificationResult.memoryType) {
-                    MemoryType.WORKING -> {
-                        val entry = MemoryEntry(
-                            id = generateId(),
-                            key = classificationResult.key ?: "task_${System.currentTimeMillis()}",
-                            value = classificationResult.value,
-                            memoryType = MemoryType.WORKING,
-                            reason = classificationResult.reason,
-                            source = sourceValue,
-                            importance = importanceValue,
-                            branchId = message.branchId,
-                            createdAt = System.currentTimeMillis(),
-                            updatedAt = System.currentTimeMillis(),
-                            isActive = true,
-                            ttl = System.currentTimeMillis() + config.workingMemoryTTL
-                        )
-                        memoryRepository.insertEntry(entry)
-                        println("✅ MemoryManager: Saved to working memory - ${entry.reason.name}: ${entry.value}")
-                    }
-                    MemoryType.LONG_TERM -> {
-                        if (importanceValue >= config.longTermImportanceThreshold) {
-                            val existing = memoryRepository.getEntryByKey(
-                                classificationResult.key ?: "fact_${classificationResult.value.hashCode()}",
-                                message.branchId
-                            )
-
-                            if (existing == null) {
-                                val entry = MemoryEntry(
-                                    id = generateId(),
-                                    key = classificationResult.key ?: "fact_${classificationResult.value.hashCode()}",
-                                    value = classificationResult.value,
-                                    memoryType = MemoryType.LONG_TERM,
-                                    reason = classificationResult.reason,
-                                    source = sourceValue,
-                                    importance = importanceValue,
-                                    branchId = message.branchId,
-                                    createdAt = System.currentTimeMillis(),
-                                    updatedAt = System.currentTimeMillis(),
-                                    isActive = true,
-                                    ttl = null
-                                )
-                                memoryRepository.insertEntry(entry)
-                                println("✅ MemoryManager: Saved to long-term memory - ${entry.reason.name}: ${entry.value}")
-                            } else {
-                                println("⚠️ MemoryManager: Entry already exists - ${existing.key}")
-                            }
-                        } else {
-                            println("⏭️ MemoryManager: Importance $importanceValue < threshold ${config.longTermImportanceThreshold}, skipping long-term save")
-                        }
-                    }
-                    MemoryType.SHORT_TERM -> {
-                        println("ℹ️ MemoryManager: Short-term message handled in context building")
-                    }
-                }
-            }
-            is ClassificationResult.Skip -> {
-                println("⏭️ MemoryManager: Classification result - SKIP")
-            }
-        }
-    }
-
-    suspend fun onAssistantMessage(message: ChatMessage) {
-        println("🧠 MemoryManager: Processing assistant message...")
-
-        val workingMemory = memoryRepository.getWorkingMemory(message.branchId).first()
-
-        val result = aiClassifier.classifyAssistantMessage(message, workingMemory)
-        if (result.isSuccess) {
-            val multiResult = result.getOrNull()!!
-
-            multiResult.results.forEach { classificationResult ->
-                processClassificationResult(classificationResult, message)
-            }
-
-            if (multiResult.results.isNotEmpty()) {
-                val classificationEntity = multiResult.results.first().toEntity(
-                    message, multiResult.metrics, isMultiple = multiResult.results.size > 1
-                )
-                classificationRepository.saveClassificationMetrics(classificationEntity)
-            }
-
-            println("📊 MemoryManager: Processed ${multiResult.results.size} classifications")
-            println("   Tokens: ${multiResult.metrics.promptTokens?.plus(multiResult.metrics.completionTokens ?: 0) ?: 0}")
+    private fun createMemoryEntry(
+        result: ClassificationResult.Create,
+        message: ChatMessage,
+        memoryType: MemoryType
+    ): MemoryEntry {
+        val ttl = if (memoryType == MemoryType.WORKING) {
+            System.currentTimeMillis() + 30 * 60 * 1000
         } else {
-            println("❌ MemoryManager: Failed to classify assistant message - ${result.exceptionOrNull()?.message}")
+            null
         }
+
+        return MemoryEntry(
+            id = generateId(),
+            key = result.key ?: "${memoryType.name.lowercase()}_${System.currentTimeMillis()}",
+            value = result.value,
+            memoryType = memoryType,
+            reason = result.reason,
+            source = result.source,
+            importance = result.importance,
+            branchId = message.branchId,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis(),
+            isActive = true,
+            ttl = ttl
+        )
     }
 
     suspend fun buildMemoryContext(branchId: String): MemoryContext {
@@ -201,7 +189,7 @@ class MemoryManager(
     }
 
     fun getShortTermMessages(messages: List<ChatMessage>): List<ChatMessage> {
-        return messages.takeLast(config.shortTermWindow)
+        return messages.takeLast(shortTermWindow)
     }
 
     suspend fun getDebugInfo(branchId: String, allMessages: List<ChatMessage>): MemoryDebugInfo {
