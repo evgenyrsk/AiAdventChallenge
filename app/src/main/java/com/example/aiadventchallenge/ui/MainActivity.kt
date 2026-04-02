@@ -87,6 +87,7 @@ class MainActivity : ComponentActivity() {
             aiRequestRepository,
             fitnessProfileManager,
             taskRepository,
+            AppDependencies.invariantValidator,
         )
     }
 
