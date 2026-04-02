@@ -6,8 +6,10 @@ import com.example.aiadventchallenge.data.api.HttpClient
 import com.example.aiadventchallenge.data.parser.ResponseParser
 import com.example.aiadventchallenge.data.repository.AiRepositoryImpl
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
+import com.example.aiadventchallenge.data.repository.InvariantRepositoryImpl
 import com.example.aiadventchallenge.data.local.database.AppDatabase
 import com.example.aiadventchallenge.domain.repository.AiRepository
+import com.example.aiadventchallenge.domain.repository.InvariantRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
 import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
 import com.example.aiadventchallenge.domain.usecase.AskModelUseCase
@@ -15,6 +17,8 @@ import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareTemperatureResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.TemperatureUseCase
 import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
+import com.example.aiadventchallenge.domain.validation.InvariantValidator
+import com.example.aiadventchallenge.domain.validation.InvariantValidatorImpl
 import android.content.Context
 
 object AppDependencies {
@@ -80,7 +84,18 @@ object AppDependencies {
     val chatAgent: ChatAgent by lazy {
         ChatAgent(
             askAiUseCase = askAiUseCase,
-            repository = repository
+            repository = repository,
+            invariantValidator = invariantValidator
+        )
+    }
+
+    private val invariantRepository: InvariantRepository by lazy {
+        InvariantRepositoryImpl()
+    }
+
+    val invariantValidator: InvariantValidator by lazy {
+        InvariantValidatorImpl(
+            config = invariantRepository.getInvariantConfig()
         )
     }
 

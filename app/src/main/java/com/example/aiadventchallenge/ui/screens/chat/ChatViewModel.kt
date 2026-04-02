@@ -15,6 +15,8 @@ import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
+import com.example.aiadventchallenge.domain.model.InvariantValidationResult
+import com.example.aiadventchallenge.domain.model.MessageRole
 import com.example.aiadventchallenge.domain.model.RequestLog
 import com.example.aiadventchallenge.domain.model.TaskAction
 import com.example.aiadventchallenge.domain.model.TaskContext
@@ -29,6 +31,7 @@ import com.example.aiadventchallenge.domain.repository.FactRepository
 import com.example.aiadventchallenge.domain.repository.MemoryRepository
 import com.example.aiadventchallenge.domain.repository.TaskRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
+import com.example.aiadventchallenge.domain.validation.InvariantValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,7 +49,8 @@ class ChatViewModel(
     private val memoryRepository: MemoryRepository,
     private val aiRequestRepository: AiRequestRepository,
     private val fitnessProfileManager: FitnessProfileManager,
-    private val taskRepository: TaskRepository
+    private val taskRepository: TaskRepository,
+    private val invariantValidator: InvariantValidator
 ) : ViewModel() {
 
     private val TAG = "ChatViewModel"
@@ -248,6 +252,32 @@ class ChatViewModel(
             val strategyConfig = chatSettingsRepository.getSettings()
             val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
 
+            val userInputValidation = invariantValidator.validate(
+                content = userInput,
+                context = _taskContext.value,
+                role = MessageRole.USER
+            )
+
+            when (userInputValidation) {
+                is InvariantValidationResult.Violated -> {
+                    val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
+
+                    val refusalMessage = ChatMessage(
+                        id = (System.currentTimeMillis() + 1).toString(),
+                        parentMessageId = parentMessageId,
+                        content = userInputValidation.explanation,
+                        isFromUser = false,
+                        isSystemMessage = true,
+                        branchId = activeBranchId
+                    )
+                    _messages.value += refusalMessage
+                    _isLoading.value = false
+                    return@launch
+                }
+                InvariantValidationResult.Valid -> {
+                }
+            }
+
             val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
 
             val userMessage = ChatMessage(
@@ -271,7 +301,12 @@ class ChatViewModel(
             val strategy = contextStrategyFactory.create(strategyConfig)
             val apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
 
-            when (val result = agent.processRequestWithContextAndUsage(apiMessages, config)) {
+            when (val result = agent.processRequestWithContextAndUsage(
+                messages = apiMessages,
+                config = config,
+                userInput = userInput,
+                taskContext = _taskContext.value
+            )) {
                 is ChatResult.Success -> {
                     val answerWithUsage = result.data
 
@@ -294,7 +329,6 @@ class ChatViewModel(
 
                     handleTaskIntent(aiResponse, userInput)
 
-                    // Вызываем стратегию для работы с памятью
                     strategy.onConversationPair(userMessage, aiMessage)
                 }
                 is ChatResult.Error -> {
@@ -303,6 +337,7 @@ class ChatViewModel(
                         parentMessageId = userMessage.id,
                         content = "Ошибка: ${result.message}",
                         isFromUser = false,
+                        isSystemMessage = true,
                         branchId = activeBranchId
                     )
                     _messages.value += errorMessage
@@ -316,6 +351,32 @@ class ChatViewModel(
         viewModelScope.launch {
             val strategyConfig = chatSettingsRepository.getSettings()
             val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
+
+            val userInputValidation = invariantValidator.validate(
+                content = userInput,
+                context = _taskContext.value,
+                role = MessageRole.USER
+            )
+
+            when (userInputValidation) {
+                is InvariantValidationResult.Violated -> {
+                    val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
+
+                    val refusalMessage = ChatMessage(
+                        id = (System.currentTimeMillis() + 1).toString(),
+                        parentMessageId = parentMessageId,
+                        content = userInputValidation.explanation,
+                        isFromUser = false,
+                        isSystemMessage = true,
+                        branchId = activeBranchId
+                    )
+                    _messages.value += refusalMessage
+                    _isLoading.value = false
+                    return@launch
+                }
+                InvariantValidationResult.Valid -> {
+                }
+            }
 
             val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
 
@@ -340,7 +401,12 @@ class ChatViewModel(
             val strategy = contextStrategyFactory.create(strategyConfig)
             val apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
 
-            when (val result = agent.processRequestWithContextAndUsage(apiMessages, config)) {
+            when (val result = agent.processRequestWithContextAndUsage(
+                messages = apiMessages,
+                config = config,
+                userInput = userInput,
+                taskContext = _taskContext.value
+            )) {
                 is ChatResult.Success -> {
                     val answerWithUsage = result.data
 
@@ -374,6 +440,7 @@ class ChatViewModel(
                         parentMessageId = userMessage.id,
                         content = "Ошибка: ${result.message}",
                         isFromUser = false,
+                        isSystemMessage = true,
                         branchId = activeBranchId
                     )
                     _messages.value += errorMessage
