@@ -17,6 +17,7 @@ data class ChatMessageEntity(
     val parentMessageId: String?,
     val content: String,
     val isFromUser: Boolean,
+    val isSystemMessage: Boolean = false,
     val timestamp: Long = System.currentTimeMillis(),
 
     val promptTokens: Int? = null,

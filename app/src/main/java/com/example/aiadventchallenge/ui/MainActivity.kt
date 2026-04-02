@@ -31,6 +31,7 @@ import com.example.aiadventchallenge.data.repository.BranchRepositoryImpl
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
 import com.example.aiadventchallenge.data.repository.MemoryRepositoryImpl
 import com.example.aiadventchallenge.data.repository.MemoryClassificationRepositoryImpl
+import com.example.aiadventchallenge.data.repository.TaskRepositoryImpl
 import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.ui.screens.chat.ChatScreen
 import com.example.aiadventchallenge.ui.screens.chat.ChatViewModel
@@ -53,6 +54,7 @@ import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.MemoryRepository
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.repository.MemoryClassificationRepository
+import com.example.aiadventchallenge.domain.repository.TaskRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 import java.io.File
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
     private val memoryRepository by lazy { MemoryRepositoryImpl(database.memoryEntriesDao()) }
     private val memoryClassificationRepository by lazy { MemoryClassificationRepositoryImpl(database.memoryClassificationDao()) }
     private val aiRequestRepository by lazy { AiRequestRepository(database.aiRequestDao()) }
+    private val taskRepository by lazy { TaskRepositoryImpl(database.taskDao()) }
     private val factExtractor by lazy { FactExtractor(AppDependencies.repository) }
     private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository, factExtractor, chatRepository, memoryRepository, AppDependencies.repository, memoryClassificationRepository) }
     private val fitnessProfileManager by lazy { FitnessProfileManager(chatSettingsRepository) }
@@ -83,6 +86,7 @@ class MainActivity : ComponentActivity() {
             memoryClassificationRepository,
             aiRequestRepository,
             fitnessProfileManager,
+            taskRepository,
         )
     }
 

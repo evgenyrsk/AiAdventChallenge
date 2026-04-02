@@ -1,6 +1,30 @@
 package com.example.aiadventchallenge.domain.utils
 
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
+
 object JsonUtils {
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
+
+    fun serializeStringList(list: List<String>): String {
+        return json.encodeToString(ListSerializer(String.serializer()), list)
+    }
+
+    fun parseStringList(jsonString: String): List<String> {
+        return if (jsonString.isBlank()) {
+            emptyList()
+        } else {
+            try {
+                json.decodeFromString(ListSerializer(String.serializer()), jsonString)
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+    }
     fun extractJson(content: String): String {
         val trimmed = content.trim()
 
