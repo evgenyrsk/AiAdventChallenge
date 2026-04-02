@@ -5,14 +5,13 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.aiadventchallenge.data.agent.ChatAgent
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
-import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
 import com.example.aiadventchallenge.domain.repository.FactRepository
 import com.example.aiadventchallenge.domain.repository.BranchRepository
 import com.example.aiadventchallenge.domain.repository.MemoryRepository
 import com.example.aiadventchallenge.domain.repository.MemoryClassificationRepository
-import com.example.aiadventchallenge.domain.context.FactExtractor
+import com.example.aiadventchallenge.domain.repository.TaskRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 
 class ChatViewModelFactory(
@@ -26,6 +25,7 @@ class ChatViewModelFactory(
     private val classificationRepository: MemoryClassificationRepository,
     private val aiRequestRepository: AiRequestRepository,
     private val fitnessProfileManager: FitnessProfileManager,
+    private val taskRepository: TaskRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -40,6 +40,7 @@ class ChatViewModelFactory(
                 memoryRepository,
                 aiRequestRepository,
                 fitnessProfileManager,
+                taskRepository,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

@@ -5,6 +5,7 @@ data class ChatMessage(
     val parentMessageId: String?,
     val content: String,
     val isFromUser: Boolean,
+    val isSystemMessage: Boolean = false,
     val branchId: String = "main",
     val promptTokens: Int? = null,
     val completionTokens: Int? = null,

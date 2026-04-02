@@ -1,6 +1,7 @@
 package com.example.aiadventchallenge.data.agent
 
 import com.example.aiadventchallenge.data.config.Prompts
+import com.example.aiadventchallenge.data.config.TaskPromptBuilder
 import com.example.aiadventchallenge.data.mapper.MessageMapper
 import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.domain.agent.Agent
@@ -10,6 +11,7 @@ import com.example.aiadventchallenge.domain.model.CompressedChatHistory
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.domain.model.RequestType
+import com.example.aiadventchallenge.domain.model.TaskContext
 import com.example.aiadventchallenge.domain.model.UserProfile
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
@@ -60,6 +62,31 @@ $profilePrompt
 
         return RequestConfig(
             systemPrompt = combinedPrompt,
+        )
+    }
+
+    fun buildRequestConfigWithTask(
+        taskContext: TaskContext?,
+        fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE,
+        userInput: String? = null
+    ): RequestConfig {
+        if (taskContext == null) {
+            // Режим без активной задачи - используем промпт для создания задач
+            val taskCreationPrompt = TaskPromptBuilder.buildTaskCreationPrompt(
+                userInput = userInput ?: "",
+                fitnessProfile = fitnessProfile,
+                hasActiveTask = false
+            )
+
+            return RequestConfig(
+                systemPrompt = taskCreationPrompt
+            )
+        }
+
+        val taskPrompt = TaskPromptBuilder.buildSystemPrompt(taskContext, fitnessProfile)
+
+        return RequestConfig(
+            systemPrompt = taskPrompt
         )
     }
 }

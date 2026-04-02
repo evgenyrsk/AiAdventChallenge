@@ -65,6 +65,7 @@ import com.example.aiadventchallenge.ui.screens.chat.components.CreateBranchDial
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchStartDivider
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchIndicatorBadge
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchInputHint
+import com.example.aiadventchallenge.ui.screens.chat.components.TaskInputHint
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,6 +77,7 @@ fun ChatScreen(
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val chatUiState by viewModel.chatUiState.collectAsStateWithLifecycle()
+    val taskContext by viewModel.taskContext.collectAsStateWithLifecycle()
     var userInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -133,8 +135,24 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .combinedClickable(
+                                    onClick = { showTokenStats = true },
+                                    onLongClick = { showDebugLog = true }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Статистика",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         IconButton(
-                            onClick = { showStrategySettings = true }
+                            onClick = { showStrategySettings = true },
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
@@ -206,12 +224,13 @@ fun ChatScreen(
                                 MessageBubble(
                                     message = message.content,
                                     isFromUser = message.isFromUser,
+                                    isSystemMessage = message.isSystemMessage,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .combinedClickable(
                                             onClick = {},
                                             onLongClick = {
-                                                if (chatUiState.isBranchingStrategy) {
+                                                if (chatUiState.isBranchingStrategy && !message.isSystemMessage) {
                                                     viewModel.onCreateBranchFromMessage(message.id)
                                                 }
                                             }
@@ -248,68 +267,57 @@ fun ChatScreen(
                         )
                     }
                     
+                    if (taskContext?.isActive == true) {
+                        TaskInputHint(taskContext = taskContext)
+                    }
+                    
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         OutlinedTextField(
-                        value = userInput,
-                        onValueChange = { userInput = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Введите сообщение...") },
-                        enabled = !isLoading,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(
-                            onSend = {
+                            value = userInput,
+                            onValueChange = { userInput = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("Сообщение") },
+                            enabled = !isLoading,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(
+                                onSend = {
+                                    if (userInput.isNotBlank()) {
+                                        viewModel.sendMessage(userInput)
+                                        userInput = ""
+                                        keyboardController?.hide()
+                                    }
+                                }
+                            ),
+                            shape = RoundedCornerShape(24.dp),
+                            singleLine = true
+                        )
+
+                        IconButton(
+                            onClick = {
                                 if (userInput.isNotBlank()) {
                                     viewModel.sendMessage(userInput)
                                     userInput = ""
                                     keyboardController?.hide()
                                 }
-                            }
-                        ),
-                        shape = RoundedCornerShape(24.dp),
-                        singleLine = true
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(
-                        onClick = {
-                            if (userInput.isNotBlank()) {
-                                viewModel.sendMessage(userInput)
-                                userInput = ""
-                                keyboardController?.hide()
-                            }
-                        },
-                        enabled = !isLoading && userInput.isNotBlank(),
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Отправить",
-                            tint = if (userInput.isNotBlank() && !isLoading) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .combinedClickable(
-                                onClick = { showTokenStats = true },
-                                onLongClick = { showDebugLog = true }
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Статистика токенов",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    }
+                            },
+                            enabled = !isLoading && userInput.isNotBlank(),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Отправить",
+                                tint = if (userInput.isNotBlank() && !isLoading) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                }
                 }
             }
         }
@@ -437,6 +445,7 @@ fun ChatScreen(
 fun MessageBubble(
     message: String,
     isFromUser: Boolean,
+    isSystemMessage: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -444,30 +453,34 @@ fun MessageBubble(
         horizontalArrangement = if (isFromUser) Arrangement.End else Arrangement.Start
     ) {
         Card(
-            modifier = Modifier.fillMaxWidth(0.8f),
+            modifier = Modifier.fillMaxWidth(if (isSystemMessage) 1.0f else 0.8f),
             shape = RoundedCornerShape(
                 topStart = if (isFromUser) 12.dp else 4.dp,
                 topEnd = if (isFromUser) 4.dp else 12.dp,
-                bottomStart = 12.dp,
-                bottomEnd = 12.dp
+                bottomStart = if (isFromUser || isSystemMessage) 4.dp else 12.dp,
+                bottomEnd = if (isFromUser || isSystemMessage) 12.dp else 4.dp
             ),
             colors = CardDefaults.cardColors(
-                containerColor = if (isFromUser) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
+                containerColor = when {
+                    isSystemMessage -> MaterialTheme.colorScheme.surfaceContainerHighest
+                    isFromUser -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.surfaceVariant
                 }
             )
         ) {
             Text(
                 text = message,
                 modifier = Modifier.padding(12.dp),
-                color = if (isFromUser) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                color = when {
+                    isSystemMessage -> MaterialTheme.colorScheme.onSurfaceVariant
+                    isFromUser -> MaterialTheme.colorScheme.onPrimary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
-                style = MaterialTheme.typography.bodyMedium
+                style = if (isSystemMessage) {
+                    MaterialTheme.typography.bodySmall
+                } else {
+                    MaterialTheme.typography.bodyMedium
+                }
             )
         }
     }
