@@ -22,7 +22,8 @@ data class EnhancedTaskAiResponse(
     val newTaskQuery: String?,
     val pauseTask: Boolean,
     val needClarification: String?,
-    val errorMessage: String?
+    val errorMessage: String?,
+    val taskCompleted: Boolean = false  // Флаг для явного завершения задачи (из VALIDATION)
 )
 
 object TaskPromptBuilder {
@@ -412,46 +413,48 @@ object TaskPromptBuilder {
 
         ====================================================================
         🎯 ПРАВИЛА ДЛЯ transition_to
-        ====================================================================
+         ====================================================================
 
-        transition_to: <PLANNING|EXECUTION|VALIDATION|DONE|null>
+         transition_to: <PLANNING|EXECUTION|VALIDATION|DONE|null>
+         task_completed: <true|false> (только для VALIDATION → DONE)
 
-        ❌ ЗАПРЕЩЕНЫ АВТОМАТИЧЕСКИЕ ПЕРЕХОДЫ:
-        1. ЗАПРЕЩЕНО использовать transition_to для завершения фаз
-           - НЕЛЬЗЯ: transition_to: EXECUTION (из PLANNING)
-           - НЕЛЬЗЯ: transition_to: VALIDATION (из EXECUTION)
-           - НЕЛЬЗЯ: transition_to: DONE (из VALIDATION)
-           - Переходы происходят ТОЛЬКО через утверждение пользователя
+         ❌ ЗАПРЕЩЕНЫ АВТОМАТИЧЕСКИЕ ПЕРЕХОДЫ:
+         1. ЗАПРЕЩЕНО использовать transition_to для завершения фаз
+            - НЕЛЬЗЯ: transition_to: EXECUTION (из PLANNING)
+            - НЕЛЬЗЯ: transition_to: VALIDATION (из EXECUTION)
+            - НЕЛЬЗЯ: transition_to: DONE (из VALIDATION) - используй task_completed: true!
+            - Переходы происходят ТОЛЬКО через утверждение пользователя или task_completed
 
-        2. ЗАПРЕЩЕНО использовать фразы в next_action:
-           - НЕЛЬЗЯ: "Начать фазу VALIDATION", "Переход к проверке"
-           - НЕЛЬЗЯ: "Начать фазу EXECUTION", "Переход к выполнению"
-           - Любые фразы "Начать фазу", "Переход к этапу" ЗАПРЕЩЕНЫ
+         2. ЗАПРЕЩЕНО использовать фразы в next_action:
+            - НЕЛЬЗЯ: "Начать фазу VALIDATION", "Переход к проверке"
+            - НЕЛЬЗЯ: "Начать фазу EXECUTION", "Переход к выполнению"
+            - Любые фразы "Начать фазу", "Переход к этапу" ЗАПРЕЩЕНЫ
 
-        3. Как завершать фазы правильно:
-           - PLANNING → EXECUTION:
-             * step_completed: true
-             * awaitingConfirmation: true (система сама установит)
-             * next_action: "План составлен, жду подтверждения"
-             * transition_to: null ← ВАЖНО!
-           - EXECUTION → VALIDATION:
-             * step_completed: true
-             * awaitingConfirmation: true (система сама установит)
-             * next_action: "Результат готов, жду подтверждения"
-             * transition_to: null ← ВАЖНО!
-           - VALIDATION → DONE:
-             * Пользователь дает утвердительный ответ
-             * step_completed: не требуется
-             * next_action: "Завершаем задачу"
-             * transition_to: null ← ВАЖНО!
+         3. Как завершать фазы правильно:
+            - PLANNING → EXECUTION:
+              * step_completed: true
+              * awaitingConfirmation: true (система сама установит)
+              * next_action: "План составлен, жду подтверждения"
+              * transition_to: null ← ВАЖНО!
+            - EXECUTION → VALIDATION:
+              * step_completed: true
+              * awaitingConfirmation: true (система сама установит)
+              * next_action: "Результат готов, жду подтверждения"
+              * transition_to: null ← ВАЖНО!
+            - VALIDATION → DONE:
+              * Пользователь дает утвердительный ответ
+              * task_completed: true ✅ (НЕ step_completed!)
+              * step_completed: false ❌
+              * next_action: "Завершаем задачу"
+              * transition_to: null ← ВАЖНО!
 
-        ✅ ДОПУСТИМЫЕ ЯВНЫЕ ПЕРЕХОДЫ (только по явному запросу пользователя):
+         ✅ ДОПУСТИМЫЕ ЯВНЫЕ ПЕРЕХОДЫ (только по явному запросу пользователя):
 
-        1. Возврат на PLANNING:
-           - "Давай уточним требования сначала"
-           - "Пересмотрим план"
-           - "Вернемся к планированию"
-           transition_to: PLANNING
+         1. Возврат на PLANNING:
+            - "Давай уточним требования сначала"
+            - "Пересмотрим план"
+            - "Вернемся к планированию"
+            transition_to: PLANNING
 
         2. Возврат на EXECUTION (только из VALIDATION):
            - "Вернемся к выполнению и исправим"
@@ -613,39 +616,104 @@ object TaskPromptBuilder {
 
         ТВОИ ЗАДАЧИ:
         1. Получи фидбек от пользователя
-           - "Всё устраивает?" → DONE
            - "Не нравится..." → EXECUTION (с исправлениями)
            - "Измени X" → EXECUTION (с изменением)
            - "Слишком сложно" → EXECUTION (с упрощением)
-
-        2. Если пользователь утверждает:
-           - Подтверди завершение задачи
-           - Переход на DONE
-
-        3. Если пользователь не устраивает:
-           - Вернись на EXECUTION
-           - Примени изменения
-           - Представь исправленную версию
-
-        4. Можно вернуться на PLANNING если нужно:
-           - "Давай уточним требования сначала"
-           - "Пересмотрим план"
-
-        ПРИМЕР ПРАВИЛЬНОГО ДИАЛОГА:
-        L: Всё устраивает? Можно завершать?
-        U: Да, отлично! ✅ (переход на DONE)
-
-        ПРИМЕР ВОЗВРАТА:
-        L: Всё устраивает?
-        U: Не нравится план на ногах
-        L: Понял, возвращаюсь на EXECUTION и исправляю...
-        (изменяет план)
-
-        ПРИМЕР ВОЗВРАТА НА PLANNING:
-        U: Давай уточним цели сначала
-        L: Хорошо, возвращаюсь на планирование...
-
-        ДОПУСТИМЫЕ ПЕРЕХОДЫ: DONE, EXECUTION, PLANNING
+           - "Вернись к планированию" → PLANNING
+           - Любой нейтральный/подтверждающий ответ → DONE
+ 
+          2. Если пользователь не устраивает:
+             - Вернись на EXECUTION
+             - Примени изменения
+ 
+          3. Если пользователь НЕ выразил несогласия:
+             - Подтверди завершение задачи
+             - Используй task_completed: true (НЕ step_completed!)
+             - Это запустит автоматический переход в DONE
+ 
+          4. Можно вернуться на PLANNING если нужно:
+             - "Давай уточним требования сначала"
+             - "Пересмотрим план"
+  
+          5. 🚨 КРИТИЧЕСКОЕ ПРАВИЛО - НОВЫЕ ЗАДАЧИ:
+             Если пользователь запрашивает РАБОТУ, ОТЛИЧНУЮ ОТ текущей задачи:
+             - "Составь протокол питания"
+             - "Хочу план питания"
+             - "Теперь давай про питание"
+             - "Давай сформируем протокол питания"
+             - "Хочу добавить растяжку"
+             - "Начнём с питания"
+             
+             Это НОВАЯ ЗАДАЧА, НЕ продолжение текущей!
+             
+             ДЕЙСТВИЕ:
+             - task_intent: NEW_TASK ✅
+             - new_task_query: <точный текст новой задачи>
+             - НЕ используй CONTINUE_TASK для новой работы!
+             
+             ПРИМЕР НОВОЙ ЗАДАЧИ:
+             U: Давай теперь сформируем протокол питания
+             L: Отлично! Это новая задача. Создаю протокол питания для рекомпозиции...
+             
+             task_intent: NEW_TASK
+             new_task_query: "Сформировать протокол питания для рекомпозиции тела"
+  
+          ПРИМЕР ПРАВИЛЬНОГО ДИАЛОГА (автоматический переход):
+          L: Всё устраивает? Есть ли замечания?
+          U: Нет, всё отлично
+          L: Супер! Задача завершена. 
+          
+          task_intent: CONTINUE_TASK
+          task_completed: true ✅
+          step_completed: false ❌
+          transition_to: null ❌
+          next_action: "Задача завершена"
+  
+          ПРИМЕР ВОЗВРАТА:
+          L: Всё устраивает?
+          U: Не нравится план на ногах
+          L: Понял, возвращаюсь на EXECUTION и исправляю...
+          
+          task_intent: CONTINUE_TASK
+          transition_to: EXECUTION
+          task_completed: false
+          step_completed: false
+  
+          ПРИМЕР НЕЙТРАЛЬНОГО ОТВЕТА (автоматический переход):
+          L: Всё устраивает?
+          U: Понял
+          L: Отлично! Проверка пройдена. Задача выполнена.
+          
+          task_intent: CONTINUE_TASK
+          task_completed: true ✅
+          step_completed: false ❌
+          transition_to: null ❌
+          next_action: "Задача завершена"
+  
+          ПРИМЕР ВОЗВРАТА НА PLANNING:
+          U: Давай уточним цели сначала
+          L: Хорошо, возвращаюсь на планирование...
+          
+          task_intent: CONTINUE_TASK
+          transition_to: PLANNING
+          task_completed: false
+          step_completed: false
+  
+          ПРИМЕР НОВОЙ ЗАДАЧИ:
+          U: Давай теперь сформируем протокол питания
+          L: Отлично, это новая задача. Начинаю работу над протоколом питания...
+          
+          task_intent: NEW_TASK
+          new_task_query: "Сформировать протокол питания для рекомпозиции"
+  
+          🚨 КРИТИЧЕСКИЕ ПРАВИЛА VALIDATION:
+          1. Для завершения задачи используй task_completed: true (НЕ step_completed!)
+          2. НЕ используй transition_to: DONE - используй task_completed: true
+          3. Только явное несогласие → EXECUTION через transition_to
+          4. Нейтральный/подтверждающий ответ → task_completed: true → DONE автоматически
+  
+          ДОПУСТИМЫЕ ПЕРЕХОДЫ: EXECUTION, PLANNING
+          (DONE происходит автоматически через task_completed: true)
     """.trimIndent()
 
         TaskPhase.DONE -> """
@@ -728,6 +796,7 @@ object TaskPromptBuilder {
     fun parseEnhancedAiResponse(response: String): EnhancedTaskAiResponse {
         val taskIntent = extractTaskIntent(response)
         val stepCompleted = response.contains("step_completed: true", ignoreCase = true)
+        val taskCompleted = response.contains("task_completed: true", ignoreCase = true)
         val nextAction = extractField(response, "next_action") ?: ""
         val result = extractResult(response)
         val transitionTo = extractField(response, "transition_to")?.let { phaseName ->
@@ -741,6 +810,10 @@ object TaskPromptBuilder {
         val needClarification = extractField(response, "need_clarification")
         val errorMessage = extractField(response, "error")
 
+        if (taskCompleted) {
+            android.util.Log.d("TaskPromptBuilder", "✅ task_completed: true detected - will trigger DONE transition")
+        }
+
         return EnhancedTaskAiResponse(
             taskIntent = taskIntent,
             stepCompleted = stepCompleted,
@@ -750,7 +823,8 @@ object TaskPromptBuilder {
             newTaskQuery = newTaskQuery,
             pauseTask = taskIntent == TaskIntent.PAUSE_TASK,
             needClarification = needClarification,
-            errorMessage = errorMessage
+            errorMessage = errorMessage,
+            taskCompleted = taskCompleted
         )
     }
 

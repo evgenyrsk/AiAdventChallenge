@@ -387,6 +387,7 @@ class ChatViewModel(
         Log.d(TAG, "=== Task Intent Handler ===")
         Log.d(TAG, "Intent: ${aiResponse.taskIntent}")
         Log.d(TAG, "stepCompleted: ${aiResponse.stepCompleted}")
+        Log.d(TAG, "taskCompleted: ${aiResponse.taskCompleted}")
         Log.d(TAG, "transitionTo: ${aiResponse.transitionTo}")
         Log.d(TAG, "nextAction: ${aiResponse.nextAction}")
 
@@ -425,6 +426,7 @@ class ChatViewModel(
                     Log.d(TAG, "Has active task for intent processing: true")
                     Log.d(TAG, "Response: stepCompleted=${aiResponse.stepCompleted}, transitionTo=${aiResponse.transitionTo}")
 
+                    // ПРИОРИТЕТ 1: Обработка подтверждения пользователя
                     if (currentTask.awaitingUserConfirmation) {
                         val isAffirmative = parseAffirmativeResponse(aiResponse)
                         if (isAffirmative) {
@@ -432,8 +434,10 @@ class ChatViewModel(
                             val nextPhase = TaskStateMachine().getNextPhase(currentTask.phase)
                             if (nextPhase != null) {
                                 transitionTaskTo(nextPhase)
-                            } else if (currentTask.phase == TaskPhase.DONE) {
-                                // Уже в DONE, ничего не делаем
+                            } else if (currentTask.phase != TaskPhase.DONE) {
+                                // Нет следующей фазы - финальная, переходим в DONE
+                                Log.d(TAG, "No next phase, transitioning to DONE")
+                                transitionTaskTo(TaskPhase.DONE)
                             }
                         } else {
                             Log.d(TAG, "User rejected or unclear - staying on current phase")
@@ -449,8 +453,20 @@ class ChatViewModel(
                         return
                      }
 
+                    // ПРИОРИТЕТ 2: Явный переход через transitionTo
+                    if (aiResponse.transitionTo != null) {
+                        Log.d(TAG, "Explicit transition requested to: ${aiResponse.transitionTo.label}")
+                        val stateMachine = TaskStateMachine()
+                        if (stateMachine.canTransition(currentTask.phase, aiResponse.transitionTo)) {
+                            transitionTaskTo(aiResponse.transitionTo)
+                        } else {
+                            Log.w(TAG, "Transition not allowed: ${aiResponse.transitionTo.label}")
+                        }
+                        return
+                    }
+
+                    // ПРИОРИТЕТ 3: PLANNING - проверка готовности плана
                     if (!currentTask.awaitingUserConfirmation && currentTask.phase == TaskPhase.PLANNING) {
-                        // PLANNING: проверяем готов ли план
                         if (containsPlanKeywords(aiResponse.result)) {
                             Log.d(TAG, "PLANNING: Plan presented, awaiting user confirmation")
                             setAwaitingConfirmation(true)
@@ -458,23 +474,26 @@ class ChatViewModel(
                         }
                     }
 
+                    // ПРИОРИТЕТ 3.2: EXECUTION - проверка завершения
+                    if (!currentTask.awaitingUserConfirmation && currentTask.phase == TaskPhase.EXECUTION) {
+                        if (currentTask.currentStep >= currentTask.totalSteps) {
+                            Log.d(TAG, "EXECUTION: Last step completed, awaiting user confirmation for VALIDATION")
+                            setAwaitingConfirmation(true)
+                            return
+                        }
+                    }
+
+                    // ПРИОРИТЕТ 4: Задача завершена (из VALIDATION)
+                    if (aiResponse.taskCompleted) {
+                        Log.d(TAG, "Task completed: true - transitioning to DONE")
+                        transitionTaskTo(TaskPhase.DONE)
+                        return
+                    }
+
+                    // ПРИОРИТЕТ 5: Шаг завершён
                     if (aiResponse.stepCompleted) {
                         Log.d(TAG, "Step completed: true")
-                        if (currentTask.isCompleted && currentTask.phase != TaskPhase.DONE) {
-                            // Все шаги фазы выполнены, но не в DONE - переходим на следующую фазу или DONE
-                            Log.d(TAG, "All steps completed, checking next phase")
-                            val nextPhase = TaskStateMachine().getNextPhase(currentTask.phase)
-                            if (nextPhase != null) {
-                                Log.d(TAG, "Transitioning to next phase: ${nextPhase.label}")
-                                transitionTaskTo(nextPhase)
-                            } else {
-                                // Нет следующей фазы - значит финальная, переходим в DONE
-                                if (currentTask.phase != TaskPhase.DONE) {
-                                    Log.d(TAG, "No next phase, transitioning to DONE")
-                                    transitionTaskTo(TaskPhase.DONE)
-                                }
-                            }
-                        } else if (currentTask.currentStep >= currentTask.totalSteps) {
+                        if (currentTask.currentStep >= currentTask.totalSteps) {
                             Log.d(TAG, "Last step completed, awaiting user confirmation")
                             setAwaitingConfirmation(true)
                         } else {
@@ -482,25 +501,7 @@ class ChatViewModel(
                             advanceTask()
                         }
                     } else {
-                        Log.d(TAG, "Step completed: false")
-                        if (aiResponse.transitionTo != null) {
-                            if (currentTask.awaitingUserConfirmation) {
-                                Log.w(TAG, "Ignoring transition_to while awaiting confirmation")
-                                Log.d(TAG, "  Requested transition to: ${aiResponse.transitionTo.label}")
-                                Log.d(TAG, "  Current phase: ${currentTask.phase.label}")
-                                Log.d(TAG, "  Step completed: ${aiResponse.stepCompleted}")
-                                return
-                            }
-                            Log.d(TAG, "Explicit transition requested to: ${aiResponse.transitionTo.label}")
-                            val stateMachine = TaskStateMachine()
-                            if (stateMachine.canTransition(currentTask.phase, aiResponse.transitionTo)) {
-                                transitionTaskTo(aiResponse.transitionTo)
-                            } else {
-                                Log.w(TAG, "Transition not allowed: ${aiResponse.transitionTo.label}")
-                            }
-                        } else {
-                            Log.d(TAG, "No transition action taken")
-                        }
+                        Log.d(TAG, "No transition action taken")
                     }
                 } else {
                     Log.d(TAG, "Has active task for intent processing: false")
@@ -870,6 +871,17 @@ class ChatViewModel(
         )
         val responseText = aiResponse.result.lowercase()
         return affirmativeKeywords.any { it in responseText }
+    }
+
+    private fun parseDisagreementResponse(aiResponse: EnhancedTaskAiResponse): Boolean {
+        val disagreementKeywords = listOf(
+            "нет", "не нравится", "не устраивает", "хочу изменить",
+            "переделай", "исправь", "это неправильно", "плохо",
+            "неудачно", "не то", "другой вариант", "изменить", "измени",
+            "переделать", "переделай", "не работает", "сложно", "слишком сложно"
+        )
+        val responseText = aiResponse.result.lowercase()
+        return disagreementKeywords.any { it in responseText }
     }
 
     private fun setAwaitingConfirmation(awaiting: Boolean) {
