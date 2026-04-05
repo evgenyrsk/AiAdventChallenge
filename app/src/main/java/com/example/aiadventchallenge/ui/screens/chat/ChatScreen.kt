@@ -66,6 +66,7 @@ import com.example.aiadventchallenge.ui.screens.chat.components.BranchStartDivid
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchIndicatorBadge
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchInputHint
 import com.example.aiadventchallenge.ui.screens.chat.components.TaskInputHint
+import com.example.aiadventchallenge.domain.model.TaskPhase
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,8 +115,8 @@ fun ChatScreen(
                     title = {
                         Column {
                             Row(
-                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text("Чат")
                                 if (chatUiState.isBranchingStrategy && chatUiState.activeBranchName != null) {
@@ -162,6 +163,7 @@ fun ChatScreen(
                         }
                     }
                 )
+
                 LazyColumn(
                         state = listState,
                         modifier = Modifier

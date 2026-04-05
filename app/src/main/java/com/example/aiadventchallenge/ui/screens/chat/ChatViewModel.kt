@@ -22,6 +22,7 @@ import com.example.aiadventchallenge.domain.model.TaskAction
 import com.example.aiadventchallenge.domain.model.TaskContext
 import com.example.aiadventchallenge.domain.model.TaskPhase
 import com.example.aiadventchallenge.domain.model.TaskStateMachine
+import com.example.aiadventchallenge.domain.model.TransitionResult
 import com.example.aiadventchallenge.data.config.TaskIntent
 import com.example.aiadventchallenge.data.config.EnhancedTaskAiResponse
 import com.example.aiadventchallenge.data.config.TaskPromptBuilder
@@ -327,7 +328,7 @@ class ChatViewModel(
 
                     _isLoading.value = false
 
-                    handleTaskIntent(aiResponse, userInput)
+                    handleTaskIntent(aiResponse, userInput, activeBranchId)
 
                     strategy.onConversationPair(userMessage, aiMessage)
                 }
@@ -427,7 +428,7 @@ class ChatViewModel(
 
                     _isLoading.value = false
 
-                    handleTaskIntent(aiResponse, userInput)
+                    handleTaskIntent(aiResponse, userInput, activeBranchId)
 
                     strategy.onConversationPair(userMessage, aiMessage)
 
@@ -450,7 +451,7 @@ class ChatViewModel(
         }
     }
 
-    private fun handleTaskIntent(aiResponse: EnhancedTaskAiResponse, userInput: String) {
+    private fun handleTaskIntent(aiResponse: EnhancedTaskAiResponse, userInput: String, activeBranchId: String) {
         Log.d(TAG, "=== Task Intent Handler ===")
         Log.d(TAG, "Intent: ${aiResponse.taskIntent}")
         Log.d(TAG, "stepCompleted: ${aiResponse.stepCompleted}")
@@ -523,11 +524,36 @@ class ChatViewModel(
                     // ПРИОРИТЕТ 2: Явный переход через transitionTo
                     if (aiResponse.transitionTo != null) {
                         Log.d(TAG, "Explicit transition requested to: ${aiResponse.transitionTo.label}")
+
                         val stateMachine = TaskStateMachine()
-                        if (stateMachine.canTransition(currentTask.phase, aiResponse.transitionTo)) {
-                            transitionTaskTo(aiResponse.transitionTo)
-                        } else {
-                            Log.w(TAG, "Transition not allowed: ${aiResponse.transitionTo.label}")
+                        val validationResult = stateMachine.validateTransitionBefore(
+                            currentTask.phase,
+                            aiResponse.transitionTo
+                        )
+
+                        when (validationResult) {
+                            is TransitionResult.Allowed -> {
+                                Log.d(TAG, "✅ Transition ALLOWED by validation")
+                                transitionTaskTo(aiResponse.transitionTo)
+                            }
+                            is TransitionResult.Denied -> {
+                                Log.w(TAG, "❌ Transition DENIED by validation: ${validationResult.reason}")
+
+                                val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
+                                val warningMessage = ChatMessage(
+                                    id = (System.currentTimeMillis() + 1).toString(),
+                                    parentMessageId = parentMessageId,
+                                    content = """
+                                        ⚠️ ${validationResult.reason}
+
+                                        💡 ${getValidTransitionsHint(currentTask.phase)}
+                                    """.trimIndent(),
+                                    isFromUser = false,
+                                    isSystemMessage = true,
+                                    branchId = activeBranchId
+                                )
+                                _messages.value += warningMessage
+                            }
                         }
                         return
                     }
@@ -552,8 +578,31 @@ class ChatViewModel(
 
                     // ПРИОРИТЕТ 4: Задача завершена (из VALIDATION)
                     if (aiResponse.taskCompleted) {
-                        Log.d(TAG, "Task completed: true - transitioning to DONE")
-                        transitionTaskTo(TaskPhase.DONE)
+                        Log.d(TAG, "Task completed: true")
+
+                        if (currentTask.phase == TaskPhase.VALIDATION) {
+                            Log.d(TAG, "✅ Task completion ALLOWED: from VALIDATION phase")
+                            transitionTaskTo(TaskPhase.DONE)
+                        } else {
+                            Log.w(TAG, "❌ Task completion DENIED: current phase is ${currentTask.phase.label}")
+                            Log.w(TAG, "   Reason: Task completion is only allowed from VALIDATION phase")
+
+                            val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
+                            val warningMessage = ChatMessage(
+                                id = (System.currentTimeMillis() + 1).toString(),
+                                parentMessageId = parentMessageId,
+                                content = """
+                                    ⚠️ Нельзя завершить задачу из фазы "${currentTask.phase.label}"
+
+                                    💡 Завершение задачи разрешено только после фазы проверки (VALIDATION)
+                                    💡 ${getValidTransitionsHint(currentTask.phase)}
+                                """.trimIndent(),
+                                isFromUser = false,
+                                isSystemMessage = true,
+                                branchId = activeBranchId
+                            )
+                            _messages.value += warningMessage
+                        }
                         return
                     }
 
@@ -978,16 +1027,60 @@ class ChatViewModel(
         val planKeywords = listOf(
             "план тренировок", "программа тренировок", "протокол тренировок", "расписание тренировок",
             "график тренировок", "структура тренировок", "подход к тренировкам", "стратегия тренировок",
-
-            // Индикаторы готового решения
+            "план питания", "программа питания", "протокол питания",
             "готов план", "предлагаю план", "рекомендую план", "вот вариант плана",
-            "вот решение", "вот детальный план", "вот программа тренировок",
-
-            // Списки дней (только если с упражнениями)
-            "пн:", "вт:", "ср:", "чт:", "пт:", "сб:", "вс:",
-            "понедельник:", "вторник:", "среда:", "четверг:",
-            "пятница:", "суббота:", "воскресенье:"
+            "вот решение", "вот детальный план", "вот программа тренировок"
         )
-        return planKeywords.any { it.lowercase() in response.lowercase() }
+        val hasPlanKeywords = planKeywords.any { it.lowercase() in response.lowercase() }
+
+        val planSummaryKeywords = listOf(
+            "резюме", "понял", "понял вас", "итого", "подводя итог"
+        )
+        val isSummary = planSummaryKeywords.any { it.lowercase() in response.lowercase() }
+
+        val confirmationKeywords = listOf(
+            "правильно ли понял", "составить", "создать", "приступим к",
+            "готовы", "можем", "хотите", "начать", "согласны"
+        )
+        val isConfirmationQuestion = confirmationKeywords.any { it.lowercase() in response.lowercase() }
+
+        val hasDetailedSolution = hasDetailedSolutionInPlanning(response)
+
+        return isSummary && isConfirmationQuestion && !hasDetailedSolution
+    }
+
+    private fun hasDetailedSolutionInPlanning(response: String): Boolean {
+        val structuredListPattern = Regex(
+            """(Пн|Вт|Ср|Чт|Пт|Сб|Вс|Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье|День|Шаг|Этап)\s*[:：]\s*[^,\n]+\d+""",
+            RegexOption.IGNORE_CASE
+        )
+        val hasStructuredList = structuredListPattern.containsMatchIn(response)
+
+        val specificValuesPattern = Regex(
+            """\d+\s*(г|кг|мл|мг|мкг|грамм|килограмм|раз|подход|повторение|упражнение|мин|час|день|неделя|мес)""",
+            RegexOption.IGNORE_CASE
+        )
+        val hasSpecificValues = specificValuesPattern.containsMatchIn(response)
+
+        val hasQuestions = response.contains("?") ||
+                          response.lowercase().contains("какую") ||
+                          response.lowercase().contains("какой") ||
+                          response.lowercase().contains("сколько") ||
+                          response.lowercase().contains("есть ли") ||
+                          response.lowercase().contains("можете") ||
+                          response.lowercase().contains("хотите") ||
+                          response.lowercase().contains("желаете") ||
+                          response.lowercase().contains("предпочитаете")
+
+        return (hasStructuredList || hasSpecificValues) && !hasQuestions
+    }
+
+    private fun getValidTransitionsHint(phase: TaskPhase): String {
+        val transitions = TaskStateMachine().getPossibleTransitions(phase)
+        return if (transitions.isEmpty()) {
+            "Нет допустимых переходов (финальная фаза)"
+        } else {
+            "Допустимые переходы: ${transitions.joinToString { it.label }}"
+        }
     }
 }
