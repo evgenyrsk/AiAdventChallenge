@@ -10,7 +10,7 @@ object FitnessInvariants {
         override val category = InvariantCategory.TOPIC
         override val description = "Только темы фитнеса, питания и здоровья"
         override val priority = InvariantPriority.HARD
-        override val isEnabled = true
+        override val isEnabled = false
 
         private val forbiddenTopics = listOf(
             "политика", "религия", "финансы", "инвестиции",
@@ -23,10 +23,16 @@ object FitnessInvariants {
             context: TaskContext?,
             role: MessageRole
         ): InvariantViolation? {
+            if (role != MessageRole.USER) {
+                return null
+            }
+
             val lowerContent = content.lowercase()
 
             for (topic in forbiddenTopics) {
-                if (topic in lowerContent) {
+                // Используем word boundaries для точной детекции (избегаем ложных срабатываний на словах-омонимах)
+                val topicPattern = Regex("\\b${Regex.escape(topic)}\\b", RegexOption.IGNORE_CASE)
+                if (topicPattern.containsMatchIn(lowerContent)) {
                     return InvariantViolation(
                         invariantId = id,
                         invariantDescription = description,
@@ -45,7 +51,7 @@ object FitnessInvariants {
         override val category = InvariantCategory.SAFETY
         override val description = "Запрет постановки медицинских диагнозов"
         override val priority = InvariantPriority.HARD
-        override val isEnabled = true
+        override val isEnabled = false
 
         private val diagnosisPatterns = listOf(
             Regex("\\bдиагноз\\b"),
@@ -90,7 +96,7 @@ object FitnessInvariants {
         override val category = InvariantCategory.PROFESSIONALISM
         override val description = "Запрет назначения лекарств"
         override val priority = InvariantPriority.HARD
-        override val isEnabled = true
+        override val isEnabled = false
 
         private val prescriptionKeywords = listOf(
             "пропишу", "назначаю", "принимать лекарство", "препарат", "таблетки", "лекарство"
@@ -121,7 +127,7 @@ object FitnessInvariants {
         override val category = InvariantCategory.PROFESSIONALISM
         override val description = "Запрет назначения лекарств AI"
         override val priority = InvariantPriority.HARD
-        override val isEnabled = true
+        override val isEnabled = false
 
         private val prescriptionPatterns = listOf(
             Regex("\\b(?:пропишу|назначаю)\\s+.*(?:лекарств|препарат|таблеток|мазей)\\b"),
@@ -153,7 +159,6 @@ object FitnessInvariants {
         return InvariantConfig(
             invariants = listOf(
                 TaskFlowInvariant(),
-                PlanningPhaseInvariant(),
                 TopicRestrictionInvariant(),
                 PrescriptionProhibitionInvariant(),
                 MedicalDiagnosisInvariant(),

@@ -231,6 +231,43 @@ class ChatViewModel(
         _requestLogs.value = updatedLogs
     }
 
+    private fun logLlmRequest(
+        userInput: String,
+        phase: TaskPhase?,
+        query: String?
+    ) {
+        Log.d(TAG, "📤 === OUTGOING LLM REQUEST ===")
+        Log.d(TAG, "   User input: $userInput")
+        Log.d(TAG, "   Phase: ${phase?.label}")
+        Log.d(TAG, "   Active task: $query")
+        Log.d(TAG, "   ============================")
+    }
+
+    private fun logLlmResponse(
+        aiResponse: EnhancedTaskAiResponse,
+        totalTokens: Int,
+        contentLength: Int
+    ) {
+        Log.d(TAG, "📥 === INCOMING LLM RESPONSE ===")
+        Log.d(TAG, "   Raw content length: $contentLength")
+        Log.d(TAG, "   Intent: ${aiResponse.taskIntent}")
+        Log.d(TAG, "   step_completed: ${aiResponse.stepCompleted}")
+        Log.d(TAG, "   plan_ready: ${aiResponse.planReady}")
+        Log.d(TAG, "   transitionTo: ${aiResponse.transitionTo}")
+        Log.d(TAG, "   taskCompleted: ${aiResponse.taskCompleted}")
+        Log.d(TAG, "   nextAction: ${aiResponse.nextAction}")
+        Log.d(TAG, "   Tokens: $totalTokens")
+
+        // Проверка на пустой результат
+        if (aiResponse.result.isEmpty()) {
+            Log.w(TAG, "⚠️ Empty result detected - will show error to user")
+        } else {
+            Log.d(TAG, "   Response preview: ${aiResponse.result.take(150)}...")
+        }
+
+        Log.d(TAG, "   ===============================")
+    }
+
     fun sendMessage(userInput: String) {
         if (userInput.isBlank()) return
         if (_isLoading.value) return
@@ -253,32 +290,6 @@ class ChatViewModel(
             val strategyConfig = chatSettingsRepository.getSettings()
             val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
 
-            val userInputValidation = invariantValidator.validate(
-                content = userInput,
-                context = _taskContext.value,
-                role = MessageRole.USER
-            )
-
-            when (userInputValidation) {
-                is InvariantValidationResult.Violated -> {
-                    val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
-
-                    val refusalMessage = ChatMessage(
-                        id = (System.currentTimeMillis() + 1).toString(),
-                        parentMessageId = parentMessageId,
-                        content = userInputValidation.explanation,
-                        isFromUser = false,
-                        isSystemMessage = true,
-                        branchId = activeBranchId
-                    )
-                    _messages.value += refusalMessage
-                    _isLoading.value = false
-                    return@launch
-                }
-                InvariantValidationResult.Valid -> {
-                }
-            }
-
             val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
 
             val userMessage = ChatMessage(
@@ -299,6 +310,8 @@ class ChatViewModel(
                 userInput = userInput
             )
 
+            logLlmRequest(userInput, _taskContext.value?.phase, _taskContext.value?.query)
+
             val strategy = contextStrategyFactory.create(strategyConfig)
             val apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
 
@@ -312,6 +325,25 @@ class ChatViewModel(
                     val answerWithUsage = result.data
 
                     val aiResponse = TaskPromptBuilder.parseEnhancedAiResponse(answerWithUsage.content)
+
+                    logLlmResponse(aiResponse, answerWithUsage.totalTokens ?: 0, answerWithUsage.content.length)
+
+                    // Обработка пустого результата
+                    if (aiResponse.result.isEmpty()) {
+                        val errorMessage = ChatMessage(
+                            id = (System.currentTimeMillis() + 1).toString(),
+                            parentMessageId = userMessage.id,
+                            content = "❌ Не удалось получить ответ от ассистента. Попробуйте переформулировать запрос.",
+                            isFromUser = false,
+                            isSystemMessage = true,
+                            branchId = activeBranchId
+                        )
+                        _messages.value += errorMessage
+                        chatRepository.insertMessage(errorMessage, activeBranchId, errorMessage.parentMessageId)
+
+                        _isLoading.value = false
+                        return@launch
+                    }
 
                     val aiMessage = ChatMessage(
                         id = (System.currentTimeMillis() + 1).toString(),
@@ -353,31 +385,18 @@ class ChatViewModel(
             val strategyConfig = chatSettingsRepository.getSettings()
             val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
 
-            val userInputValidation = invariantValidator.validate(
-                content = userInput,
-                context = _taskContext.value,
-                role = MessageRole.USER
-            )
-
-            when (userInputValidation) {
-                is InvariantValidationResult.Violated -> {
-                    val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
-
-                    val refusalMessage = ChatMessage(
-                        id = (System.currentTimeMillis() + 1).toString(),
-                        parentMessageId = parentMessageId,
-                        content = userInputValidation.explanation,
-                        isFromUser = false,
-                        isSystemMessage = true,
-                        branchId = activeBranchId
-                    )
-                    _messages.value += refusalMessage
-                    _isLoading.value = false
-                    return@launch
-                }
-                InvariantValidationResult.Valid -> {
-                }
+            // ========== НОВАЯ ЛОГИКА: Предварительное создание задачи ==========
+            if (_taskContext.value == null) {
+                val profile = _chatUiState.value.fitnessProfile
+                val task = taskRepository.createTask(userInput, profile)
+                _taskContext.value = task
+                
+                Log.d(TAG, "Task created in advance before LLM request")
+                Log.d(TAG, "  Task ID: ${task.taskId}")
+                Log.d(TAG, "  Query: ${task.query}")
+                Log.d(TAG, "  Phase: ${task.phase.label} (${task.currentStep}/${task.totalSteps})")
             }
+            // ================================================================
 
             val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
 
@@ -399,6 +418,8 @@ class ChatViewModel(
                 userInput = userInput
             )
 
+            logLlmRequest(userInput, _taskContext.value?.phase, _taskContext.value?.query)
+
             val strategy = contextStrategyFactory.create(strategyConfig)
             val apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
 
@@ -412,6 +433,25 @@ class ChatViewModel(
                     val answerWithUsage = result.data
 
                     val aiResponse = TaskPromptBuilder.parseEnhancedAiResponse(answerWithUsage.content)
+
+                    logLlmResponse(aiResponse, answerWithUsage.totalTokens ?: 0, answerWithUsage.content.length)
+
+                    // Обработка пустого результата
+                    if (aiResponse.result.isEmpty()) {
+                        val errorMessage = ChatMessage(
+                            id = (System.currentTimeMillis() + 1).toString(),
+                            parentMessageId = userMessage.id,
+                            content = "❌ Не удалось получить ответ от ассистента. Попробуйте переформулировать запрос.",
+                            isFromUser = false,
+                            isSystemMessage = true,
+                            branchId = activeBranchId
+                        )
+                        _messages.value += errorMessage
+                        chatRepository.insertMessage(errorMessage, activeBranchId, errorMessage.parentMessageId)
+
+                        _isLoading.value = false
+                        return@launch
+                    }
 
                     val aiMessage = ChatMessage(
                         id = (System.currentTimeMillis() + 1).toString(),
@@ -431,9 +471,6 @@ class ChatViewModel(
                     handleTaskIntent(aiResponse, userInput, activeBranchId)
 
                     strategy.onConversationPair(userMessage, aiMessage)
-
-                    loadDialogStats()
-                    loadAllTimeStats()
                 }
                 is ChatResult.Error -> {
                     val errorMessage = ChatMessage(
@@ -475,7 +512,19 @@ class ChatViewModel(
             TaskIntent.NEW_TASK -> {
                 Log.d(TAG, "Action: Creating new task")
                 val taskQuery = aiResponse.newTaskQuery ?: userInput
-                createTask(taskQuery)
+
+                // ========== НОВАЯ ПРОВЕРКА: Защита от дублирования ==========
+                if (currentTask != null) {
+                    Log.w(TAG, "LLM returned NEW_TASK but task already exists (ID: ${currentTask.taskId})")
+                    Log.w(TAG, "  Expected: CONTINUE_TASK, Actual: NEW_TASK")
+                    Log.w(TAG, "  Current task query: ${currentTask.query}")
+                    Log.w(TAG, "  New task query: $taskQuery")
+                    Log.w(TAG, "  Skipping task creation to avoid duplicate")
+                    // Не создаём дубликат задачи
+                } else {
+                    createTask(taskQuery)
+                }
+                // ================================================================
             }
             TaskIntent.SWITCH_TASK -> {
                 Log.d(TAG, "Action: Switching task")
@@ -494,9 +543,34 @@ class ChatViewModel(
                     Log.d(TAG, "Has active task for intent processing: true")
                     Log.d(TAG, "Response: stepCompleted=${aiResponse.stepCompleted}, transitionTo=${aiResponse.transitionTo}")
 
+                    // ПРИОРИТЕТ 0: Валидация контента для фазы
+                    if (!currentTask.awaitingUserConfirmation) {
+                        val contentValidation = validatePhaseContent(aiResponse.result, currentTask.phase)
+                        when (contentValidation) {
+                            is ValidationResult.Violated -> {
+                                Log.w(TAG, "❌ Content validation failed: ${contentValidation.explanation}")
+
+                                val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
+                                val warningMessage = ChatMessage(
+                                    id = (System.currentTimeMillis() + 1).toString(),
+                                    parentMessageId = parentMessageId,
+                                    content = contentValidation.explanation,
+                                    isFromUser = false,
+                                    isSystemMessage = true,
+                                    branchId = activeBranchId
+                                )
+                                _messages.value += warningMessage
+                                return
+                            }
+                            ValidationResult.Valid -> {
+                                Log.d(TAG, "✅ Content validation passed")
+                            }
+                        }
+                    }
+
                     // ПРИОРИТЕТ 1: Обработка подтверждения пользователя
                     if (currentTask.awaitingUserConfirmation) {
-                        val isAffirmative = parseAffirmativeResponse(aiResponse)
+                        val isAffirmative = parseAffirmativeResponse(userInput)
                         if (isAffirmative) {
                             Log.d(TAG, "User confirmed - transitioning to next phase")
                             val nextPhase = TaskStateMachine().getNextPhase(currentTask.phase)
@@ -521,9 +595,63 @@ class ChatViewModel(
                         return
                      }
 
+                    // ПРИОРИТЕТ 1.5: Проверка на преждевременный step_completed при awaitingConfirmation
+                    if (!currentTask.awaitingUserConfirmation && aiResponse.stepCompleted && aiResponse.transitionTo == null) {
+                        // LLM пометил шаг как завершён, но не запрашивал подтверждение
+                        // Это может быть ошибкой - логируем
+                        Log.w(TAG, "⚠️ Potential issue: step_completed=true without awaitingConfirmation")
+                        Log.w(TAG, "   Phase: ${currentTask.phase.label}, transitionTo: null")
+                        Log.w(TAG, "   This should only happen in non-awaiting mode")
+                    }
+
                     // ПРИОРИТЕТ 2: Явный переход через transitionTo
                     if (aiResponse.transitionTo != null) {
                         Log.d(TAG, "Explicit transition requested to: ${aiResponse.transitionTo.label}")
+
+                        // Дополнительная проверка: запрещённые автоматические переходы
+                        val isAutoTransition = when {
+                            currentTask.phase == TaskPhase.EXECUTION && aiResponse.transitionTo == TaskPhase.VALIDATION -> true
+                            currentTask.phase == TaskPhase.PLANNING && aiResponse.transitionTo == TaskPhase.VALIDATION -> true
+                            else -> false
+                        }
+
+                        if (isAutoTransition) {
+                            Log.w(TAG, "❌ Auto-transition detected: ${currentTask.phase.label} → ${aiResponse.transitionTo.label}")
+
+                            val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
+                            val warningMessage = ChatMessage(
+                                id = (System.currentTimeMillis() + 1).toString(),
+                                parentMessageId = parentMessageId,
+                                content = """
+                                    ⚠️ Автоматический переход на ${aiResponse.transitionTo.label} запрещен!
+
+                                    💡 Правильный протокол для завершения фазы ${currentTask.phase.label}:
+                                    1. Представьте результат работы
+                                    2. Задайте вопрос пользователю
+                                    3. Установите step_completed: true
+                                    4. Система автоматически перейдет на следующую фазу после подтверждения
+
+                                    ❌ Что запрещено:
+                                    • Использовать transition_to для автоматических переходов вперед
+                                    • Использовать фразы "Переходим к проверке", "Приступаем к проверке"
+
+                                    ✅ Правильный пример:
+                                    Вот план тренировок на неделю:
+                                    Пн: Грудь + Трицепс
+                                    ...
+
+                                    Всё устраивает?
+
+                                    step_completed: true
+                                    transition_to: null
+                                """.trimIndent(),
+                                isFromUser = false,
+                                isSystemMessage = true,
+                                branchId = activeBranchId
+                            )
+                            _messages.value += warningMessage
+                            return
+                        }
 
                         val stateMachine = TaskStateMachine()
                         val validationResult = stateMachine.validateTransitionBefore(
@@ -560,21 +688,21 @@ class ChatViewModel(
 
                     // ПРИОРИТЕТ 3: PLANNING - проверка готовности плана
                     if (!currentTask.awaitingUserConfirmation && currentTask.phase == TaskPhase.PLANNING) {
-                        if (containsPlanKeywords(aiResponse.result)) {
-                            Log.d(TAG, "PLANNING: Plan presented, awaiting user confirmation")
+                        if (aiResponse.planReady) {
+                            Log.d(TAG, "✅ PLANNING: plan_ready=true detected - awaiting confirmation")
                             setAwaitingConfirmation(true)
                             return
+                        }
+
+                        // Warning если LLM выдает детальный контент без plan_ready
+                        if (containsDetailedExerciseContent(aiResponse.result)) {
+                            Log.w(TAG, "⚠️ PLANNING: LLM returned detailed content without plan_ready marker")
+                            Log.w(TAG, "   Response preview: ${aiResponse.result.take(200)}")
+                            Log.w(TAG, "   This may indicate PLANNING rules violation")
                         }
                     }
 
-                    // ПРИОРИТЕТ 3.2: EXECUTION - проверка завершения
-                    if (!currentTask.awaitingUserConfirmation && currentTask.phase == TaskPhase.EXECUTION) {
-                        if (currentTask.currentStep >= currentTask.totalSteps) {
-                            Log.d(TAG, "EXECUTION: Last step completed, awaiting user confirmation for VALIDATION")
-                            setAwaitingConfirmation(true)
-                            return
-                        }
-                    }
+
 
                     // ПРИОРИТЕТ 4: Задача завершена (из VALIDATION)
                     if (aiResponse.taskCompleted) {
@@ -610,8 +738,15 @@ class ChatViewModel(
                     if (aiResponse.stepCompleted) {
                         Log.d(TAG, "Step completed: true")
                         if (currentTask.currentStep >= currentTask.totalSteps) {
-                            Log.d(TAG, "Last step completed, awaiting user confirmation")
-                            setAwaitingConfirmation(true)
+                            // EXECUTION: автоматический переход в VALIDATION без подтверждения
+                            if (currentTask.phase == TaskPhase.EXECUTION) {
+                                Log.d(TAG, "EXECUTION: Last step completed, auto-transitioning to VALIDATION")
+                                transitionTaskTo(TaskPhase.VALIDATION)
+                            } else {
+                                // Другие фазы: требуем подтверждение пользователя
+                                Log.d(TAG, "Last step completed, awaiting user confirmation")
+                                setAwaitingConfirmation(true)
+                            }
                         } else {
                             Log.d(TAG, "Advancing to next step: ${currentTask.currentStep + 1}/${currentTask.totalSteps}")
                             advanceTask()
@@ -621,9 +756,20 @@ class ChatViewModel(
                     }
                 } else {
                     Log.d(TAG, "Has active task for intent processing: false")
-                    Log.w(TAG, "No active task but LLM returned CONTINUE/CLARIFICATION. Creating new task.")
-                    val taskQuery = aiResponse.newTaskQuery ?: userInput
-                    createTask(taskQuery)
+
+                    // ========== НОВАЯ ПРОВЕРКА: Защита от дублирования ==========
+                    if (currentTask != null) {
+                        Log.w(TAG, "LLM returned CONTINUE/CLARIFICATION but task already exists")
+                        Log.w(TAG, "  Task ID: ${currentTask.taskId}")
+                        Log.w(TAG, "  Phase: ${currentTask.phase.label}")
+                        Log.w(TAG, "  Skipping fallback task creation")
+                        // Не создаём дубликат задачи
+                    } else {
+                        Log.w(TAG, "No active task but LLM returned CONTINUE/CLARIFICATION. Creating new task.")
+                        val taskQuery = aiResponse.newTaskQuery ?: userInput
+                        createTask(taskQuery)
+                    }
+                    // ================================================================
                 }
             }
         }
@@ -976,7 +1122,7 @@ class ChatViewModel(
         }
     }
 
-    private fun parseAffirmativeResponse(aiResponse: EnhancedTaskAiResponse): Boolean {
+    private fun parseAffirmativeResponse(userInput: String): Boolean {
         val affirmativeKeywords = listOf(
             "да", "утверждаю", "хорошо", "согласен", "yes", "ок", "окей",
             "давай", "отлично", "супер", "конечно", "разумеется", "несомненно",
@@ -985,7 +1131,7 @@ class ChatViewModel(
             "выглядит хорошо", "вроде бы", "думаю да", "наверное да", "пожалуй",
             "ну ладно", "ну ок", "ну давай", "окей давай", "ого круто", "класс"
         )
-        val responseText = aiResponse.result.lowercase()
+        val responseText = userInput.lowercase()
         return affirmativeKeywords.any { it in responseText }
     }
 
@@ -1047,6 +1193,106 @@ class ChatViewModel(
         val hasDetailedSolution = hasDetailedSolutionInPlanning(response)
 
         return isSummary && isConfirmationQuestion && !hasDetailedSolution
+    }
+
+    private fun containsDetailedExerciseContent(response: String): Boolean {
+        val exercisePatterns = listOf(
+            Regex("""\d+\s*подход.*\d+\s*повтор""", RegexOption.IGNORE_CASE),
+            Regex("""жим\s+\w+.*\d+""", RegexOption.IGNORE_CASE),
+            Regex("""присед.*\d+""", RegexOption.IGNORE_CASE),
+            Regex("""тяга.*\d+""", RegexOption.IGNORE_CASE),
+            Regex("""\d+\s*x\s*\d+""", RegexOption.IGNORE_CASE),  // 5x5 формат
+            Regex("""день\s+\d+:""", RegexOption.IGNORE_CASE)  // "День 1:"
+        )
+        return exercisePatterns.any { it.find(response) != null }
+    }
+
+    private fun validatePhaseContent(response: String, phase: TaskPhase): ValidationResult {
+        return when (phase) {
+            TaskPhase.PLANNING -> validatePlanningContent(response)
+            TaskPhase.EXECUTION -> validateExecutionContent(response)
+            TaskPhase.VALIDATION -> ValidationResult.Valid
+            TaskPhase.DONE -> ValidationResult.Valid
+        }
+    }
+
+    private fun validatePlanningContent(response: String): ValidationResult {
+        val responseLower = response.lowercase()
+
+        val detailedSolutionPatterns = listOf(
+            Regex("""(Пн|Вт|Ср|Чт|Пт|Сб|Вс|Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье|День|Шаг|Этап)\s*[:：]\s*[^,\n]+\d+""", RegexOption.IGNORE_CASE),
+            Regex("""\d+\s*(г|кг|мл|мг|мкг|грамм|килограмм|раз|подход|повторение|упражнение|мин|час|день|неделя|мес)""", RegexOption.IGNORE_CASE)
+        )
+
+        val hasDetailedSolution = detailedSolutionPatterns.any { it.containsMatchIn(responseLower) }
+
+        val hasQuestions = response.contains("?") ||
+                responseLower.contains("какую") ||
+                responseLower.contains("какой") ||
+                responseLower.contains("сколько") ||
+                responseLower.contains("есть ли") ||
+                responseLower.contains("можете") ||
+                responseLower.contains("хотите") ||
+                responseLower.contains("желаете") ||
+                responseLower.contains("предпочитаете")
+
+        val summaryKeywords = listOf("резюме", "понял", "понял вас", "итого", "подводя итог")
+        val isSummary = summaryKeywords.any { it.lowercase() in responseLower }
+
+        if (hasDetailedSolution && !hasQuestions && !isSummary) {
+            return ValidationResult.Violated(
+                "⚠️ В фазе PLANNING нельзя выдавать детальное решение!\n\n" +
+                        "💡 Что нужно делать:\n" +
+                        "• Задавайте вопросы пользователю\n" +
+                        "• Собирайте информацию о требованиях\n" +
+                        "• Представляйте краткое резюме\n\n" +
+                        "❌ Что запрещено:\n" +
+                        "• Выводить планы с конкретными днями и упражнениями\n" +
+                        "• Указывать конкретные значения (кг, раз, повторения)\n" +
+                        "• Решать задачу до перехода в EXECUTION"
+            )
+        }
+
+        return ValidationResult.Valid
+    }
+
+    private fun validateExecutionContent(response: String): ValidationResult {
+        val responseLower = response.lowercase()
+
+        val forbiddenTransitionPhrases = listOf(
+            "начать фазу validation",
+            "переход к проверке",
+            "переходим к проверке",
+            "проверим",
+            "перейдем к этапу",
+            "переход к этапу validation",
+            "начинаем проверку",
+            "приступаем к проверке"
+        )
+
+        val hasForbiddenPhrases = forbiddenTransitionPhrases.any { it in responseLower }
+
+        if (hasForbiddenPhrases) {
+            return ValidationResult.Violated(
+                "⚠️ В фазе EXECUTION нельзя использовать автоматический переход в VALIDATION!\n\n" +
+                        "💡 Правильный протокол:\n" +
+                        "• Представьте результат работы\n" +
+                        "• Задайте вопрос: \"Всё устраивает?\"\n" +
+                        "• Установите step_completed: true\n" +
+                        "• Пользователь подтвердит → автоматический переход\n\n" +
+                        "❌ Что запрещено:\n" +
+                        "• Использовать transition_to: VALIDATION\n" +
+                        "• Использовать фразы \"Переходим к проверке\"\n" +
+                        "• Автоматический переход без диалога"
+            )
+        }
+
+        return ValidationResult.Valid
+    }
+
+    sealed class ValidationResult {
+        object Valid : ValidationResult()
+        data class Violated(val explanation: String) : ValidationResult()
     }
 
     private fun hasDetailedSolutionInPlanning(response: String): Boolean {
