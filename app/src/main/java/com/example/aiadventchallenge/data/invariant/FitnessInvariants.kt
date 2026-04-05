@@ -1,6 +1,7 @@
 package com.example.aiadventchallenge.data.invariant
 
 import com.example.aiadventchallenge.domain.model.*
+import com.example.aiadventchallenge.data.invariant.TaskFlowInvariant
 
 object FitnessInvariants {
 
@@ -151,6 +152,8 @@ object FitnessInvariants {
     fun createDefaultConfig(): InvariantConfig {
         return InvariantConfig(
             invariants = listOf(
+                TaskFlowInvariant(),
+                PlanningPhaseInvariant(),
                 TopicRestrictionInvariant(),
                 PrescriptionProhibitionInvariant(),
                 MedicalDiagnosisInvariant(),

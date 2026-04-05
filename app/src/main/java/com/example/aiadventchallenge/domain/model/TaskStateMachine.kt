@@ -2,6 +2,11 @@ package com.example.aiadventchallenge.domain.model
 
 import android.util.Log
 
+sealed class TransitionResult {
+    object Allowed : TransitionResult()
+    data class Denied(val reason: String) : TransitionResult()
+}
+
 class TaskStateMachine {
 
     private val TAG = "TaskStateMachine"
@@ -91,6 +96,16 @@ class TaskStateMachine {
 
             is TaskAction.Complete -> {
                 Log.d(TAG, "Action type: Complete: ${action.finalResult}")
+                
+                if (current.phase != TaskPhase.VALIDATION) {
+                    Log.w(TAG, "❌ Task.Complete DENIED: Cannot complete task from ${current.phase.label}")
+                    Log.w(TAG, "   Reason: Task completion is only allowed from VALIDATION phase")
+                    Log.w(TAG, "   Current: ${current.phase.label}, Required: VALIDATION")
+                    
+                    return current
+                }
+                
+                Log.d(TAG, "✅ Task.Complete ALLOWED: Completing task from VALIDATION")
                 current.copy(
                     phase = TaskPhase.DONE,
                     currentAction = "Задача выполнена: ${action.finalResult}",
@@ -146,5 +161,48 @@ class TaskStateMachine {
 
     fun getPossibleTransitions(from: TaskPhase): Set<TaskPhase> {
         return VALID_TRANSITIONS[from] ?: emptySet()
+    }
+
+    fun validateTransitionBefore(from: TaskPhase, to: TaskPhase): TransitionResult {
+        return if (canTransition(from, to)) {
+            TransitionResult.Allowed
+        } else {
+            TransitionResult.Denied(
+                getTransitionReason(from, to)
+            )
+        }
+    }
+
+    fun getTransitionReason(from: TaskPhase, to: TaskPhase): String {
+        return when {
+            to == TaskPhase.DONE && from == TaskPhase.PLANNING ->
+                "Нельзя завершить задачу пропустив выполнение и проверку"
+            to == TaskPhase.DONE && from == TaskPhase.EXECUTION ->
+                "Нельзя завершить задачу без проверки"
+            to == TaskPhase.DONE && from == TaskPhase.VALIDATION ->
+                "Нельзя завершить задачу (уже в фазе проверки)"
+            to == TaskPhase.VALIDATION && from == TaskPhase.PLANNING ->
+                "Нельзя перейти к проверке (${to.label}) пропустив выполнение"
+            to == TaskPhase.DONE && from == TaskPhase.DONE ->
+                "Нельзя завершить задачу (уже завершена)"
+            getPossibleTransitions(from).isEmpty() ->
+                "Из фазы ${from.label} нет допустимых переходов"
+            else ->
+                "Недопустимый переход: ${from.label} → ${to.label}. " +
+                "Допустимые: ${getPossibleTransitions(from).joinToString { it.label }}"
+        }
+    }
+
+    fun checkSequentialFlow(current: TaskPhase, target: TaskPhase): Boolean {
+        val validSequences = listOf(
+            listOf(TaskPhase.PLANNING, TaskPhase.EXECUTION),
+            listOf(TaskPhase.EXECUTION, TaskPhase.VALIDATION),
+            listOf(TaskPhase.VALIDATION, TaskPhase.DONE),
+            listOf(TaskPhase.EXECUTION, TaskPhase.PLANNING),
+            listOf(TaskPhase.VALIDATION, TaskPhase.EXECUTION),
+            listOf(TaskPhase.VALIDATION, TaskPhase.PLANNING)
+        )
+
+        return validSequences.any { it == listOf(current, target) }
     }
 }
