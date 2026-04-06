@@ -14,14 +14,20 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ChatMessageDao {
-    @Query("SELECT * FROM chat_messages ORDER BY timestamp ASC")
+    @Query("SELECT * FROM chat_messages WHERE isHidden = 0 ORDER BY timestamp ASC")
     fun getAllMessages(): Flow<List<ChatMessageEntity>>
 
-    @Query("SELECT * FROM chat_messages ORDER BY timestamp ASC")
+    @Query("SELECT * FROM chat_messages WHERE isHidden = 0 ORDER BY timestamp ASC")
     suspend fun getAllMessagesList(): List<ChatMessageEntity>
 
-    @Query("SELECT * FROM chat_messages WHERE branchId = :branchId ORDER BY timestamp ASC")
+    @Query("SELECT * FROM chat_messages WHERE branchId = :branchId AND isHidden = 0 ORDER BY timestamp ASC")
     suspend fun getMessagesByBranch(branchId: String): List<ChatMessageEntity>
+
+    @Query("SELECT * FROM chat_messages WHERE branchId = :branchId AND isHidden = 1 ORDER BY timestamp ASC")
+    suspend fun getHiddenMessagesByBranch(branchId: String): List<ChatMessageEntity>
+
+    @Query("SELECT * FROM chat_messages WHERE branchId = :branchId ORDER BY timestamp ASC")
+    suspend fun getAllMessagesByBranchIncludingHidden(branchId: String): List<ChatMessageEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: ChatMessageEntity)

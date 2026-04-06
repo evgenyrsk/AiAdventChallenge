@@ -12,21 +12,10 @@ class TaskStateMachine {
     private val TAG = "TaskStateMachine"
     
     companion object {
-        private val VALID_TRANSITIONS = mapOf(
-            TaskPhase.PLANNING to setOf(
-                TaskPhase.EXECUTION
-            ),
-            TaskPhase.EXECUTION to setOf(
-                TaskPhase.VALIDATION,
-                TaskPhase.PLANNING
-            ),
-            TaskPhase.VALIDATION to setOf(
-                TaskPhase.DONE,
-                TaskPhase.EXECUTION,
-                TaskPhase.PLANNING
-            ),
-            TaskPhase.DONE to emptySet()
-        )
+        // VALID_TRANSITIONS теперь управляется через TaskProtocol
+        // Сохранено для backward compatibility
+        @Deprecated("Use TaskProtocol.VALID_TRANSITIONS instead")
+        private val VALID_TRANSITIONS = TaskProtocol.VALID_TRANSITIONS
     }
 
     fun transition(current: TaskContext, action: TaskAction): TaskContext {
@@ -140,16 +129,15 @@ class TaskStateMachine {
     }
 
     fun canTransition(from: TaskPhase, to: TaskPhase): Boolean {
-        if (from == to) return true
-        return VALID_TRANSITIONS[from]?.contains(to) == true
+        return TaskProtocol.canTransition(from, to)
     }
 
     fun getNextPhase(current: TaskPhase): TaskPhase? {
-        return VALID_TRANSITIONS[current]?.firstOrNull { it.position > current.position }
+        return TaskProtocol.getNextPhase(current)
     }
 
     fun canAdvanceToNextPhase(current: TaskContext): Boolean {
-        return current.currentStep >= current.totalSteps && 
+        return current.currentStep >= current.totalSteps &&
                current.phase != TaskPhase.DONE &&
                getNextPhase(current.phase) != null
     }
@@ -160,7 +148,7 @@ class TaskStateMachine {
     }
 
     fun getPossibleTransitions(from: TaskPhase): Set<TaskPhase> {
-        return VALID_TRANSITIONS[from] ?: emptySet()
+        return TaskProtocol.getPossibleTransitions(from)
     }
 
     fun validateTransitionBefore(from: TaskPhase, to: TaskPhase): TransitionResult {
@@ -174,23 +162,14 @@ class TaskStateMachine {
     }
 
     fun getTransitionReason(from: TaskPhase, to: TaskPhase): String {
-        return when {
-            to == TaskPhase.DONE && from == TaskPhase.PLANNING ->
-                "Нельзя завершить задачу пропустив выполнение и проверку"
-            to == TaskPhase.DONE && from == TaskPhase.EXECUTION ->
-                "Нельзя завершить задачу без проверки"
-            to == TaskPhase.DONE && from == TaskPhase.VALIDATION ->
-                "Нельзя завершить задачу (уже в фазе проверки)"
-            to == TaskPhase.VALIDATION && from == TaskPhase.PLANNING ->
-                "Нельзя перейти к проверке (${to.label}) пропустив выполнение"
-            to == TaskPhase.DONE && from == TaskPhase.DONE ->
-                "Нельзя завершить задачу (уже завершена)"
-            getPossibleTransitions(from).isEmpty() ->
-                "Из фазы ${from.label} нет допустимых переходов"
-            else ->
-                "Недопустимый переход: ${from.label} → ${to.label}. " +
-                "Допустимые: ${getPossibleTransitions(from).joinToString { it.label }}"
-        }
+        return TaskProtocol.getForbiddenTransitionReason(from, to)
+            ?: when {
+                getPossibleTransitions(from).isEmpty() ->
+                    "Из фазы ${from.label} нет допустимых переходов"
+                else ->
+                    "Недопустимый переход: ${from.label} → ${to.label}. " +
+                    "Допустимые: ${getPossibleTransitions(from).joinToString { it.label }}"
+            }
     }
 
     fun checkSequentialFlow(current: TaskPhase, target: TaskPhase): Boolean {

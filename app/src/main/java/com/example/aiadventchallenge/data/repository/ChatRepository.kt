@@ -51,7 +51,27 @@ class ChatRepository(
                 branchId = entity.branchId,
                 promptTokens = entity.promptTokens,
                 completionTokens = entity.completionTokens,
-                totalTokens = entity.totalTokens
+                totalTokens = entity.totalTokens,
+                isHidden = entity.isHidden
+            )
+        }
+    }
+
+    suspend fun getMessagesByBranchIncludingHidden(branchId: String = "main"): List<ChatMessage> {
+        val entities = chatMessageDao.getAllMessagesByBranchIncludingHidden(branchId)
+
+        return entities.map { entity ->
+            ChatMessage(
+                id = entity.id,
+                parentMessageId = entity.parentMessageId,
+                content = entity.content,
+                isFromUser = entity.isFromUser,
+                isSystemMessage = entity.isSystemMessage,
+                branchId = entity.branchId,
+                promptTokens = entity.promptTokens,
+                completionTokens = entity.completionTokens,
+                totalTokens = entity.totalTokens,
+                isHidden = entity.isHidden
             )
         }
     }
@@ -66,7 +86,8 @@ class ChatRepository(
             promptTokens = message.promptTokens,
             completionTokens = message.completionTokens,
             totalTokens = message.totalTokens,
-            branchId = branchId
+            branchId = branchId,
+            isHidden = message.isHidden
         )
         chatMessageDao.insertMessage(entity)
     }
@@ -82,7 +103,8 @@ class ChatRepository(
                 branchId = branchId,
                 promptTokens = message.promptTokens,
                 completionTokens = message.completionTokens,
-                totalTokens = message.totalTokens
+                totalTokens = message.totalTokens,
+                isHidden = message.isHidden
             )
         }
         entities.forEach { chatMessageDao.insertMessage(it) }
@@ -116,7 +138,8 @@ class ChatRepository(
             branchId = entity.branchId,
             promptTokens = entity.promptTokens,
             completionTokens = entity.completionTokens,
-            totalTokens = entity.totalTokens
+            totalTokens = entity.totalTokens,
+            isHidden = entity.isHidden
         )
     }
 
@@ -132,7 +155,8 @@ class ChatRepository(
                 branchId = entity.branchId,
                 promptTokens = entity.promptTokens,
                 completionTokens = entity.completionTokens,
-                totalTokens = entity.totalTokens
+                totalTokens = entity.totalTokens,
+                isHidden = entity.isHidden
             )
         }
     }
@@ -149,7 +173,8 @@ class ChatRepository(
                 branchId = entity.branchId,
                 promptTokens = entity.promptTokens,
                 completionTokens = entity.completionTokens,
-                totalTokens = entity.totalTokens
+                totalTokens = entity.totalTokens,
+                isHidden = entity.isHidden
             )
         }
     }
@@ -166,7 +191,8 @@ class ChatRepository(
                 branchId = entity.branchId,
                 promptTokens = entity.promptTokens,
                 completionTokens = entity.completionTokens,
-                totalTokens = entity.totalTokens
+                totalTokens = entity.totalTokens,
+                isHidden = entity.isHidden
             )
         }
     }

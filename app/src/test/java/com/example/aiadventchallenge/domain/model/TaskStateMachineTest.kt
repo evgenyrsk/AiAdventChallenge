@@ -69,7 +69,7 @@ class TaskStateMachineTest {
         )
         assertTrue("Expected Denied result", result is TransitionResult.Denied)
         val reason = (result as TransitionResult.Denied).reason
-        assertTrue("Reason should mention skipping execution", "выполнение" in reason)
+        assertTrue("Reason should mention skipping execution", "выполнение" in reason ?: "")
     }
 
     @Test
@@ -80,7 +80,7 @@ class TaskStateMachineTest {
         )
         assertTrue("Expected Denied result", result is TransitionResult.Denied)
         val reason = (result as TransitionResult.Denied).reason
-        assertTrue("Reason should mention validation", "проверк" in reason)
+        assertTrue("Reason should mention validation", "проверк" in reason ?: "")
     }
 
     @Test
@@ -91,7 +91,7 @@ class TaskStateMachineTest {
         )
         assertTrue("Expected Denied result", result is TransitionResult.Denied)
         val reason = (result as TransitionResult.Denied).reason
-        assertTrue("Reason should mention skipping execution", "выполнение" in reason)
+        assertTrue("Reason should mention skipping execution", "выполнение" in reason ?: "")
     }
 
     @Test
@@ -102,7 +102,7 @@ class TaskStateMachineTest {
         )
         assertTrue("Expected Denied result", result is TransitionResult.Denied)
         val reason = (result as TransitionResult.Denied).reason
-        assertTrue("Reason should mention no transitions", "переход" in reason)
+        assertTrue("Reason should mention no transitions", "переход" in reason ?: "")
     }
 
     // TODO: Investigate TaskContext.create() issues in unit tests
@@ -153,52 +153,100 @@ class TaskStateMachineTest {
 
     @Test
     fun `test checkSequentialFlow valid sequences`() {
-        assertTrue("PLANNING → EXECUTION should be valid", 
+        assertTrue("PLANNING → EXECUTION should be valid",
             stateMachine.checkSequentialFlow(TaskPhase.PLANNING, TaskPhase.EXECUTION))
-        assertTrue("EXECUTION → VALIDATION should be valid", 
+        assertTrue("EXECUTION → VALIDATION should be valid",
             stateMachine.checkSequentialFlow(TaskPhase.EXECUTION, TaskPhase.VALIDATION))
-        assertTrue("VALIDATION → DONE should be valid", 
+        assertTrue("VALIDATION → DONE should be valid",
             stateMachine.checkSequentialFlow(TaskPhase.VALIDATION, TaskPhase.DONE))
     }
 
     @Test
     fun `test checkSequentialFlow invalid sequences`() {
-        assertFalse("PLANNING → DONE should be invalid", 
+        assertFalse("PLANNING → DONE should be invalid",
             stateMachine.checkSequentialFlow(TaskPhase.PLANNING, TaskPhase.DONE))
-        assertFalse("EXECUTION → DONE should be invalid", 
+        assertFalse("EXECUTION → DONE should be invalid",
             stateMachine.checkSequentialFlow(TaskPhase.EXECUTION, TaskPhase.DONE))
-        assertFalse("DONE → PLANNING should be invalid", 
+        assertFalse("DONE → PLANNING should be invalid",
             stateMachine.checkSequentialFlow(TaskPhase.DONE, TaskPhase.PLANNING))
     }
 
     @Test
     fun `test getPossibleTransitions`() {
         val fromPLANNING = stateMachine.getPossibleTransitions(TaskPhase.PLANNING)
-        assertTrue("PLANNING should have EXECUTION transition", 
+        assertTrue("PLANNING should have EXECUTION transition",
             TaskPhase.EXECUTION in fromPLANNING)
-        assertFalse("PLANNING should not have DONE transition", 
+        assertFalse("PLANNING should not have DONE transition",
             TaskPhase.DONE in fromPLANNING)
 
         val fromEXECUTION = stateMachine.getPossibleTransitions(TaskPhase.EXECUTION)
-        assertTrue("EXECUTION should have VALIDATION transition", 
+        assertTrue("EXECUTION should have VALIDATION transition",
             TaskPhase.VALIDATION in fromEXECUTION)
-        assertTrue("EXECUTION should have PLANNING transition", 
+        assertTrue("EXECUTION should have PLANNING transition",
             TaskPhase.PLANNING in fromEXECUTION)
 
         val fromDONE = stateMachine.getPossibleTransitions(TaskPhase.DONE)
-        assertTrue("DONE should have no transitions", 
+        assertTrue("DONE should have no transitions",
             fromDONE.isEmpty())
     }
 
     @Test
     fun `test getNextPhase`() {
-        assertEquals("Next phase after PLANNING should be EXECUTION", 
+        assertEquals("Next phase after PLANNING should be EXECUTION",
             TaskPhase.EXECUTION, stateMachine.getNextPhase(TaskPhase.PLANNING))
-        assertEquals("Next phase after EXECUTION should be VALIDATION", 
+        assertEquals("Next phase after EXECUTION should be VALIDATION",
             TaskPhase.VALIDATION, stateMachine.getNextPhase(TaskPhase.EXECUTION))
-        assertEquals("Next phase after VALIDATION should be DONE", 
+        assertEquals("Next phase after VALIDATION should be DONE",
             TaskPhase.DONE, stateMachine.getNextPhase(TaskPhase.VALIDATION))
-        assertEquals("Next phase after DONE should be null", 
+        assertEquals("Next phase after DONE should be null",
             null, stateMachine.getNextPhase(TaskPhase.DONE))
+    }
+
+    @Test
+    fun `test TaskProtocol canTransition`() {
+        assertTrue("PLANNING → EXECUTION should be allowed",
+            TaskProtocol.canTransition(TaskPhase.PLANNING, TaskPhase.EXECUTION))
+        assertFalse("PLANNING → DONE should be denied",
+            TaskProtocol.canTransition(TaskPhase.PLANNING, TaskPhase.DONE))
+    }
+
+    @Test
+    fun `test TaskProtocol getPossibleTransitions`() {
+        val transitions = TaskProtocol.getPossibleTransitions(TaskPhase.PLANNING)
+        assertEquals("PLANNING should have 1 transition", 1, transitions.size)
+        assertTrue("PLANNING should have EXECUTION transition",
+            TaskPhase.EXECUTION in transitions)
+    }
+
+    @Test
+    fun `test TaskProtocol getNextPhase`() {
+        assertEquals("Next phase after PLANNING should be EXECUTION",
+            TaskPhase.EXECUTION, TaskProtocol.getNextPhase(TaskPhase.PLANNING))
+        assertEquals("Next phase after EXECUTION should be VALIDATION",
+            TaskPhase.VALIDATION, TaskProtocol.getNextPhase(TaskPhase.EXECUTION))
+        assertEquals("Next phase after VALIDATION should be DONE",
+            TaskPhase.DONE, TaskProtocol.getNextPhase(TaskPhase.VALIDATION))
+        assertEquals("Next phase after DONE should be null",
+            null, TaskProtocol.getNextPhase(TaskPhase.DONE))
+    }
+
+    @Test
+    fun `test TaskProtocol getForbiddenTransitionReason`() {
+        val reason = TaskProtocol.getForbiddenTransitionReason(
+            TaskPhase.PLANNING,
+            TaskPhase.DONE
+        )
+        assertNotNull("Reason should exist", reason)
+        assertTrue("Reason should mention skipping execution",
+            "выполнение" in reason ?: "")
+    }
+
+    @Test
+    fun `test TaskProtocol getPhaseDefinition`() {
+        val planningDef = TaskProtocol.getPhaseDefinition(TaskPhase.PLANNING)
+        assertNotNull("Planning definition should exist", planningDef)
+        assertEquals("Label should be 'Планирование'", "Планирование", planningDef?.label)
+        assertFalse("Planning should have restrictions", planningDef?.restrictions?.isEmpty() ?: true)
+        assertFalse("Planning should have capabilities", planningDef?.capabilities?.isEmpty() ?: true)
     }
 }
