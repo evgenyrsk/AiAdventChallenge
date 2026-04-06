@@ -543,31 +543,6 @@ class ChatViewModel(
                     Log.d(TAG, "Has active task for intent processing: true")
                     Log.d(TAG, "Response: stepCompleted=${aiResponse.stepCompleted}, transitionTo=${aiResponse.transitionTo}")
 
-                    // ПРИОРИТЕТ 0: Валидация контента для фазы
-                    if (!currentTask.awaitingUserConfirmation) {
-                        val contentValidation = validatePhaseContent(aiResponse.result, currentTask.phase)
-                        when (contentValidation) {
-                            is ValidationResult.Violated -> {
-                                Log.w(TAG, "❌ Content validation failed: ${contentValidation.explanation}")
-
-                                val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
-                                val warningMessage = ChatMessage(
-                                    id = (System.currentTimeMillis() + 1).toString(),
-                                    parentMessageId = parentMessageId,
-                                    content = contentValidation.explanation,
-                                    isFromUser = false,
-                                    isSystemMessage = true,
-                                    branchId = activeBranchId
-                                )
-                                _messages.value += warningMessage
-                                return
-                            }
-                            ValidationResult.Valid -> {
-                                Log.d(TAG, "✅ Content validation passed")
-                            }
-                        }
-                    }
-
                     // ПРИОРИТЕТ 1: Обработка подтверждения пользователя
                     if (currentTask.awaitingUserConfirmation) {
                         val isAffirmative = parseAffirmativeResponse(userInput)
@@ -1169,32 +1144,6 @@ class ChatViewModel(
         setAwaitingConfirmation(false)
     }
 
-    private fun containsPlanKeywords(response: String): Boolean {
-        val planKeywords = listOf(
-            "план тренировок", "программа тренировок", "протокол тренировок", "расписание тренировок",
-            "график тренировок", "структура тренировок", "подход к тренировкам", "стратегия тренировок",
-            "план питания", "программа питания", "протокол питания",
-            "готов план", "предлагаю план", "рекомендую план", "вот вариант плана",
-            "вот решение", "вот детальный план", "вот программа тренировок"
-        )
-        val hasPlanKeywords = planKeywords.any { it.lowercase() in response.lowercase() }
-
-        val planSummaryKeywords = listOf(
-            "резюме", "понял", "понял вас", "итого", "подводя итог"
-        )
-        val isSummary = planSummaryKeywords.any { it.lowercase() in response.lowercase() }
-
-        val confirmationKeywords = listOf(
-            "правильно ли понял", "составить", "создать", "приступим к",
-            "готовы", "можем", "хотите", "начать", "согласны"
-        )
-        val isConfirmationQuestion = confirmationKeywords.any { it.lowercase() in response.lowercase() }
-
-        val hasDetailedSolution = hasDetailedSolutionInPlanning(response)
-
-        return isSummary && isConfirmationQuestion && !hasDetailedSolution
-    }
-
     private fun containsDetailedExerciseContent(response: String): Boolean {
         val exercisePatterns = listOf(
             Regex("""\d+\s*подход.*\d+\s*повтор""", RegexOption.IGNORE_CASE),
@@ -1205,120 +1154,6 @@ class ChatViewModel(
             Regex("""день\s+\d+:""", RegexOption.IGNORE_CASE)  // "День 1:"
         )
         return exercisePatterns.any { it.find(response) != null }
-    }
-
-    private fun validatePhaseContent(response: String, phase: TaskPhase): ValidationResult {
-        return when (phase) {
-            TaskPhase.PLANNING -> validatePlanningContent(response)
-            TaskPhase.EXECUTION -> validateExecutionContent(response)
-            TaskPhase.VALIDATION -> ValidationResult.Valid
-            TaskPhase.DONE -> ValidationResult.Valid
-        }
-    }
-
-    private fun validatePlanningContent(response: String): ValidationResult {
-        val responseLower = response.lowercase()
-
-        val detailedSolutionPatterns = listOf(
-            Regex("""(Пн|Вт|Ср|Чт|Пт|Сб|Вс|Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье|День|Шаг|Этап)\s*[:：]\s*[^,\n]+\d+""", RegexOption.IGNORE_CASE),
-            Regex("""\d+\s*(г|кг|мл|мг|мкг|грамм|килограмм|раз|подход|повторение|упражнение|мин|час|день|неделя|мес)""", RegexOption.IGNORE_CASE)
-        )
-
-        val hasDetailedSolution = detailedSolutionPatterns.any { it.containsMatchIn(responseLower) }
-
-        val hasQuestions = response.contains("?") ||
-                responseLower.contains("какую") ||
-                responseLower.contains("какой") ||
-                responseLower.contains("сколько") ||
-                responseLower.contains("есть ли") ||
-                responseLower.contains("можете") ||
-                responseLower.contains("хотите") ||
-                responseLower.contains("желаете") ||
-                responseLower.contains("предпочитаете")
-
-        val summaryKeywords = listOf("резюме", "понял", "понял вас", "итого", "подводя итог")
-        val isSummary = summaryKeywords.any { it.lowercase() in responseLower }
-
-        if (hasDetailedSolution && !hasQuestions && !isSummary) {
-            return ValidationResult.Violated(
-                "⚠️ В фазе PLANNING нельзя выдавать детальное решение!\n\n" +
-                        "💡 Что нужно делать:\n" +
-                        "• Задавайте вопросы пользователю\n" +
-                        "• Собирайте информацию о требованиях\n" +
-                        "• Представляйте краткое резюме\n\n" +
-                        "❌ Что запрещено:\n" +
-                        "• Выводить планы с конкретными днями и упражнениями\n" +
-                        "• Указывать конкретные значения (кг, раз, повторения)\n" +
-                        "• Решать задачу до перехода в EXECUTION"
-            )
-        }
-
-        return ValidationResult.Valid
-    }
-
-    private fun validateExecutionContent(response: String): ValidationResult {
-        val responseLower = response.lowercase()
-
-        val forbiddenTransitionPhrases = listOf(
-            "начать фазу validation",
-            "переход к проверке",
-            "переходим к проверке",
-            "проверим",
-            "перейдем к этапу",
-            "переход к этапу validation",
-            "начинаем проверку",
-            "приступаем к проверке"
-        )
-
-        val hasForbiddenPhrases = forbiddenTransitionPhrases.any { it in responseLower }
-
-        if (hasForbiddenPhrases) {
-            return ValidationResult.Violated(
-                "⚠️ В фазе EXECUTION нельзя использовать автоматический переход в VALIDATION!\n\n" +
-                        "💡 Правильный протокол:\n" +
-                        "• Представьте результат работы\n" +
-                        "• Задайте вопрос: \"Всё устраивает?\"\n" +
-                        "• Установите step_completed: true\n" +
-                        "• Пользователь подтвердит → автоматический переход\n\n" +
-                        "❌ Что запрещено:\n" +
-                        "• Использовать transition_to: VALIDATION\n" +
-                        "• Использовать фразы \"Переходим к проверке\"\n" +
-                        "• Автоматический переход без диалога"
-            )
-        }
-
-        return ValidationResult.Valid
-    }
-
-    sealed class ValidationResult {
-        object Valid : ValidationResult()
-        data class Violated(val explanation: String) : ValidationResult()
-    }
-
-    private fun hasDetailedSolutionInPlanning(response: String): Boolean {
-        val structuredListPattern = Regex(
-            """(Пн|Вт|Ср|Чт|Пт|Сб|Вс|Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье|День|Шаг|Этап)\s*[:：]\s*[^,\n]+\d+""",
-            RegexOption.IGNORE_CASE
-        )
-        val hasStructuredList = structuredListPattern.containsMatchIn(response)
-
-        val specificValuesPattern = Regex(
-            """\d+\s*(г|кг|мл|мг|мкг|грамм|килограмм|раз|подход|повторение|упражнение|мин|час|день|неделя|мес)""",
-            RegexOption.IGNORE_CASE
-        )
-        val hasSpecificValues = specificValuesPattern.containsMatchIn(response)
-
-        val hasQuestions = response.contains("?") ||
-                          response.lowercase().contains("какую") ||
-                          response.lowercase().contains("какой") ||
-                          response.lowercase().contains("сколько") ||
-                          response.lowercase().contains("есть ли") ||
-                          response.lowercase().contains("можете") ||
-                          response.lowercase().contains("хотите") ||
-                          response.lowercase().contains("желаете") ||
-                          response.lowercase().contains("предпочитаете")
-
-        return (hasStructuredList || hasSpecificValues) && !hasQuestions
     }
 
     private fun getValidTransitionsHint(phase: TaskPhase): String {
