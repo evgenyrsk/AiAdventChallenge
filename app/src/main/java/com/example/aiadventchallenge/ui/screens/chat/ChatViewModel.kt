@@ -657,27 +657,9 @@ class ChatViewModel(
                                 )
                                 _messages.value += warningMessage
                             }
-                        }
-                        return
-                    }
-
-                    // ПРИОРИТЕТ 3: PLANNING - проверка готовности плана
-                    if (!currentTask.awaitingUserConfirmation && currentTask.phase == TaskPhase.PLANNING) {
-                        if (aiResponse.planReady) {
-                            Log.d(TAG, "✅ PLANNING: plan_ready=true detected - awaiting confirmation")
-                            setAwaitingConfirmation(true)
-                            return
-                        }
-
-                        // Warning если LLM выдает детальный контент без plan_ready
-                        if (containsDetailedExerciseContent(aiResponse.result)) {
-                            Log.w(TAG, "⚠️ PLANNING: LLM returned detailed content without plan_ready marker")
-                            Log.w(TAG, "   Response preview: ${aiResponse.result.take(200)}")
-                            Log.w(TAG, "   This may indicate PLANNING rules violation")
-                        }
-                    }
-
-
+                         }
+                         return
+                     }
 
                     // ПРИОРИТЕТ 4: Задача завершена (из VALIDATION)
                     if (aiResponse.taskCompleted) {
@@ -730,21 +712,7 @@ class ChatViewModel(
                         Log.d(TAG, "No transition action taken")
                     }
                 } else {
-                    Log.d(TAG, "Has active task for intent processing: false")
-
-                    // ========== НОВАЯ ПРОВЕРКА: Защита от дублирования ==========
-                    if (currentTask != null) {
-                        Log.w(TAG, "LLM returned CONTINUE/CLARIFICATION but task already exists")
-                        Log.w(TAG, "  Task ID: ${currentTask.taskId}")
-                        Log.w(TAG, "  Phase: ${currentTask.phase.label}")
-                        Log.w(TAG, "  Skipping fallback task creation")
-                        // Не создаём дубликат задачи
-                    } else {
-                        Log.w(TAG, "No active task but LLM returned CONTINUE/CLARIFICATION. Creating new task.")
-                        val taskQuery = aiResponse.newTaskQuery ?: userInput
-                        createTask(taskQuery)
-                    }
-                    // ================================================================
+                     Log.d(TAG, "Has active task for intent processing: false")
                 }
             }
         }

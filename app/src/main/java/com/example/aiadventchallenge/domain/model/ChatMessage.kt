@@ -9,5 +9,6 @@ data class ChatMessage(
     val branchId: String = "main",
     val promptTokens: Int? = null,
     val completionTokens: Int? = null,
-    val totalTokens: Int? = null
+    val totalTokens: Int? = null,
+    val isHidden: Boolean = false
 )

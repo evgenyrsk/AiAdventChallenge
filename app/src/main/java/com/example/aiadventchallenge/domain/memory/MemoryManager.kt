@@ -95,13 +95,16 @@ class MemoryManager(
         println("   User: ${userMessage.content.take(100)}${if (userMessage.content.length > 100) "..." else ""}")
         println("   Assistant: ${assistantMessage.content.take(100)}${if (assistantMessage.content.length > 100) "..." else ""}")
 
+        val beforeDeactivation = System.currentTimeMillis()
         memoryRepository.deactivateExpiredEntries()
+        val afterDeactivation = System.currentTimeMillis()
 
         val workingMemory = memoryRepository.getWorkingMemory(userMessage.branchId).first()
         val longTermMemory = memoryRepository.getLongTermMemory(userMessage.branchId).first()
 
-        println("   Working memory size: ${workingMemory.size}")
-        println("   Long-term memory size: ${longTermMemory.size}")
+        println("   Deactivation time: ${afterDeactivation - beforeDeactivation}ms")
+        println("   Working memory after deactivation: ${workingMemory.size} entries")
+        println("   Long-term memory: ${longTermMemory.size} entries")
 
         val consolidationResult = consolidator.consolidateConversationPair(
             userMessage,

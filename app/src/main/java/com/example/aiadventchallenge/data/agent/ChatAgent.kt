@@ -14,6 +14,7 @@ import com.example.aiadventchallenge.domain.model.MessageRole
 import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.domain.model.RequestType
 import com.example.aiadventchallenge.domain.model.TaskContext
+import com.example.aiadventchallenge.domain.model.TaskProtocol
 import com.example.aiadventchallenge.domain.model.UserProfile
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase

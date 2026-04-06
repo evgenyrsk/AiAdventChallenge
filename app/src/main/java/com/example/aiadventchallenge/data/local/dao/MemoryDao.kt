@@ -31,7 +31,7 @@ interface MemoryDao {
     @Query("UPDATE memory_entries SET isActive = 0, updatedAt = :updatedAt WHERE id = :id")
     suspend fun deactivateEntry(id: String, updatedAt: Long = System.currentTimeMillis())
 
-    @Query("UPDATE memory_entries SET isActive = 0 WHERE ttl < :now")
+    @Query("UPDATE memory_entries SET isActive = 0 WHERE ttl IS NOT NULL AND ttl < :now")
     suspend fun deactivateExpiredEntries(now: Long = System.currentTimeMillis())
 
     @Query("DELETE FROM memory_entries WHERE branchId = :branchId")

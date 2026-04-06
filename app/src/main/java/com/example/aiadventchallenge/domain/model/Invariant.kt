@@ -24,7 +24,7 @@ enum class InvariantCategory {
     SAFETY,
     PROFESSIONALISM,
     FORMAT,
-    QUALITY,
+    CONTENT_QUALITY,
     TASK_FLOW
 }
 

@@ -9,7 +9,8 @@ import androidx.room.Index
     indices = [
         Index(value = ["branchId"], name = "index_chat_messages_branchId"),
         Index(value = ["parentMessageId"], name = "index_chat_messages_parentMessageId"),
-        Index(value = ["timestamp"], name = "index_chat_messages_timestamp")
+        Index(value = ["timestamp"], name = "index_chat_messages_timestamp"),
+        Index(value = ["isHidden"], name = "index_chat_messages_isHidden")
     ]
 )
 data class ChatMessageEntity(
@@ -23,5 +24,6 @@ data class ChatMessageEntity(
     val promptTokens: Int? = null,
     val completionTokens: Int? = null,
     val totalTokens: Int? = null,
-    val branchId: String = "main"
+    val branchId: String = "main",
+    val isHidden: Boolean = false
 )
