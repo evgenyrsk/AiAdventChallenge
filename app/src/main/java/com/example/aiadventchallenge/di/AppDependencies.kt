@@ -8,6 +8,8 @@ import com.example.aiadventchallenge.data.repository.AiRepositoryImpl
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
 import com.example.aiadventchallenge.data.repository.InvariantRepositoryImpl
 import com.example.aiadventchallenge.data.local.database.AppDatabase
+import com.example.aiadventchallenge.data.mcp.McpJsonRpcClient
+import com.example.aiadventchallenge.data.mcp.McpRepository
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.repository.InvariantRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
@@ -17,6 +19,7 @@ import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareTemperatureResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.TemperatureUseCase
 import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
+import com.example.aiadventchallenge.domain.usecase.mcp.GetMcpToolsUseCase
 import com.example.aiadventchallenge.domain.validation.InvariantValidator
 import com.example.aiadventchallenge.domain.validation.InvariantValidatorImpl
 import android.content.Context
@@ -101,5 +104,23 @@ object AppDependencies {
 
     val createSummaryUseCase: CreateSummaryUseCase by lazy {
         CreateSummaryUseCase(repository = repository)
+    }
+
+    private val mcpJsonRpcClient: McpJsonRpcClient by lazy {
+        McpJsonRpcClient(
+            serverUrl = "http://10.0.2.2:8080"
+        )
+    }
+
+    val mcpRepository: McpRepository by lazy {
+        McpRepository(
+            client = mcpJsonRpcClient
+        )
+    }
+
+    val getMcpToolsUseCase: GetMcpToolsUseCase by lazy {
+        GetMcpToolsUseCase(
+            mcpRepository = mcpRepository
+        )
     }
 }
