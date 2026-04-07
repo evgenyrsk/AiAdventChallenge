@@ -73,6 +73,36 @@ class McpJsonRpcClient(
         } ?: emptyList()
     }
 
+    suspend fun callTool(
+        name: String,
+        params: Map<String, Any?>
+    ): String {
+        val jsonParams = params.mapValues { (_, value) ->
+            when (value) {
+                is String -> kotlinx.serialization.json.JsonPrimitive(value)
+                is Number -> kotlinx.serialization.json.JsonPrimitive(value)
+                is Boolean -> kotlinx.serialization.json.JsonPrimitive(value)
+                else -> kotlinx.serialization.json.JsonPrimitive(value.toString())
+            }
+        }
+
+        val request = JsonRpcRequest(
+            id = ++requestId,
+            method = name,
+            params = jsonParams
+        )
+
+        val responseJson = sendRequest(request)
+
+        val response = json.decodeFromString<JsonRpcResponse>(responseJson)
+
+        if (response.error != null) {
+            throw McpException("Tool call failed: ${response.error.message}")
+        }
+
+        return response.result?.message ?: ""
+    }
+
     private suspend fun sendRequest(request: JsonRpcRequest): String = suspendCancellableCoroutine { continuation ->
         try {
             val requestBody = json.encodeToString(request)

@@ -45,6 +45,19 @@ class McpRepository(
         }
     }
 
+    suspend fun callTool(
+        name: String,
+        params: Map<String, Any?>
+    ): String = withContext(Dispatchers.IO) {
+        Log.d(TAG, "🔧 Calling MCP tool: $name")
+        Log.d(TAG, "   Params: $params")
+
+        val result = client.callTool(name, params)
+
+        Log.d(TAG, "✅ Tool result: $result")
+        result
+    }
+
     fun getConnectionStatus(): McpConnectionStatus {
         return when {
             isConnected -> McpConnectionStatus.CONNECTED

@@ -1,13 +1,14 @@
 package com.example.aiadventchallenge.data.mcp.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class JsonRpcRequest(
     val jsonrpc: String = "2.0",
     val id: Int,
     val method: String,
-    val params: Map<String, String>? = null
+    val params: Map<String, JsonElement>? = null
 )
 
 @Serializable
