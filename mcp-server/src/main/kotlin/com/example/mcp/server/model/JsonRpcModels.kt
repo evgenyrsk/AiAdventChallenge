@@ -1,13 +1,18 @@
 package com.example.mcp.server.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.buildJsonObject
 
 @Serializable
 data class JsonRpcRequest(
     val jsonrpc: String = "2.0",
     val id: Int,
     val method: String,
-    val params: Map<String, String>? = null
+    val params: Map<String, JsonElement>? = null
 )
 
 @Serializable
@@ -21,7 +26,8 @@ data class JsonRpcResponse(
 @Serializable
 data class JsonRpcResult(
     val tools: List<Tool>? = null,
-    val message: String? = null
+    val message: String? = null,
+    val nutritionResult: CalculateNutritionResult? = null
 )
 
 @Serializable
@@ -34,4 +40,23 @@ data class Tool(
 data class JsonRpcError(
     val code: Int,
     val message: String
+)
+
+@Serializable
+data class CalculateNutritionParams(
+    val sex: String,
+    val age: Int,
+    val heightCm: Double,
+    val weightKg: Double,
+    val activityLevel: String,
+    val goal: String
+)
+
+@Serializable
+data class CalculateNutritionResult(
+    val calories: Int,
+    val proteinGrams: Int,
+    val fatGrams: Int,
+    val carbsGrams: Int,
+    val explanation: String
 )

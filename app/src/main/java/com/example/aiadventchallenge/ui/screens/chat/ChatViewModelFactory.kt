@@ -14,6 +14,7 @@ import com.example.aiadventchallenge.domain.repository.MemoryClassificationRepos
 import com.example.aiadventchallenge.domain.repository.TaskRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 import com.example.aiadventchallenge.domain.validation.InvariantValidator
+import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
 
 class ChatViewModelFactory(
     private val agent: ChatAgent,
@@ -28,6 +29,7 @@ class ChatViewModelFactory(
     private val fitnessProfileManager: FitnessProfileManager,
     private val taskRepository: TaskRepository,
     private val invariantValidator: InvariantValidator,
+    private val callMcpToolUseCase: CallMcpToolUseCase,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -44,6 +46,7 @@ class ChatViewModelFactory(
                 fitnessProfileManager,
                 taskRepository,
                 invariantValidator,
+                callMcpToolUseCase,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

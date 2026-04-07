@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
             fitnessProfileManager,
             taskRepository,
             AppDependencies.invariantValidator,
+            AppDependencies.callMcpToolUseCase,
         )
     }
 

@@ -20,6 +20,7 @@ import com.example.aiadventchallenge.domain.usecase.CompareTemperatureResultsUse
 import com.example.aiadventchallenge.domain.usecase.TemperatureUseCase
 import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
 import com.example.aiadventchallenge.domain.usecase.mcp.GetMcpToolsUseCase
+import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
 import com.example.aiadventchallenge.domain.validation.InvariantValidator
 import com.example.aiadventchallenge.domain.validation.InvariantValidatorImpl
 import android.content.Context
@@ -120,6 +121,12 @@ object AppDependencies {
 
     val getMcpToolsUseCase: GetMcpToolsUseCase by lazy {
         GetMcpToolsUseCase(
+            mcpRepository = mcpRepository
+        )
+    }
+
+    val callMcpToolUseCase: CallMcpToolUseCase by lazy {
+        CallMcpToolUseCase(
             mcpRepository = mcpRepository
         )
     }

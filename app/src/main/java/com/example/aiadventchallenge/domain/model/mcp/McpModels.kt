@@ -17,3 +17,20 @@ enum class McpConnectionStatus {
     CONNECTED,
     ERROR
 }
+
+data class CalculateNutritionParams(
+    val sex: String,
+    val age: Int,
+    val heightCm: Double,
+    val weightKg: Double,
+    val activityLevel: String,
+    val goal: String
+)
+
+data class CalculateNutritionResult(
+    val calories: Int,
+    val proteinGrams: Int,
+    val fatGrams: Int,
+    val carbsGrams: Int,
+    val explanation: String
+)
