@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -54,11 +55,16 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel as viewModelCompose
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestLog
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.ui.screens.chat.components.StrategySettingsBottomSheet
+import com.example.aiadventchallenge.ui.screens.mcp.McpDebugSheet
+import com.example.aiadventchallenge.ui.screens.mcp.McpDebugViewModel
+import com.example.aiadventchallenge.ui.screens.mcp.McpDebugViewModelFactory
+import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchChip
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchPickerSheet
 import com.example.aiadventchallenge.ui.screens.chat.components.CreateBranchDialog
@@ -104,6 +110,11 @@ fun ChatScreen(
     var showStrategySettings by remember { mutableStateOf(false) }
     var showClearChatDialog by remember { mutableStateOf(false) }
     var pendingStrategyChange by remember { mutableStateOf<ContextStrategyType?>(null) }
+    var showMcpDebug by remember { mutableStateOf(false) }
+
+    val mcpViewModel: McpDebugViewModel = viewModelCompose(
+        factory = McpDebugViewModelFactory(AppDependencies.getMcpToolsUseCase)
+    )
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -152,12 +163,12 @@ fun ChatScreen(
                             )
                         }
                         IconButton(
-                            onClick = { showStrategySettings = true },
+                            onClick = { showMcpDebug = true },
                             modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Настройки стратегии",
+                                imageVector = Icons.Default.Build,
+                                contentDescription = "MCP Debug",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -350,6 +361,21 @@ fun ChatScreen(
                 DebugLogDisplay(
                     requestLogs = requestLogs,
                     onClose = { showDebugLog = false },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                )
+            }
+        }
+
+        if (showMcpDebug) {
+            ModalBottomSheet(
+                onDismissRequest = { showMcpDebug = false },
+                sheetState = sheetState
+            ) {
+                McpDebugSheet(
+                    viewModel = mcpViewModel,
+                    onClose = { showMcpDebug = false },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
