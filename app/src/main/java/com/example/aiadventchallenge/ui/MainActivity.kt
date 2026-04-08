@@ -56,6 +56,19 @@ import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.repository.MemoryClassificationRepository
 import com.example.aiadventchallenge.domain.repository.TaskRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
+import com.example.aiadventchallenge.domain.parser.UserResponseParser
+import com.example.aiadventchallenge.domain.task.TaskIntentHandler
+import com.example.aiadventchallenge.domain.task.TaskIntentHandlerImpl
+import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
+import com.example.aiadventchallenge.domain.chat.ChatMessageHandlerImpl
+import com.example.aiadventchallenge.domain.branch.BranchOrchestrator
+import com.example.aiadventchallenge.domain.branch.BranchOrchestratorImpl
+import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
+import com.example.aiadventchallenge.domain.mcp.McpToolOrchestratorImpl
+import com.example.aiadventchallenge.domain.detector.NutritionRequestDetector
+import com.example.aiadventchallenge.domain.detector.NutritionRequestDetectorImpl
+import com.example.aiadventchallenge.domain.task.TaskCoordinator
+import com.example.aiadventchallenge.domain.task.TaskCoordinatorImpl
 import java.io.File
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
@@ -73,22 +86,49 @@ class MainActivity : ComponentActivity() {
     private val factExtractor by lazy { FactExtractor(AppDependencies.repository) }
     private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository, factExtractor, chatRepository, memoryRepository, AppDependencies.repository, memoryClassificationRepository) }
     private val fitnessProfileManager by lazy { FitnessProfileManager(chatSettingsRepository) }
+    private val taskIntentHandler by lazy { TaskIntentHandlerImpl(taskRepository, AppDependencies.userResponseParser) }
+    private val chatMessageHandler by lazy {
+        ChatMessageHandlerImpl(
+            chatRepository = chatRepository,
+            agent = AppDependencies.chatAgent,
+            contextStrategyFactory = contextStrategyFactory,
+            chatSettingsRepository = chatSettingsRepository
+        )
+    }
+    private val branchOrchestrator by lazy {
+        BranchOrchestratorImpl(
+            branchRepository = branchRepository,
+            chatRepository = chatRepository
+        )
+    }
+    private val nutritionRequestDetector by lazy { NutritionRequestDetectorImpl() }
+    private val mcpToolOrchestrator by lazy {
+        McpToolOrchestratorImpl(
+            callMcpToolUseCase = AppDependencies.callMcpToolUseCase,
+            nutritionRequestDetector = nutritionRequestDetector
+        )
+    }
+    private val taskCoordinator by lazy {
+        TaskCoordinatorImpl(
+            taskRepository = taskRepository
+        )
+    }
 
     private val chatViewModel: ChatViewModel by viewModels {
         ChatViewModelFactory(
-            AppDependencies.chatAgent,
             chatRepository,
             chatSettingsRepository,
             contextStrategyFactory,
             factRepository,
             branchRepository,
-            memoryRepository,
-            memoryClassificationRepository,
             aiRequestRepository,
             fitnessProfileManager,
             taskRepository,
-            AppDependencies.invariantValidator,
-            AppDependencies.callMcpToolUseCase,
+            taskIntentHandler,
+            chatMessageHandler,
+            branchOrchestrator,
+            mcpToolOrchestrator,
+            taskCoordinator,
         )
     }
 

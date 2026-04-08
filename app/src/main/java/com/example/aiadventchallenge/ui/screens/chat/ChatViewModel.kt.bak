@@ -1,0 +1,614 @@
+package com.example.aiadventchallenge.ui.screens.chat
+
+import android.util.Log
+import com.example.aiadventchallenge.data.config.EnhancedTaskAiResponse
+import com.example.aiadventchallenge.data.config.TaskIntent
+import com.example.aiadventchallenge.data.config.TaskPromptBuilder
+import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
+import com.example.aiadventchallenge.domain.mcp.ToolExecutionResult
+import com.example.aiadventchallenge.domain.task.TaskIntentHandler
+import com.example.aiadventchallenge.domain.task.TaskIntentResult
+import com.example.aiadventchallenge.domain.chat.ChatMessageResult
+import com.example.aiadventchallenge.domain.model.ChatBranch
+import com.example.aiadventchallenge.domain.model.ChatMessage
+import com.example.aiadventchallenge.domain.model.TaskAction
+import com.example.aiadventchallenge.domain.model.TaskPhase
+import com.example.aiadventchallenge.domain.model.TaskContext
+import com.example.aiadventchallenge.domain.model.DialogTokenStats
+import com.example.aiadventchallenge.domain.model.FitnessProfileType
+import com.example.aiadventchallenge.domain.repository.BranchRepository
+import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
+import com.example.aiadventchallenge.domain.repository.FactRepository
+import com.example.aiadventchallenge.domain.repository.MemoryRepository
+import com.example.aiadventchallenge.domain.repository.TaskRepository
+import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
+import com.example.aiadventchallenge.domain.validation.InvariantValidator
+import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+
+class ChatViewModel(
+    private val agent: ChatAgent,
+    private val chatRepository: ChatRepository,
+    private val chatSettingsRepository: ChatSettingsRepository,
+    private val contextStrategyFactory: ContextStrategyFactory,
+    private val factRepository: FactRepository,
+    private val branchRepository: BranchRepository,
+    private val memoryRepository: MemoryRepository,
+    private val aiRequestRepository: AiRequestRepository,
+    private val fitnessProfileManager: FitnessProfileManager,
+    private val taskRepository: TaskRepository,
+    private val invariantValidator: InvariantValidator,
+    private val callMcpToolUseCase: CallMcpToolUseCase,
+    private val taskIntentHandler: TaskIntentHandler,
+    private val chatMessageHandler: ChatMessageHandler,
+    private val branchOrchestrator: BranchOrchestrator,
+    private val mcpToolOrchestrator: McpToolOrchestrator
+) : ViewModel() {
+
+    private val TAG = "ChatViewModel"
+
+    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _lastRequestTokens = MutableStateFlow<LastRequestTokens?>(null)
+    val lastRequestTokens: StateFlow<LastRequestTokens?> = _lastRequestTokens.asStateFlow()
+
+    private val _dialogStats = MutableStateFlow(DialogTokenStats())
+    val dialogStats: StateFlow<DialogTokenStats> = _dialogStats.asStateFlow()
+
+    private val _allTimeStats = MutableStateFlow(DialogTokenStats())
+    val allTimeStats: StateFlow<DialogTokenStats> = _allTimeStats.asStateFlow()
+
+    private val _requestLogs = MutableStateFlow<List<RequestLog>>(emptyList())
+    val requestLogs: StateFlow<List<RequestLog>> = _requestLogs.asStateFlow()
+
+    private val _activeStrategyConfig = MutableStateFlow<ContextStrategyConfig?>(null)
+    val activeStrategyConfig: StateFlow<ContextStrategyConfig?> = _activeStrategyConfig.asStateFlow()
+
+    private val _taskContext = MutableStateFlow<TaskContext?>(null)
+    val taskContext: StateFlow<TaskContext?> = _taskContext.asStateFlow()
+
+    data class LastRequestTokens(
+        val promptTokens: Int?,
+        val completionTokens: Int?,
+        val totalTokens: Int?
+    )
+
+    init {
+        loadMessagesFromDatabase()
+        loadDialogStats()
+        loadAllTimeStats()
+        loadStrategyConfig()
+        loadBranchState()
+        loadFitnessProfile()
+        loadActiveTask()
+    }
+
+    private fun loadMessagesFromDatabase() {
+        viewModelScope.launch {
+            val currentConfig = chatSettingsRepository.getSettings()
+            val isBranching =
+                currentConfig.type == ContextStrategyType.BRANCHING
+
+            if (isBranching) {
+                val activeBranchId = branchRepository.getActiveBranchId()
+                if (activeBranchId != null) {
+                    val messages = chatRepository.getBranchPathWithCheckpoint(activeBranchId)
+                    _messages.value = messages
+                    _chatUiState.value = _chatUiState.value.copy(
+                        messages = messages
+                    _chatUiState.value.copy(
+                        messages = messages
+                    )
+                } else {
+                    chatRepository.getAllMessages().collect { messages ->
+                        _messages.value = messages
+                        _chatUiState.value = _chatUiState.value.copy(
+                            messages = messages
+                        )
+                }
+            }
+        }
+    }
+
+    private fun loadDialogStats() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _dialogStats.value = chatRepository.getDialogStats()
+        }
+    }
+
+    private fun loadAllTimeStats() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _allTimeStats.value = aiRequestRepository.getAllTimeStats()
+        }
+    }
+
+    private fun loadStrategyConfig() {
+        viewModelScope.launch {
+            _activeStrategyConfig.value = chatSettingsRepository.getSettings()
+            updateBranchingStrategyState()
+        }
+    }
+
+    private fun loadBranchState() {
+        viewModelScope.launch {
+            branchRepository.getAllBranches().collect { branches ->
+                val activeBranchId = branchRepository.getActiveBranchId()
+                val branchUiModels = branches.map { branch ->
+                    val lastMessagePreview = branch.lastMessageId?.let { messageId ->
+                        chatRepository.getMessageById(messageId)?.content?.take(50)?.let { "$it..." }
+                    }
+
+                    BranchUiModel.fromDomain(
+                        id = branch.id,
+                        title = branch.title,
+                        isActive = branch.id == activeBranchId,
+                        parentBranchId = branch.parentBranchId,
+                        checkpointMessageId = branch.checkpointMessageId,
+                        lastMessageId = branch.lastMessageId,
+                        lastMessagePreview = lastMessagePreview,
+                        updatedAt = branch.createdAt
+                    )
+                }
+
+                val currentConfig = chatSettingsRepository.getSettings()
+                val isBranching =
+                    currentConfig.type == ContextStrategyType.BRANCHING
+
+                val activeBranch = if (activeBranchId != null) {
+                    branchRepository.getBranchById(activeBranchId).first()
+                } else {
+                    null
+                }
+
+                _chatUiState.value = _chatUiState.value.copy(
+                    isBranchingStrategy = isBranching,
+                    activeBranchId = activeBranchId,
+                    activeBranchName = branchUiModels.find { it.isActive }?.title ?: "Main",
+                    availableBranches = branchUiModels,
+                    currentBranchCheckpointMessageId = activeBranch?.checkpointMessageId
+                )
+            }
+        }
+    }
+
+    private fun loadFitnessProfile() {
+        viewModelScope.launch {
+            val profile = fitnessProfileManager.getActiveProfile()
+            _chatUiState.value = _chatUiState.value.copy(
+                fitnessProfile = profile
+            )
+        }
+    }
+
+    private fun loadActiveTask() {
+        viewModelScope.launch {
+            val task = taskRepository.getActiveTask()
+            _taskContext.value = task
+            if (task != null) {
+                Log.d(TAG, "=== Active Task Loaded ===")
+                Log.d(TAG, "Task ID: ${task.taskId}")
+                Log.d(TAG, "Query: ${task.query}")
+                Log.d(TAG, "Phase: ${task.phase.label} (step ${task.currentStep}/${task.totalSteps})")
+                Log.d(TAG, "isActive: ${task.isActive}")
+                Log.d(TAG, "AwaitingConfirmation: ${task.awaitingUserConfirmation}")
+                Log.d(TAG, "Progress: ${(task.progress * 100).toInt()}%")
+                Log.d(TAG, "=== Active Task Loaded End ===\n")
+            } else {
+                Log.d(TAG, "No active task found")
+            }
+        }
+    }
+
+    private fun loadStrategyConfig() {
+        viewModelScope.launch {
+            _activeStrategyConfig.value = chatSettingsRepository.getSettings()
+            updateBranchingStrategyState()
+        }
+    }
+
+    private fun updateBranchingStrategyState() {
+        val currentConfig = _activeStrategyConfig.value ?: return
+        val isBranching =
+            currentConfig.type == ContextStrategyType.BRANCHING
+
+        _chatUiState.value = _chatUiState.value.copy(
+            isBranchingStrategy = isBranching
+        )
+    }
+
+    fun sendMessage(userInput: String) {
+        if (userInput.isBlank()) return
+        if (_isLoading.value) return
+
+        _isLoading.value = true
+
+        viewModelScope.launch {
+            val activeTask = _taskContext.value
+            val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
+            val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
+
+            if (activeTask != null && activeTask.isActive && activeTask.phase != TaskPhase.DONE) {
+                processIntelligentMessage(userInput, activeBranchId, parentMessageId)
+            } else {
+                processNormalMessage(userInput, activeBranchId, parentMessageId)
+            }
+        }
+    }
+
+    private suspend fun processIntelligentMessage(
+        userInput: String,
+        activeBranchId: String,
+        parentMessageId: String?
+    ) {
+        val result = chatMessageHandler.handleUserMessage(
+            userInput = userInput,
+            taskContext = _taskContext.value,
+            fitnessProfile = _chatUiState.value.fitnessProfile,
+            activeBranchId = activeBranchId,
+            parentMessageId = parentMessageId
+        )
+
+        when (result) {
+            is ChatMessageResult.Success -> {
+                _messages.value += result.userMessage
+                _messages.value += result.aiMessage
+                _isLoading.value = false
+                handleTaskIntent(result.aiResponse, userInput, activeBranchId)
+            }
+            is ChatMessageResult.Error -> {
+                _messages.value += result.userMessage
+                _messages.value += ChatMessage(
+                    id = (System.currentTimeMillis() + 1).toString(),
+                    parentMessageId = parentMessageId,
+                    content = "Ошибка: ${result.errorMessage}",
+                    isFromUser = false,
+                    isSystemMessage = true,
+                    branchId = activeBranchId
+                )
+                _isLoading.value = false
+            }
+            is ChatMessageResult.EmptyResponse -> {
+                _messages.value += result.userMessage
+                _messages.value += ChatMessage(
+                    id = (System.currentTimeMillis() + 1).toString(),
+                    parentMessageId = parentMessageId,
+                    content = "❌ Не удалось получить ответ от ассистента. Попробуйте переформулировать запрос.",
+                    isFromUser = false,
+                    isSystemMessage = true,
+                    branchId = activeBranchId
+                )
+                _isLoading.value = false
+            }
+        }
+    }
+
+    private suspend fun processNormalMessage(
+        userInput: String,
+        activeBranchId: String,
+        parentMessageId: String?
+    ) {
+        if (_taskContext.value == null) {
+            val profile = _chatUiState.value.fitnessProfile
+            val task = taskRepository.createTask(userInput, profile)
+            _taskContext.value = task
+
+            Log.d(TAG, "Task created in advance before LLM request")
+            Log.d(TAG, "  Task ID: ${task.taskId}")
+            Log.d(TAG, "  Query: ${task.query}")
+            Log.d(TAG, "  Phase: ${task.phase.label} (${task.currentStep}/${task.totalSteps})")
+        }
+
+        val mcpResult = mcpToolOrchestrator.detectAndExecuteTool(userInput)
+
+        val mcpContext = when (mcpResult) {
+            is ToolExecutionResult.Success -> mcpResult.context
+            else -> null
+        }
+
+        val result = chatMessageHandler.handleUserMessage(
+            userInput = userInput,
+            taskContext = _taskContext.value,
+            fitnessProfile = _chatUiState.value.fitnessProfile,
+            activeBranchId = activeBranchId,
+            parentMessageId = parentMessageId,
+            mcpContext = mcpContext
+        )
+
+        when (result) {
+            is ChatMessageResult.Success -> {
+                _messages.value += result.userMessage
+                _messages.value += result.aiMessage
+                _isLoading.value = false
+                handleTaskIntent(result.aiResponse, userInput, activeBranchId)
+            }
+            is ChatMessageResult.Error -> {
+                _messages.value += result.userMessage
+                _messages.value += ChatMessage(
+                    id = (System.currentTimeMillis() + 1).toString(),
+                    parentMessageId = parentMessageId,
+                    content = "Ошибка: ${result.errorMessage}",
+                    isFromUser = false,
+                    isSystemMessage = true,
+                    branchId = activeBranchId
+                )
+                _isLoading.value = false
+            }
+            is ChatMessageResult.EmptyResponse -> {
+                _messages.value += result.userMessage
+                _messages.value += ChatMessage(
+                    id = (System.currentTimeMillis() + 1).toString(),
+                    parentMessageId = parentMessageId,
+                    content = "❌ Не удалось получить ответ от ассистента. Попробуйте переформулировать запрос.",
+                    isFromUser = false,
+                    isSystemMessage = true,
+                    branchId = activeBranchId
+                )
+                _isLoading.value = false
+            }
+        }
+    }
+
+    private fun handleTaskIntent(
+        aiResponse: EnhancedTaskAiResponse,
+        userInput: String,
+        activeBranchId: String
+    ) {
+        viewModelScope.launch {
+            val result = taskIntentHandler.handleIntent(
+                aiResponse = aiResponse,
+                userInput = userInput,
+                currentTask = _taskContext.value
+            )
+
+            when (result) {
+                is TaskIntentResult.TaskUpdated -> {
+                    _taskContext.value = result.task
+                }
+                is TaskIntentResult.SystemMessage -> {
+                    val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
+                    val systemMessage = ChatMessage(
+                        id = (System.currentTimeMillis() + 1).toString(),
+                        parentMessageId = parentMessageId,
+                        content = result.message,
+                        isFromUser = false,
+                        isSystemMessage = true,
+                        branchId = activeBranchId
+                    )
+                    _messages.value += systemMessage
+                    chatRepository.insertMessage(systemMessage, activeBranchId, parentMessageId)
+                }
+                is TaskIntentResult.NoAction -> {
+                    // Нет действий
+                }
+            }
+        }
+    }
+
+    fun clearChat() {
+        viewModelScope.launch {
+            chatRepository.deleteAllMessages()
+            aiRequestRepository.clearAllRequests()
+            _dialogStats.value = DialogTokenStats()
+            _allTimeStats.value = DialogTokenStats()
+            _lastRequestTokens.value = null
+            _requestLogs.value = emptyList()
+            
+            _messages.value = emptyList()
+            _chatUiState.value = _chatUiState.value.copy(
+                messages = emptyList(),
+                activeBranchId = null,
+                activeBranchName = null,
+                currentBranchCheckpointMessageId = null
+            )
+        }
+    }
+
+    fun setStrategyType(type: ContextStrategyType) {
+        viewModelScope.launch {
+            chatSettingsRepository.updateStrategyType(type)
+            _activeStrategyConfig.value = chatSettingsRepository.getSettings()
+
+            val isBranching =
+                type == ContextStrategyType.BRANCHING
+            _chatUiState.value = _chatUiState.value.copy(
+                isBranchingStrategy = isBranching,
+                messages = emptyList(),
+                activeBranchId = null,
+                activeBranchName = null,
+                currentBranchCheckpointMessageId = null
+            )
+
+            factRepository.clearAllFacts()
+            branchRepository.clearAllBranches()
+            chatRepository.deleteMessagesByBranch("main")
+
+            _messages.value = emptyList()
+
+            if (isBranching) {
+                val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())
+                if (strategy is BranchingStrategy) {
+                    strategy.initialize()
+                }
+            }
+        }
+    }
+
+    fun onBranchChipClicked() {
+        _chatUiState.value = _chatUiState.value.copy(
+            showBranchPicker = true
+        )
+    }
+
+    fun onBranchPickerDismiss() {
+        _chatUiState.value = _chatUiState.value.copy(
+            showBranchPicker = false
+        )
+    }
+
+    fun onBranchSelected(branchId: String) {
+        viewModelScope.launch {
+            val result = branchOrchestrator.switchToBranch(branchId)
+
+            when (result) {
+                is BranchSwitchResult.Success -> {
+                    _chatUiState.value = _chatUiState.value.copy(
+                        showBranchPicker = false,
+                        messages = result.messages,
+                        activeBranchId = branchId,
+                        activeBranchName = result.branchName,
+                        currentBranchCheckpointMessageId = result.checkpointMessageId
+                    )
+                }
+                is BranchSwitchResult.Error -> {
+                    // Ошибка переключения - показываем пользователю
+                }
+            }
+        }
+    }
+
+    fun onCreateBranchFromMessage(messageId: String) {
+        val message = _messages.value.find { it.id == messageId }
+        val preview = message?.content?.take(50)?.let { "$it..." } ?: "Сообщение"
+
+        val branchNumber = _chatUiState.value.availableBranches.size + 1
+
+        _chatUiState.value = _chatUiState.value.copy(
+            showCreateBranchDialog = true,
+            branchCreationTargetMessageId = messageId,
+            branchCreationTargetPreview = preview,
+            newBranchName = "Ветка $branchNumber",
+            newBranchError = null
+        )
+    }
+
+    fun onNewBranchNameChanged(name: String) {
+        _chatUiState.value = _chatUiState.value.copy(
+            newBranchName = name,
+            newBranchError = null
+        )
+    }
+
+    fun onCreateBranchConfirmed(switchToNew: Boolean = true) {
+        val state = _chatUiState.value
+        val targetMessageId = state.branchCreationTargetMessageId
+
+        if (state.newBranchName.isBlank()) {
+            _chatUiState.value = state.copy(
+                newBranchError = "Название ветки не может быть пустым"
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            val result = branchOrchestrator.createBranchFromMessage(
+                messageId = targetMessageId ?: "",
+                branchName = state.newBranchName,
+                switchToNew = switchToNew
+            )
+
+            when (result) {
+                is BranchCreationResult.Success -> {
+                    _chatUiState.value = _chatUiState.value.copy(
+                        showCreateBranchDialog = false,
+                        activeBranchId = result.branchId,
+                        activeBranchName = state.newBranchName,
+                        messages = result.messages,
+                        currentBranchCheckpointMessageId = result.checkpointMessageId,
+                        branchCreationTargetMessageId = null,
+                        branchCreationTargetPreview = null,
+                        newBranchName = ""
+                    )
+                }
+                is BranchCreationResult.Error -> {
+                    when (result.type) {
+                        BranchCreationErrorType.EMPTY_NAME -> {
+                            _chatUiState.value = _chatUiState.value.copy(
+                                newBranchError = result.message
+                            )
+                        }
+                        BranchCreationErrorType.NO_MESSAGE_SELECTED -> {
+                            _chatUiState.value = _chatUiState.value.copy(
+                                newBranchError = result.message
+                            )
+                        }
+                        BranchCreationErrorType.UNKNOWN -> {
+                            // Неизвестная ошибка - закрываем диалог
+                            _chatUiState.value = _chatUiState.value.copy(
+                                showCreateBranchDialog = false,
+                                branchCreationTargetMessageId = null,
+                                branchCreationTargetPreview = null,
+                                newBranchName = ""
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun onCreateBranchDialogDismiss() {
+        _chatUiState.value = _chatUiState.value.copy(
+            showCreateBranchDialog = false,
+            branchCreationTargetMessageId = null,
+            branchCreationTargetPreview = null,
+            newBranchName = "",
+            newBranchError = null
+        )
+    }
+
+    fun onDeleteBranch(branchId: String) {
+        viewModelScope.launch {
+            val activeBranchId = branchRepository.getActiveBranchId()
+
+            branchOrchestrator.deleteBranch(branchId)
+
+            if (activeBranchId == branchId) {
+                val result = branchOrchestrator.switchToBranch("main")
+
+                when (result) {
+                    is BranchSwitchResult.Success -> {
+                        _chatUiState.value = _chatUiState.value.copy(
+                            activeBranchId = "main",
+                            messages = result.messages,
+                            currentBranchCheckpointMessageId = result.checkpointMessageId
+                        )
+                    }
+                    is BranchSwitchResult.Error -> {
+                        // Ошибка переключения - просто скрываем ветку из списка
+                        // UI автоматически обновится через loadBranchState
+                    }
+                }
+            }
+        }
+    }
+
+    fun onBranchIndicatorClicked(messageId: String) {
+        val branches = branchOrchestrator.getBranchesForMessage(
+            messageId = messageId,
+            allBranches = _chatUiState.value.availableBranches
+        )
+        _chatUiState.value = _chatUiState.value.copy(
+            showBranchPicker = true,
+            showBranchActionsForMessageId = messageId,
+            branchesForMessage = branches
+        )
+    }
+
+    fun setFitnessProfile(profile: FitnessProfileType) {
+        viewModelScope.launch {
+            fitnessProfileManager.setActiveProfile(profile)
+            _chatUiState.value = _chatUiState.value.copy(
+                fitnessProfile = profile
+            )
+        }
+    }
+}

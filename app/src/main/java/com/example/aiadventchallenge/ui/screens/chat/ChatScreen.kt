@@ -194,7 +194,7 @@ fun ChatScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)
                     ) {
-                        if (chatUiState.isBranchingStrategy && chatUiState.messages.isEmpty()) {
+                        if (chatUiState.isBranchingStrategy && messages.isEmpty()) {
                             item {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),

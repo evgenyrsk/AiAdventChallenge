@@ -23,6 +23,8 @@ import com.example.aiadventchallenge.domain.usecase.mcp.GetMcpToolsUseCase
 import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
 import com.example.aiadventchallenge.domain.validation.InvariantValidator
 import com.example.aiadventchallenge.domain.validation.InvariantValidatorImpl
+import com.example.aiadventchallenge.domain.parser.UserResponseParser
+import com.example.aiadventchallenge.domain.parser.UserResponseParserImpl
 import android.content.Context
 
 object AppDependencies {
@@ -129,5 +131,9 @@ object AppDependencies {
         CallMcpToolUseCase(
             mcpRepository = mcpRepository
         )
+    }
+    
+    val userResponseParser: UserResponseParser by lazy {
+        UserResponseParserImpl()
     }
 }

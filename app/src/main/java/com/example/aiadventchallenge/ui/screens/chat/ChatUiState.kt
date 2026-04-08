@@ -1,10 +1,8 @@
 package com.example.aiadventchallenge.ui.screens.chat
 
-import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 
 data class ChatUiState(
-    val messages: List<ChatMessage> = emptyList(),
     val isLoading: Boolean = false,
 
     val isBranchingStrategy: Boolean = false,
@@ -27,19 +25,16 @@ data class ChatUiState(
 
     val fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE
 ) {
-    val canCreateBranch: Boolean
-        get() = isBranchingStrategy && messages.isNotEmpty()
-    
     val hasMultipleBranches: Boolean
         get() = availableBranches.size > 1
-    
+
     val isRootBranch: Boolean
         get() = activeBranchId == null || activeBranchId == "main"
-    
+
     fun getMessageBranchCount(messageId: String): Int {
         return availableBranches.count { it.checkpointMessageId == messageId }
     }
-    
+
     fun getBranchesForMessage(messageId: String): List<BranchUiModel> {
         return availableBranches.filter { it.checkpointMessageId == messageId }
     }
