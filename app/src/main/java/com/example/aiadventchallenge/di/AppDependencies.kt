@@ -1,5 +1,6 @@
 package com.example.aiadventchallenge.di
 
+import android.annotation.SuppressLint
 import com.example.aiadventchallenge.data.agent.ChatAgent
 import com.example.aiadventchallenge.data.api.ApiConfig
 import com.example.aiadventchallenge.data.api.HttpClient
@@ -25,8 +26,15 @@ import com.example.aiadventchallenge.domain.validation.InvariantValidator
 import com.example.aiadventchallenge.domain.validation.InvariantValidatorImpl
 import com.example.aiadventchallenge.domain.parser.UserResponseParser
 import com.example.aiadventchallenge.domain.parser.UserResponseParserImpl
+import com.example.aiadventchallenge.domain.detector.NutritionRequestDetector
+import com.example.aiadventchallenge.domain.detector.NutritionRequestDetectorImpl
+import com.example.aiadventchallenge.domain.detector.FitnessRequestDetector
+import com.example.aiadventchallenge.domain.detector.FitnessRequestDetectorImpl
+import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
+import com.example.aiadventchallenge.domain.mcp.McpToolOrchestratorImpl
 import android.content.Context
 
+@SuppressLint("StaticFieldLeak")
 object AppDependencies {
     private lateinit var context: Context
 
@@ -132,7 +140,23 @@ object AppDependencies {
             mcpRepository = mcpRepository
         )
     }
-    
+
+    val nutritionRequestDetector: NutritionRequestDetector by lazy {
+        NutritionRequestDetectorImpl()
+    }
+
+    val fitnessRequestDetector: FitnessRequestDetector by lazy {
+        FitnessRequestDetectorImpl()
+    }
+
+    val mcpToolOrchestrator: McpToolOrchestrator by lazy {
+        McpToolOrchestratorImpl(
+            callMcpToolUseCase = callMcpToolUseCase,
+            nutritionRequestDetector = nutritionRequestDetector,
+            fitnessRequestDetector = fitnessRequestDetector
+        )
+    }
+
     val userResponseParser: UserResponseParser by lazy {
         UserResponseParserImpl()
     }

@@ -15,6 +15,9 @@ import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
 import com.example.aiadventchallenge.domain.branch.BranchOrchestrator
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.task.TaskCoordinator
+import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
+import com.example.aiadventchallenge.domain.detector.FitnessRequestDetector
+import com.example.aiadventchallenge.domain.detector.NutritionRequestDetector
 
 class ChatViewModelFactory(
     private val chatRepository: ChatRepository,
@@ -30,6 +33,9 @@ class ChatViewModelFactory(
     private val branchOrchestrator: BranchOrchestrator,
     private val mcpToolOrchestrator: McpToolOrchestrator,
     private val taskCoordinator: TaskCoordinator,
+    private val callMcpToolUseCase: CallMcpToolUseCase,
+    private val fitnessRequestDetector: FitnessRequestDetector,
+    private val nutritionRequestDetector: NutritionRequestDetector,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -48,6 +54,9 @@ class ChatViewModelFactory(
                 branchOrchestrator,
                 mcpToolOrchestrator,
                 taskCoordinator,
+                callMcpToolUseCase,
+                fitnessRequestDetector,
+                nutritionRequestDetector,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
