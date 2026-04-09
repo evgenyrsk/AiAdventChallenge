@@ -33,6 +33,11 @@ import com.example.aiadventchallenge.domain.task.TaskIntentResult
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.ToolExecutionResult
 import com.example.aiadventchallenge.domain.task.TaskCoordinator
+import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
+import com.example.aiadventchallenge.domain.detector.FitnessRequestDetector
+import com.example.aiadventchallenge.domain.detector.NutritionRequestDetector
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,7 +58,10 @@ class ChatViewModel(
     private val chatMessageHandler: ChatMessageHandler,
     private val branchOrchestrator: BranchOrchestrator,
     private val mcpToolOrchestrator: McpToolOrchestrator,
-    private val taskCoordinator: TaskCoordinator
+    private val taskCoordinator: TaskCoordinator,
+    private val callMcpToolUseCase: CallMcpToolUseCase,
+    private val fitnessRequestDetector: FitnessRequestDetector,
+    private val nutritionRequestDetector: NutritionRequestDetector
 ) : ViewModel() {
 
     private val TAG = "ChatViewModel"
@@ -260,13 +268,56 @@ class ChatViewModel(
         chatRepository.insertMessage(message, activeBranchId, parentId)
     }
 
+    private suspend fun extractAndRecordFitnessDataFromTask(): Boolean {
+        val task = _taskContext.value ?: return false
+
+        val fitnessParams = fitnessRequestDetector.detectParams(task.query)
+
+        if (fitnessParams?.type == com.example.aiadventchallenge.domain.detector.FitnessRequestType.ADD_FITNESS_LOG) {
+            val today = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+
+            val toolParams = mutableMapOf<String, Any?>(
+                "date" to (fitnessParams.date ?: today)
+            )
+            fitnessParams.weight?.let { toolParams["weight"] = it }
+            fitnessParams.calories?.let { toolParams["calories"] = it }
+            fitnessParams.protein?.let { toolParams["protein"] = it }
+            fitnessParams.workoutCompleted?.let { toolParams["workoutCompleted"] = it }
+            fitnessParams.steps?.let { toolParams["steps"] = it }
+            fitnessParams.sleepHours?.let { toolParams["sleepHours"] = it }
+            fitnessParams.notes?.let { toolParams["notes"] = it }
+
+            Log.d(TAG, "🔧 Extracting fitness data from task query: ${task.query}")
+            Log.d(TAG, "   Params: $toolParams")
+
+            val result = callMcpToolUseCase("add_fitness_log", toolParams)
+            Log.d(TAG, "✅ Fitness data recorded: $result")
+
+            return true
+        }
+
+        return false
+    }
+
     private suspend fun processIntelligentMessage(userInput: String, activeBranchId: String, parentMessageId: String?) {
+        extractAndRecordFitnessDataFromTask()
+        val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(userInput)
+        val mcpContext = when (mcpToolResult) {
+            is ToolExecutionResult.Success -> mcpToolResult.context
+            is ToolExecutionResult.NoToolFound -> null
+            is ToolExecutionResult.Error -> {
+                Log.e(TAG, "❌ MCP tool error: ${mcpToolResult.message}")
+                null
+            }
+        }
+
         val result = chatMessageHandler.handleUserMessage(
             userInput = userInput,
             taskContext = _taskContext.value,
             fitnessProfile = _chatUiState.value.fitnessProfile,
             activeBranchId = activeBranchId,
-            parentMessageId = parentMessageId
+            parentMessageId = parentMessageId,
+            mcpContext = mcpContext,
         )
 
         when (result) {

@@ -63,6 +63,7 @@ import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
 import com.example.aiadventchallenge.domain.chat.ChatMessageHandlerImpl
 import com.example.aiadventchallenge.domain.branch.BranchOrchestrator
 import com.example.aiadventchallenge.domain.branch.BranchOrchestratorImpl
+import com.example.aiadventchallenge.domain.detector.FitnessRequestDetectorImpl
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestratorImpl
 import com.example.aiadventchallenge.domain.detector.NutritionRequestDetector
@@ -102,10 +103,12 @@ class MainActivity : ComponentActivity() {
         )
     }
     private val nutritionRequestDetector by lazy { NutritionRequestDetectorImpl() }
+    private val fitnessRequestDetector by lazy { FitnessRequestDetectorImpl() }
     private val mcpToolOrchestrator by lazy {
         McpToolOrchestratorImpl(
             callMcpToolUseCase = AppDependencies.callMcpToolUseCase,
-            nutritionRequestDetector = nutritionRequestDetector
+            nutritionRequestDetector = nutritionRequestDetector,
+            fitnessRequestDetector = fitnessRequestDetector,
         )
     }
     private val taskCoordinator by lazy {
@@ -129,6 +132,9 @@ class MainActivity : ComponentActivity() {
             branchOrchestrator,
             mcpToolOrchestrator,
             taskCoordinator,
+            AppDependencies.callMcpToolUseCase,
+            fitnessRequestDetector,
+            nutritionRequestDetector,
         )
     }
 
