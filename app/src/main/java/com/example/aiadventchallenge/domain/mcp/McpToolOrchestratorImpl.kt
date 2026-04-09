@@ -52,14 +52,6 @@ class McpToolOrchestratorImpl(
                     callRunScheduledSummary()
                 FitnessRequestType.GET_LATEST_SUMMARY ->
                     callGetLatestScheduledSummary()
-                FitnessRequestType.SCHEDULE_REMINDER ->
-                    callScheduleReminder(params)
-                FitnessRequestType.GET_PENDING_REMINDERS ->
-                    callGetPendingReminders()
-                FitnessRequestType.CANCEL_TASK ->
-                    callCancelTask(params)
-                FitnessRequestType.RUN_TASK_NOW ->
-                    callRunTaskNow(params)
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to call fitness tool", e)
@@ -167,82 +159,6 @@ class McpToolOrchestratorImpl(
         Log.d(TAG, "✅ get_latest_scheduled_summary result: $toolResult")
 
         val context = buildMcpContext("get_latest_scheduled_summary", toolResult)
-        return ToolExecutionResult.Success(context)
-    }
-
-    private suspend fun callScheduleReminder(params: FitnessRequestParams): ToolExecutionResult {
-        Log.d(TAG, "   Calling schedule_reminder")
-
-        val toolParams = mutableMapOf<String, Any?>()
-
-        params.delayMinutes?.let { toolParams["delayMinutes"] = it }
-        params.scheduledTime?.let { toolParams["scheduledTime"] = it }
-        params.message?.let { toolParams["message"] = it }
-
-        Log.d(TAG, "   Params: $toolParams")
-
-        val toolResult = callMcpToolUseCase(
-            name = "schedule_reminder",
-            params = toolParams
-        )
-
-        Log.d(TAG, "✅ schedule_reminder result: $toolResult")
-
-        val context = buildMcpContext("schedule_reminder", toolResult)
-        return ToolExecutionResult.Success(context)
-    }
-
-    private suspend fun callGetPendingReminders(): ToolExecutionResult {
-        Log.d(TAG, "   Calling get_pending_reminders")
-
-        val toolResult = callMcpToolUseCase(
-            name = "get_pending_reminders",
-            params = emptyMap()
-        )
-
-        Log.d(TAG, "✅ get_pending_reminders result: $toolResult")
-
-        val context = buildMcpContext("get_pending_reminders", toolResult)
-        return ToolExecutionResult.Success(context)
-    }
-
-    private suspend fun callCancelTask(params: FitnessRequestParams): ToolExecutionResult {
-        Log.d(TAG, "   Calling cancel_task")
-
-        val taskId = params.taskId ?: throw Exception("taskId is required")
-
-        val toolParams = mapOf("taskId" to taskId)
-
-        Log.d(TAG, "   Params: $toolParams")
-
-        val toolResult = callMcpToolUseCase(
-            name = "cancel_task",
-            params = toolParams
-        )
-
-        Log.d(TAG, "✅ cancel_task result: $toolResult")
-
-        val context = buildMcpContext("cancel_task", toolResult)
-        return ToolExecutionResult.Success(context)
-    }
-
-    private suspend fun callRunTaskNow(params: FitnessRequestParams): ToolExecutionResult {
-        Log.d(TAG, "   Calling run_task_now")
-
-        val taskId = params.taskId ?: throw Exception("taskId is required")
-
-        val toolParams = mapOf("taskId" to taskId)
-
-        Log.d(TAG, "   Params: $toolParams")
-
-        val toolResult = callMcpToolUseCase(
-            name = "run_task_now",
-            params = toolParams
-        )
-
-        Log.d(TAG, "✅ run_task_now result: $toolResult")
-
-        val context = buildMcpContext("run_task_now", toolResult)
         return ToolExecutionResult.Success(context)
     }
 

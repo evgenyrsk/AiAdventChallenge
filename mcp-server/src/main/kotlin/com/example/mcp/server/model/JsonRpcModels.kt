@@ -4,10 +4,6 @@ import com.example.mcp.server.model.fitness.AddFitnessLogResult
 import com.example.mcp.server.model.fitness.FitnessSummaryResult
 import com.example.mcp.server.model.fitness.RunScheduledSummaryResult
 import com.example.mcp.server.model.fitness.ScheduledSummaryResult
-import com.example.mcp.server.model.task.CancelTaskResult
-import com.example.mcp.server.model.task.PendingRemindersResult
-import com.example.mcp.server.model.task.RunTaskResult
-import com.example.mcp.server.model.task.ScheduleTaskResult
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -39,11 +35,7 @@ data class JsonRpcResult(
     val fitnessSummaryResult: FitnessSummaryResult? = null,
     val scheduledSummaryResult: ScheduledSummaryResult? = null,
     val addFitnessLogResult: AddFitnessLogResult? = null,
-    val runScheduledSummaryResult: RunScheduledSummaryResult? = null,
-    val scheduleTaskResult: ScheduleTaskResult? = null,
-    val pendingRemindersResult: PendingRemindersResult? = null,
-    val cancelTaskResult: CancelTaskResult? = null,
-    val runTaskResult: RunTaskResult? = null
+    val runScheduledSummaryResult: RunScheduledSummaryResult? = null
 )
 
 @Serializable
