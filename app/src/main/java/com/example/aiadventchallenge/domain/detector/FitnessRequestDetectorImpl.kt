@@ -5,8 +5,6 @@ import java.time.format.DateTimeFormatter
 
 class FitnessRequestDetectorImpl : FitnessRequestDetector {
 
-    private val timeParser = TimeParser()
-
     private val addLogKeywords = listOf(
         "запиш", "добав", "внес", "записать", "добавить", "внести",
         "вес", "шаг", "трениров", "калор", "белок", "сон", "сегодня", "вчера"
@@ -23,18 +21,6 @@ class FitnessRequestDetectorImpl : FitnessRequestDetector {
 
     private val latestSummaryKeywords = listOf(
         "последн", "свеж", "актуальн", "текущ", "последняя"
-    )
-
-    private val scheduleReminderKeywords = listOf(
-        "напомн", "заплан", "отлож"
-    )
-
-    private val getPendingRemindersKeywords = listOf(
-        "напоминания", "запланиров", "pending", "tasks"
-    )
-
-    private val cancelTaskKeywords = listOf(
-        "отмен", "cancel"
     )
 
     private val weightRegex = Regex("""(\d+[.,]\d+|\d+)\s*(кг|kg)""", RegexOption.IGNORE_CASE)
@@ -61,9 +47,6 @@ class FitnessRequestDetectorImpl : FitnessRequestDetector {
             getSummaryKeywords.any { it in inputLower } -> detectGetSummaryRequest(userInput)
             runSummaryKeywords.any { it in inputLower } -> detectRunSummaryRequest()
             latestSummaryKeywords.any { it in inputLower } -> detectLatestSummaryRequest()
-            scheduleReminderKeywords.any { it in inputLower } -> detectScheduleReminderRequest(userInput)
-            getPendingRemindersKeywords.any { it in inputLower } -> detectGetPendingRemindersRequest()
-            cancelTaskKeywords.any { it in inputLower } -> detectCancelTaskRequest(userInput)
             else -> null
         }
     }
@@ -157,37 +140,5 @@ class FitnessRequestDetectorImpl : FitnessRequestDetector {
         notes = notes.replace(Regex("""\s+"""), " ").trim()
 
         return notes
-    }
-
-    private fun detectScheduleReminderRequest(userInput: String): FitnessRequestParams {
-        val delayMinutes = timeParser.parseDelayMinutes(userInput)
-        val scheduledTime = timeParser.parseScheduledTime(userInput)
-        val message = timeParser.parseReminderMessage(userInput)
-
-        return FitnessRequestParams(
-            type = FitnessRequestType.SCHEDULE_REMINDER,
-            delayMinutes = delayMinutes,
-            scheduledTime = scheduledTime,
-            message = message
-        )
-    }
-
-    private fun detectGetPendingRemindersRequest(): FitnessRequestParams {
-        return FitnessRequestParams(
-            type = FitnessRequestType.GET_PENDING_REMINDERS
-        )
-    }
-
-    private fun detectCancelTaskRequest(userInput: String): FitnessRequestParams {
-        val taskId = extractTaskId(userInput)
-        return FitnessRequestParams(
-            type = FitnessRequestType.CANCEL_TASK,
-            taskId = taskId
-        )
-    }
-
-    private fun extractTaskId(userInput: String): String? {
-        val taskIdRegex = Regex("""(task_\d+_\d+|task_\d+)""")
-        return taskIdRegex.find(userInput)?.groupValues?.get(1)
     }
 }

@@ -62,34 +62,6 @@ class FitnessDatabase(private val dbPath: String = "./fitness_data.db") {
             CREATE INDEX IF NOT EXISTS index_scheduled_summaries_created_at ON scheduled_summaries (created_at)
         """)
 
-        statement.execute("""
-            CREATE TABLE IF NOT EXISTS scheduled_tasks (
-                id TEXT PRIMARY KEY NOT NULL,
-                type TEXT NOT NULL,
-                schedule_type TEXT NOT NULL,
-                message TEXT,
-                delay_minutes INTEGER,
-                scheduled_time INTEGER,
-                period_minutes INTEGER,
-                created_at INTEGER NOT NULL,
-                status TEXT NOT NULL DEFAULT 'PENDING',
-                executed_at INTEGER,
-                error_message TEXT
-            )
-        """)
-
-        statement.execute("""
-            CREATE INDEX IF NOT EXISTS index_scheduled_tasks_status ON scheduled_tasks (status)
-        """)
-
-        statement.execute("""
-            CREATE INDEX IF NOT EXISTS index_scheduled_tasks_scheduled_time ON scheduled_tasks (scheduled_time)
-        """)
-
-        statement.execute("""
-            CREATE INDEX IF NOT EXISTS index_scheduled_tasks_created_at ON scheduled_tasks (created_at)
-        """)
-
         statement.close()
     }
 
