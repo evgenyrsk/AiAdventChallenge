@@ -26,7 +26,8 @@ data class JsonRpcResult(
     val addFitnessLogResult: AddFitnessLogResult? = null,
     val fitnessSummaryResult: FitnessSummaryResult? = null,
     val scheduledSummaryResult: ScheduledSummaryResult? = null,
-    val runScheduledSummaryResult: RunScheduledSummaryResult? = null
+    val runScheduledSummaryResult: RunScheduledSummaryResult? = null,
+    val fitnessSummaryExportFullResponse: FitnessSummaryExportFullResponse? = null
 )
 
 @Serializable
@@ -82,4 +83,66 @@ data class RunScheduledSummaryResult(
     val summaryId: String?,
     val message: String,
     val summary: ScheduledSummaryResult?
+)
+
+@Serializable
+data class FitnessSummaryExportFullResponse(
+    val exportResult: FitnessSummaryExportResult,
+    val summaryData: FitnessSummaryExportFullData
+)
+
+@Serializable
+data class FitnessSummaryExportFullData(
+    val searchResult: SearchFitnessLogsStepOutput?,
+    val summaryResult: SummarizeFitnessLogsStepOutput?,
+    val saveResult: SaveSummaryToFileStepOutput?,
+    val exportResult: FitnessSummaryExportResult
+)
+
+@Serializable
+data class FitnessSummaryExportResult(
+    val success: Boolean,
+    val filePath: String?,
+    val format: String?,
+    val savedAt: Long?,
+    val errorMessage: String?
+)
+
+@Serializable
+data class SearchFitnessLogsStepOutput(
+    val period: String,
+    val entries: List<FitnessLogEntry>?,
+    val startDate: String,
+    val endDate: String
+)
+
+@Serializable
+data class SummarizeFitnessLogsStepOutput(
+    val period: String,
+    val entriesCount: Int,
+    val avgWeight: Double?,
+    val workoutsCompleted: Int,
+    val avgSteps: Int?,
+    val avgSleepHours: Double?,
+    val avgProtein: Int?,
+    val summaryText: String?
+)
+
+@Serializable
+data class SaveSummaryToFileStepOutput(
+    val filePath: String,
+    val format: String,
+    val savedAt: Long
+)
+
+@Serializable
+data class FitnessLogEntry(
+    val date: String,
+    val weight: Double?,
+    val calories: Int?,
+    val protein: Int?,
+    val workoutCompleted: Boolean?,
+    val steps: Int?,
+    val sleepHours: Double?,
+    val notes: String?
 )

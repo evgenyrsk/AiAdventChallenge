@@ -1,8 +1,10 @@
 package com.example.mcp.server.handler
 
-import com.example.mcp.server.data.fitness.FitnessDatabase
+import com.example.mcp.server.data.fitness.ReminderDatabase
 import com.example.mcp.server.data.fitness.FitnessLogDao
-import com.example.mcp.server.data.fitness.FitnessRepository
+import com.example.mcp.server.data.fitness.FitnessReminderRepository
+import com.example.mcp.server.data.fitness.ReminderDao
+import com.example.mcp.server.data.fitness.ReminderEventDao
 import com.example.mcp.server.data.fitness.ScheduledSummaryDao
 import com.example.mcp.server.model.*
 import com.example.mcp.server.model.fitness.AddFitnessLogResult
@@ -10,14 +12,22 @@ import com.example.mcp.server.model.fitness.FitnessLog
 import com.example.mcp.server.model.fitness.FitnessSummaryResult
 import com.example.mcp.server.model.fitness.RunScheduledSummaryResult
 import com.example.mcp.server.model.fitness.ScheduledSummaryResult
-import com.example.mcp.server.scheduler.BackgroundSummaryScheduler
+import com.example.mcp.server.scheduler.SchedulerOrchestrator
 import com.example.mcp.server.service.fitness.FitnessSummaryService
+import com.example.mcp.server.service.file_export.SummaryFileExportService
+import com.example.mcp.server.service.reminder.ReminderAnalysisService
+import com.example.mcp.server.service.reminder.ReminderService
+import com.example.mcp.server.pipeline.usecases.FitnessSummaryExportPipeline
+import com.example.mcp.server.dto.adapter.FitnessExportAdapter
+import com.example.mcp.server.pipeline.steps.SearchFitnessLogsStepInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.LocalTime
 import java.util.Locale
 
 class McpJsonRpcHandler {
@@ -26,21 +36,42 @@ class McpJsonRpcHandler {
         encodeDefaults = true
     }
 
-    private val fitnessDatabase = FitnessDatabase()
-    private val fitnessLogDao = FitnessLogDao(fitnessDatabase)
-    private val scheduledSummaryDao = ScheduledSummaryDao(fitnessDatabase)
-    private val fitnessRepository = FitnessRepository(fitnessLogDao, scheduledSummaryDao)
+    private val database = ReminderDatabase()
+    private val fitnessLogDao = FitnessLogDao(database)
+    private val scheduledSummaryDao = ScheduledSummaryDao(database)
+    private val reminderDao = ReminderDao(database)
+    private val reminderEventDao = ReminderEventDao(database)
+    
+    private val repository = FitnessReminderRepository(
+        database,
+        fitnessLogDao,
+        scheduledSummaryDao,
+        reminderDao,
+        reminderEventDao
+    )
+    
     private val fitnessSummaryService = FitnessSummaryService()
+    private val reminderService = ReminderService(repository)
+    private val reminderAnalysisService = ReminderAnalysisService()
 
-    private val backgroundSummaryScheduler = BackgroundSummaryScheduler(
-        repository = fitnessRepository,
+    private val schedulerOrchestrator = SchedulerOrchestrator(
+        repository = repository,
+        reminderService = reminderService,
+        analysisService = reminderAnalysisService,
         summaryService = fitnessSummaryService,
-        intervalMinutes = 1
+        dailyReminderIntervalMinutes = 60,
+        weeklySummaryIntervalMinutes = 1440
+    )
+
+    private val fileExportService = SummaryFileExportService(exportDirectory = "/tmp")
+    private val fitnessSummaryExportPipeline = FitnessSummaryExportPipeline(
+        repository = repository,
+        fileExportService = fileExportService
     )
 
     init {
         val scope = CoroutineScope(Dispatchers.IO)
-        backgroundSummaryScheduler.start(scope)
+        schedulerOrchestrator.startAll()
     }
 
     private val tools = listOf(
@@ -71,6 +102,46 @@ class McpJsonRpcHandler {
         Tool(
             name = "get_latest_scheduled_summary",
             description = "Returns the latest automatically generated scheduled summary."
+        ),
+        Tool(
+            name = "create_reminder",
+            description = "Creates a new reminder. Parameters: type (WORKOUT/HYDRATION/PROTEIN/SLEEP), title, message, time (HH:mm), daysOfWeek (array: MONDAY, TUESDAY, etc). Returns reminder ID."
+        ),
+        Tool(
+            name = "check_due_reminders",
+            description = "Checks for due reminders and creates events. Optionally specify date (YYYY-MM-DD) and time (HH:mm), defaults to now."
+        ),
+        Tool(
+            name = "get_active_reminders",
+            description = "Returns list of all active reminders. Optionally filter by type."
+        ),
+        Tool(
+            name = "list_available_jobs",
+            description = "Lists all available scheduled background jobs with their status and intervals."
+        ),
+        Tool(
+            name = "run_job_now",
+            description = "Manually triggers a background job. Parameters: jobId (daily_reminders, weekly_summary)."
+        ),
+        Tool(
+            name = "get_job_status",
+            description = "Returns status and details of a specific job. Parameters: jobId."
+        ),
+        Tool(
+            name = "search_fitness_logs",
+            description = "Searches fitness logs for a specified period. Parameters: period (last_7_days, last_30_days), days (default 7). Returns fitness log entries with date, weight, calories, protein, workout status, steps, sleep hours, and notes."
+        ),
+        Tool(
+            name = "summarize_fitness_logs",
+            description = "Aggregates fitness logs and generates a summary. Parameters: period, entries (list of fitness log entries). Returns aggregated metrics including average weight, workout count, average steps, average sleep, average protein, and summary text."
+        ),
+        Tool(
+            name = "save_summary_to_file",
+            description = "Saves fitness summary to a file. Parameters: period, entriesCount, avgWeight, workoutsCompleted, avgSteps, avgSleepHours, avgProtein, summaryText, format (json/txt). Returns file path, format, and saved timestamp."
+        ),
+        Tool(
+            name = "run_fitness_summary_export_pipeline",
+            description = "Runs the complete fitness summary export pipeline (search → summarize → save). Parameters: period (last_7_days, last_30_days), days (default 7), format (json/txt). Returns export result with file path and timestamp."
         )
     )
 
@@ -88,6 +159,16 @@ class McpJsonRpcHandler {
                 "get_fitness_summary" -> handleGetFitnessSummary(request)
                 "run_scheduled_summary" -> handleRunScheduledSummary(request)
                 "get_latest_scheduled_summary" -> handleGetLatestScheduledSummary(request)
+                "create_reminder" -> handleCreateReminder(request)
+                "check_due_reminders" -> handleCheckDueReminders(request)
+                "get_active_reminders" -> handleGetActiveReminders(request)
+                "list_available_jobs" -> handleListJobs(request)
+                "run_job_now" -> handleRunJobNow(request)
+                "get_job_status" -> handleGetJobStatus(request)
+                "search_fitness_logs" -> handleSearchFitnessLogs(request)
+                "summarize_fitness_logs" -> handleSummarizeFitnessLogs(request)
+                "save_summary_to_file" -> handleSaveSummaryToFile(request)
+                "run_fitness_summary_export_pipeline" -> handleRunFitnessSummaryExportPipeline(request)
                 else -> handleUnknownMethod(request)
             }
         } catch (e: Exception) {
@@ -330,7 +411,7 @@ class McpJsonRpcHandler {
                 notes = notes
             )
 
-            val success = fitnessRepository.addFitnessLog(fitnessLog)
+            val success = repository.addFitnessLog(fitnessLog)
             val logId = if (success) FitnessLog.generateId() else ""
 
             val result = AddFitnessLogResult(
@@ -374,10 +455,10 @@ class McpJsonRpcHandler {
             println("   Parameters: period=$period")
 
             val logs = when (period) {
-                "last_7_days" -> fitnessRepository.getLastNDaysFitnessLogs(7)
-                "last_30_days" -> fitnessRepository.getLastNDaysFitnessLogs(30)
-                "all" -> fitnessRepository.getAllFitnessLogs()
-                else -> fitnessRepository.getLastNDaysFitnessLogs(7)
+                "last_7_days" -> repository.getLastNDaysFitnessLogs(7)
+                "last_30_days" -> repository.getLastNDaysFitnessLogs(30)
+                "all" -> repository.getAllFitnessLogs()
+                else -> repository.getLastNDaysFitnessLogs(7)
             }
 
             val summary = fitnessSummaryService.generateSummary(logs, period)
@@ -423,7 +504,7 @@ class McpJsonRpcHandler {
         println("   Method: run_scheduled_summary")
 
         return try {
-            val scheduledSummary = backgroundSummaryScheduler.runScheduledSummaryNow()
+            val scheduledSummary = schedulerOrchestrator.runWeeklySummaryNow()
 
             if (scheduledSummary != null) {
                 val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
@@ -471,13 +552,14 @@ class McpJsonRpcHandler {
                 val response = JsonRpcResponse(
                     jsonrpc = "2.0",
                     id = request.id,
-                    result = JsonRpcResult(
-                        runScheduledSummaryResult = runResult
-                    ),
-                    error = null
+                    result = null,
+                    error = JsonRpcError(
+                        code = -32603,
+                        message = runResult.message
+                    )
                 )
 
-                json.encodeToString(response)
+                return json.encodeToString(response)
             }
         } catch (e: Exception) {
             println("   Error: ${e.message}")
@@ -490,7 +572,7 @@ class McpJsonRpcHandler {
                     message = "Internal error: ${e.message}"
                 )
             )
-            json.encodeToString(response)
+            return json.encodeToString(response)
         }
     }
 
@@ -498,7 +580,7 @@ class McpJsonRpcHandler {
         println("   Method: get_latest_scheduled_summary")
 
         return try {
-            val scheduledSummary = fitnessRepository.getLatestScheduledSummary()
+            val scheduledSummary = repository.getLatestScheduledSummary()
 
             if (scheduledSummary != null) {
                 val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
@@ -553,6 +635,706 @@ class McpJsonRpcHandler {
                 )
             )
             json.encodeToString(response)
+        }
+    }
+
+    private fun handleCreateReminder(request: JsonRpcRequest): String {
+        println("   Method: create_reminder")
+
+        return try {
+            val params = request.params ?: throw Exception("Parameters are required")
+
+            val typeStr = params["type"]?.toString() ?: throw Exception("Missing parameter: type")
+            val title = params["title"]?.toString() ?: throw Exception("Missing parameter: title")
+            val message = params["message"]?.toString() ?: throw Exception("Missing parameter: message")
+            val time = params["time"]?.toString() ?: throw Exception("Missing parameter: time")
+            val daysOfWeekParams = params["daysOfWeek"]
+
+            val type = try {
+                com.example.mcp.server.model.reminder.ReminderType.valueOf(typeStr.uppercase())
+            } catch (e: Exception) {
+                throw Exception("Invalid type: $typeStr. Must be WORKOUT, HYDRATION, PROTEIN, or SLEEP")
+            }
+
+            val daysOfWeek = try {
+                (daysOfWeekParams as? List<*>)?.mapNotNull {
+                    it?.toString()?.let { dayStr ->
+                        try {
+                            com.example.mcp.server.model.reminder.DayOfWeek.valueOf(dayStr.uppercase())
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                } ?: throw Exception("Invalid daysOfWeek parameter")
+            } catch (e: Exception) {
+                throw Exception("Invalid daysOfWeek: ${e.message}")
+            }
+
+            println("   Parameters: type=$type, title=$title, time=$time, daysOfWeek=$daysOfWeek")
+
+            val reminder = reminderService.createReminder(
+                type = type,
+                title = title,
+                message = message,
+                time = time,
+                daysOfWeek = daysOfWeek
+            )
+
+            val result = CreateReminderResult(
+                success = reminder != null,
+                reminderId = reminder?.id,
+                message = if (reminder != null) "Reminder created successfully" else "Failed to create reminder"
+            )
+
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = JsonRpcResult(
+                    createReminderResult = result
+                ),
+                error = null
+            )
+
+            json.encodeToString(response)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32602,
+                    message = "Invalid params: ${e.message}"
+                )
+            )
+            json.encodeToString(response)
+        }
+    }
+
+    private fun handleCheckDueReminders(request: JsonRpcRequest): String {
+        println("   Method: check_due_reminders")
+
+        return try {
+            val params = request.params
+            val dateStr = params?.get("date")?.toString()
+            val timeStr = params?.get("time")?.toString()
+
+            val date = dateStr?.let { LocalDate.parse(it) } ?: LocalDate.now()
+            val time = timeStr?.let { LocalTime.parse(it) } ?: LocalTime.now()
+
+            println("   Parameters: date=$date, time=$time")
+
+            val dueReminders = reminderService.getDueReminders(date, time)
+            val context = reminderService.buildReminderContext(date)
+
+            val triggered = mutableListOf<ReminderEventResult>()
+            val skipped = mutableListOf<ReminderEventResult>()
+
+            dueReminders.forEach { reminder ->
+                val decision = reminderAnalysisService.shouldTriggerReminder(reminder, context)
+                val personalizedMessage = reminderAnalysisService.personalizeReminderMessage(reminder, context)
+
+                if (decision.shouldTrigger) {
+                    val event = reminderService.createReminderEvent(reminder, context, personalizedMessage)
+                    if (event != null) {
+                        triggered.add(
+                            ReminderEventResult(
+                                eventId = event.id,
+                                reminderId = reminder.id,
+                                type = reminder.type.name,
+                                title = reminder.title,
+                                message = personalizedMessage
+                            )
+                        )
+                    }
+                } else {
+                    skipped.add(
+                        ReminderEventResult(
+                            eventId = "",
+                            reminderId = reminder.id,
+                            type = reminder.type.name,
+                            title = reminder.title,
+                            message = decision.reason
+                        )
+                    )
+                }
+            }
+
+            val result = CheckRemindersResult(
+                triggered = triggered,
+                skipped = skipped
+            )
+
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = JsonRpcResult(
+                    checkRemindersResult = result
+                ),
+                error = null
+            )
+
+            json.encodeToString(response)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32602,
+                    message = "Invalid params: ${e.message}"
+                )
+            )
+            json.encodeToString(response)
+        }
+    }
+
+    private fun handleGetActiveReminders(request: JsonRpcRequest): String {
+        println("   Method: get_active_reminders")
+
+        return try {
+            val params = request.params
+            val typeStr = params?.get("type")?.toString()
+
+            val reminders = if (typeStr != null) {
+                val type = try {
+                    com.example.mcp.server.model.reminder.ReminderType.valueOf(typeStr.uppercase())
+                } catch (e: Exception) {
+                    throw Exception("Invalid type: $typeStr")
+                }
+                reminderService.getActiveRemindersByType(type)
+            } else {
+                reminderService.getActiveReminders()
+            }
+
+            val result = GetActiveRemindersResult(
+                reminders = reminders.map { reminder ->
+                    ReminderDto(
+                        id = reminder.id,
+                        type = reminder.type.name,
+                        title = reminder.title,
+                        message = reminder.message,
+                        time = reminder.time,
+                        daysOfWeek = reminder.daysOfWeek.map { it.name },
+                        isActive = reminder.isActive
+                    )
+                }
+            )
+
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = JsonRpcResult(
+                    getActiveRemindersResult = result
+                ),
+                error = null
+            )
+
+            json.encodeToString(response)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32602,
+                    message = "Invalid params: ${e.message}"
+                )
+            )
+            json.encodeToString(response)
+        }
+    }
+
+    private fun handleListJobs(request: JsonRpcRequest): String {
+        println("   Method: list_available_jobs")
+
+        return try {
+            val jobs = schedulerOrchestrator.listAvailableJobs()
+
+            val result = ListJobsResult(
+                jobs = jobs.map { job ->
+                    JobDto(
+                        jobId = job["job_id"] as String,
+                        name = job["name"] as String,
+                        description = job["description"] as String,
+                        intervalMinutes = job["interval_minutes"] as Int,
+                        status = job["status"] as String
+                    )
+                }
+            )
+
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = JsonRpcResult(
+                    listJobsResult = result
+                ),
+                error = null
+            )
+
+            json.encodeToString(response)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32603,
+                    message = "Internal error: ${e.message}"
+                )
+            )
+            json.encodeToString(response)
+        }
+    }
+
+    private fun handleRunJobNow(request: JsonRpcRequest): String {
+        println("   Method: run_job_now")
+
+        return try {
+            val params = request.params ?: throw Exception("Parameters are required")
+            val jobId = params["jobId"]?.toString() ?: throw Exception("Missing parameter: jobId")
+
+            println("   Parameters: jobId=$jobId")
+
+            val result = when (jobId) {
+                "daily_reminders" -> {
+                    RunJobNowResult(
+                        success = false,
+                        jobId = jobId,
+                        resultSummary = "Daily reminders job is async. Check status with get_job_status.",
+                        message = "Daily reminders job started"
+                    )
+                }
+                "weekly_summary" -> {
+                    val summary = schedulerOrchestrator.runWeeklySummaryNow()
+                    RunJobNowResult(
+                        success = summary != null,
+                        jobId = jobId,
+                        resultSummary = if (summary != null) "Weekly summary generated" else "Failed to generate weekly summary",
+                        message = if (summary != null) "Weekly summary generated successfully" else "Failed to generate weekly summary"
+                    )
+                }
+                "fitness_summary_export" -> {
+                    val (success, filePath) = kotlinx.coroutines.runBlocking {
+                        schedulerOrchestrator.runFitnessSummaryExportNow()
+                    }
+                    RunJobNowResult(
+                        success = success,
+                        jobId = jobId,
+                        resultSummary = if (success) "Fitness summary exported to $filePath" else "Failed to export fitness summary",
+                        message = if (success) "Fitness summary exported successfully" else "Failed to export fitness summary"
+                    )
+                }
+                else -> {
+                    throw Exception("Unknown job ID: $jobId. Available: daily_reminders, weekly_summary, fitness_summary_export")
+                }
+            }
+
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = JsonRpcResult(
+                    runJobNowResult = result
+                ),
+                error = null
+            )
+
+            json.encodeToString(response)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32602,
+                    message = "Invalid params: ${e.message}"
+                )
+            )
+            json.encodeToString(response)
+        }
+    }
+
+    private fun handleGetJobStatus(request: JsonRpcRequest): String {
+        println("   Method: get_job_status")
+
+        return try {
+            val params = request.params ?: throw Exception("Parameters are required")
+            val jobId = params["jobId"]?.toString() ?: throw Exception("Missing parameter: jobId")
+
+            println("   Parameters: jobId=$jobId")
+
+            val statusData = schedulerOrchestrator.getJobStatus(jobId)
+
+            val result = GetJobStatusResult(
+                jobId = jobId,
+                status = statusData["status"] as String,
+                intervalMinutes = statusData["interval_minutes"] as? Int,
+                description = statusData["description"] as? String,
+                error = statusData["error"] as? String
+            )
+
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = JsonRpcResult(
+                    getJobStatusResult = result
+                ),
+                error = null
+            )
+
+            json.encodeToString(response)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32602,
+                    message = "Invalid params: ${e.message}"
+                )
+            )
+            json.encodeToString(response)
+        }
+    }
+
+    private fun handleSearchFitnessLogs(request: JsonRpcRequest): String {
+        println("   Method: search_fitness_logs")
+
+        return try {
+            val params = request.params
+            val period = params?.get("period")?.toString() ?: "last_7_days"
+            val days = params?.get("days")?.toString()?.toIntOrNull() ?: 7
+
+            println("   Parameters: period=$period, days=$days")
+
+            val pipelineInput = com.example.mcp.server.pipeline.steps.SearchFitnessLogsStepInput(
+                period = period,
+                days = days
+            )
+            val pipelineContext = com.example.mcp.server.pipeline.PipelineContext.create(
+                "mcp_search_${request.id}",
+                "MCP Search Fitness Logs"
+            )
+
+            val searchStep = com.example.mcp.server.pipeline.steps.SearchFitnessLogsStep(repository)
+            val result = kotlinx.coroutines.runBlocking {
+                com.example.mcp.server.pipeline.PipelineExecutor.create().executeStep(
+                    searchStep,
+                    pipelineInput,
+                    pipelineContext
+                )
+            }
+
+            if (result is com.example.mcp.server.pipeline.PipelineResult.Success<*>) {
+                @Suppress("UNCHECKED_CAST")
+                val stepOutput = result.data as com.example.mcp.server.pipeline.steps.SearchFitnessLogsStepOutput
+                val mcpOutput = FitnessExportAdapter.toMcpOutput(stepOutput)
+
+                val resultJson = JsonRpcResult(
+                    message = "Found ${stepOutput.entries.size} fitness logs for period $period"
+                )
+                resultJson.toolResult = mapOf(
+                    "success" to mcpOutput.success,
+                    "tool" to mcpOutput.tool,
+                    "data" to mcpOutput.data,
+                    "timestamp" to System.currentTimeMillis()
+                )
+
+                val response = JsonRpcResponse(
+                    jsonrpc = "2.0",
+                    id = request.id,
+                    result = resultJson,
+                    error = null
+                )
+
+                json.encodeToString(response)
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                val failure = result as com.example.mcp.server.pipeline.PipelineResult.Failure
+                val response = JsonRpcResponse(
+                    jsonrpc = "2.0",
+                    id = request.id,
+                    result = null,
+                    error = JsonRpcError(
+                        code = -32603,
+                        message = failure.errorMessage ?: "Unknown error"
+                    )
+                )
+                json.encodeToString(response)
+            }
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32602,
+                    message = "Invalid params: ${e.message}"
+                )
+            )
+            json.encodeToString(response)
+        }
+    }
+
+    private fun handleSummarizeFitnessLogs(request: JsonRpcRequest): String {
+        println("   Method: summarize_fitness_logs")
+
+        return try {
+            val params = request.params ?: throw Exception("Parameters are required")
+            val period = params["period"]?.toString() ?: throw Exception("Missing parameter: period")
+
+            val entriesList = params["entries"] as? List<*> ?: throw Exception("Missing parameter: entries")
+
+            val entries = entriesList.mapNotNull { entry ->
+                val entryMap = entry as? Map<String, Any?> ?: return@mapNotNull null
+                com.example.mcp.server.dto.fitness_export.FitnessLogEntry(
+                    date = entryMap["date"]?.toString() ?: "",
+                    weight = entryMap["weight"]?.toString()?.toDoubleOrNull(),
+                    calories = entryMap["calories"]?.toString()?.toIntOrNull(),
+                    protein = entryMap["protein"]?.toString()?.toIntOrNull(),
+                    workoutCompleted = (entryMap["workoutCompleted"]?.toString()?.toBoolean() ?: false),
+                    steps = entryMap["steps"]?.toString()?.toIntOrNull(),
+                    sleepHours = entryMap["sleepHours"]?.toString()?.toDoubleOrNull(),
+                    notes = entryMap["notes"]?.toString()
+                )
+            }
+
+            val pipelineInput = com.example.mcp.server.pipeline.steps.SearchFitnessLogsStepOutput(
+                period = period,
+                entries = entries,
+                startDate = "",
+                endDate = ""
+            )
+
+            val pipelineContext = com.example.mcp.server.pipeline.PipelineContext.create(
+                "mcp_summarize_${request.id}",
+                "MCP Summarize Fitness Logs"
+            )
+
+            val summarizeStep = com.example.mcp.server.pipeline.steps.SummarizeFitnessLogsStep()
+            val result = kotlinx.coroutines.runBlocking {
+                com.example.mcp.server.pipeline.PipelineExecutor.create().executeStep(
+                    summarizeStep,
+                    pipelineInput,
+                    pipelineContext
+                )
+            }
+
+            if (result is com.example.mcp.server.pipeline.PipelineResult.Success<*>) {
+                @Suppress("UNCHECKED_CAST")
+                val stepOutput = result.data as com.example.mcp.server.pipeline.steps.SummarizeFitnessLogsStepOutput
+                val mcpOutput = FitnessExportAdapter.toMcpOutput(stepOutput)
+
+                val resultJson = JsonRpcResult(
+                    message = "Generated fitness summary for $period with ${stepOutput.entriesCount} entries"
+                )
+                resultJson.toolResult = mapOf(
+                    "success" to mcpOutput.success,
+                    "tool" to mcpOutput.tool,
+                    "data" to mcpOutput.data,
+                    "timestamp" to System.currentTimeMillis()
+                )
+
+                val response = JsonRpcResponse(
+                    jsonrpc = "2.0",
+                    id = request.id,
+                    result = resultJson,
+                    error = null
+                )
+
+                json.encodeToString(response)
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                val failure = result as com.example.mcp.server.pipeline.PipelineResult.Failure
+                val response = JsonRpcResponse(
+                    jsonrpc = "2.0",
+                    id = request.id,
+                    result = null,
+                    error = JsonRpcError(
+                        code = -32603,
+                        message = failure.errorMessage ?: "Unknown error"
+                    )
+                )
+                json.encodeToString(response)
+            }
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32602,
+                    message = "Invalid params: ${e.message}"
+                )
+            )
+            json.encodeToString(response)
+        }
+    }
+
+    private fun handleSaveSummaryToFile(request: JsonRpcRequest): String {
+        println("   Method: save_summary_to_file")
+
+        return try {
+            val params = request.params ?: throw Exception("Parameters are required")
+
+            val period = params["period"]?.toString() ?: throw Exception("Missing parameter: period")
+            val entriesCount = params["entriesCount"]?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: entriesCount")
+            val avgWeight = params["avgWeight"]?.toString()?.toDoubleOrNull()
+            val workoutsCompleted = params["workoutsCompleted"]?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: workoutsCompleted")
+            val avgSteps = params["avgSteps"]?.toString()?.toIntOrNull()
+            val avgSleepHours = params["avgSleepHours"]?.toString()?.toDoubleOrNull()
+            val avgProtein = params["avgProtein"]?.toString()?.toIntOrNull()
+            val summaryText = params["summaryText"]?.toString() ?: throw Exception("Missing parameter: summaryText")
+            val format = params["format"]?.toString() ?: "json"
+
+            println("   Parameters: period=$period, format=$format, entriesCount=$entriesCount")
+
+            val pipelineInput = com.example.mcp.server.pipeline.steps.SummarizeFitnessLogsStepOutput(
+                period = period,
+                entriesCount = entriesCount,
+                avgWeight = avgWeight,
+                workoutsCompleted = workoutsCompleted,
+                avgSteps = avgSteps,
+                avgSleepHours = avgSleepHours,
+                avgProtein = avgProtein,
+                summaryText = summaryText
+            )
+
+            val pipelineContext = com.example.mcp.server.pipeline.PipelineContext.create(
+                "mcp_save_${request.id}",
+                "MCP Save Summary To File"
+            )
+
+            val saveStep = com.example.mcp.server.pipeline.steps.SaveSummaryToFileStep(fileExportService, format)
+            val result = kotlinx.coroutines.runBlocking {
+                com.example.mcp.server.pipeline.PipelineExecutor.create().executeStep(
+                    saveStep,
+                    pipelineInput,
+                    pipelineContext
+                )
+            }
+
+            if (result is com.example.mcp.server.pipeline.PipelineResult.Success<*>) {
+                @Suppress("UNCHECKED_CAST")
+                val stepOutput = result.data as com.example.mcp.server.pipeline.steps.SaveSummaryToFileStepOutput
+                val mcpOutput = FitnessExportAdapter.toMcpOutput(stepOutput)
+
+                val resultJson = JsonRpcResult(
+                    message = "Summary saved to file: ${stepOutput.filePath}"
+                )
+                resultJson.toolResult = mapOf(
+                    "success" to mcpOutput.success,
+                    "tool" to mcpOutput.tool,
+                    "data" to mcpOutput.data,
+                    "timestamp" to System.currentTimeMillis()
+                )
+
+                val response = JsonRpcResponse(
+                    jsonrpc = "2.0",
+                    id = request.id,
+                    result = resultJson,
+                    error = null
+                )
+
+                return json.encodeToString(response)
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                val failure = result as com.example.mcp.server.pipeline.PipelineResult.Failure
+                val response = JsonRpcResponse(
+                    jsonrpc = "2.0",
+                    id = request.id,
+                    result = null,
+                    error = JsonRpcError(
+                        code = -32603,
+                        message = failure.errorMessage ?: "Unknown error"
+                    )
+                )
+                return json.encodeToString(response)
+            }
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32602,
+                    message = "Invalid params: ${e.message}"
+                )
+            )
+            return json.encodeToString(response)
+        }
+    }
+
+    private fun handleRunFitnessSummaryExportPipeline(request: JsonRpcRequest): String {
+        println("   Method: run_fitness_summary_export_pipeline")
+
+        return try {
+            val params = request.params
+            val period = params?.get("period")?.toString() ?: "last_7_days"
+            val days = params?.get("days")?.toString()?.toIntOrNull() ?: 7
+            val format = params?.get("format")?.toString() ?: "json"
+
+            println("   Parameters: period=$period, days=$days, format=$format")
+
+            val (result, fullData) = kotlinx.coroutines.runBlocking {
+                fitnessSummaryExportPipeline.executeWithFullOutput(period, days, format)
+            }
+
+            if (result is com.example.mcp.server.pipeline.PipelineResult.Success && result.data.success && fullData != null) {
+                val exportData = result.data
+
+                val fullResponse = com.example.mcp.server.dto.fitness_export.FitnessSummaryExportFullResponse(
+                    exportResult = exportData,
+                    summaryData = fullData
+                )
+
+                val resultObject = JsonRpcResult(
+                    message = "Fitness summary exported successfully to ${exportData.filePath}",
+                    fitnessSummaryExportFullResponse = fullResponse
+                )
+
+                val response = JsonRpcResponse(
+                    jsonrpc = "2.0",
+                    id = request.id,
+                    result = resultObject,
+                    error = null
+                )
+
+                json.encodeToString(response)
+            } else {
+                val response = JsonRpcResponse(
+                    jsonrpc = "2.0",
+                    id = request.id,
+                    result = JsonRpcResult(
+                        message = result.errorMessage ?: "Unknown error during export"
+                    ),
+                    error = JsonRpcError(
+                        code = -32603,
+                        message = result.errorMessage ?: "Unknown error during export"
+                    )
+                )
+                return json.encodeToString(response)
+            }
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32603,
+                    message = "Internal error: ${e.message}"
+                )
+            )
+            return json.encodeToString(response)
         }
     }
 }

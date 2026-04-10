@@ -18,3 +18,10 @@ tasks.register("run", JavaExec::class) {
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.example.mcp.server.MainKt")
 }
+
+tasks.register("runDemo", JavaExec::class) {
+    group = "application"
+    description = "Run Fitness Summary Export Demo"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.example.mcp.server.demo.DemoFitnessSummaryExportKt")
+}

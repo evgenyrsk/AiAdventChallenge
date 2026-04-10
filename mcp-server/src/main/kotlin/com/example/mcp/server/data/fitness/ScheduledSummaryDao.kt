@@ -3,7 +3,7 @@ package com.example.mcp.server.data.fitness
 import com.example.mcp.server.model.fitness.ScheduledSummaryEntity
 import java.sql.SQLException
 
-class ScheduledSummaryDao(private val database: FitnessDatabase) {
+class ScheduledSummaryDao(private val database: ReminderDatabase) {
 
     fun insert(summary: ScheduledSummaryEntity): Boolean {
         return try {

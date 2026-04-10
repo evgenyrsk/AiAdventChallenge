@@ -1,22 +1,25 @@
 package com.example.mcp.server.scheduler
 
-import com.example.mcp.server.data.fitness.FitnessRepository
+import com.example.mcp.server.data.fitness.FitnessReminderRepository
 import com.example.mcp.server.model.fitness.ScheduledSummary
+import com.example.mcp.server.pipeline.usecases.WeeklySummaryPipeline
 import com.example.mcp.server.service.fitness.FitnessSummaryService
 import kotlinx.coroutines.*
 
 class BackgroundSummaryScheduler(
-    private val repository: FitnessRepository,
+    private val repository: FitnessReminderRepository,
     private val summaryService: FitnessSummaryService,
-    private val intervalMinutes: Int = 1
+    private val intervalMinutes: Int = 1440
 ) {
 
+    private val weeklySummaryPipeline = WeeklySummaryPipeline(repository, summaryService)
+    
     private var schedulerJob: Job? = null
     private var isRunning = false
 
     fun start(scope: CoroutineScope) {
         if (isRunning) {
-            println("⚠️  Scheduler is already running")
+            println("⚠️  BackgroundSummaryScheduler is already running")
             return
         }
 
@@ -39,7 +42,7 @@ class BackgroundSummaryScheduler(
 
     fun stop() {
         if (!isRunning) {
-            println("⚠️  Scheduler is not running")
+            println("⚠️  BackgroundSummaryScheduler is not running")
             return
         }
 
@@ -48,43 +51,24 @@ class BackgroundSummaryScheduler(
         println("⏹️  BackgroundSummaryScheduler stopped")
     }
 
-    fun runScheduledSummaryNow(): ScheduledSummary? {
+    suspend fun runScheduledSummaryNow(): ScheduledSummary? {
         println("🔄 Running scheduled summary manually")
         return runScheduledSummary()
     }
 
-    private fun runScheduledSummary(): ScheduledSummary? {
+    private suspend fun runScheduledSummary(): ScheduledSummary? {
         return try {
-            val logs = repository.getLastNDaysFitnessLogs(7)
+            val (result, summary) = weeklySummaryPipeline.executeWeeklySummaryWithOutput()
 
-            if (logs.isEmpty()) {
-                println("ℹ️  No fitness logs found, skipping summary generation")
-                return null
-            }
-
-            val summary = summaryService.generateSummary(logs, "last_7_days")
-
-            val scheduledSummary = ScheduledSummary(
-                period = summary.period,
-                entriesCount = summary.entriesCount,
-                avgWeight = summary.avgWeight,
-                workoutsCompleted = summary.workoutsCompleted,
-                avgSteps = summary.avgSteps,
-                avgSleepHours = summary.avgSleepHours,
-                avgProtein = summary.avgProtein,
-                adherenceScore = summary.adherenceScore,
-                summaryText = summary.summaryText,
-                createdAt = System.currentTimeMillis()
-            )
-
-            val success = repository.addScheduledSummary(scheduledSummary)
-
-            if (success) {
+            if (result is com.example.mcp.server.pipeline.PipelineResult.Success && summary != null) {
                 println("✅ Summary generated and saved: ${summary.entriesCount} entries")
                 println("   Summary: ${summary.summaryText}")
-                scheduledSummary
+                summary
+            } else if (result is com.example.mcp.server.pipeline.PipelineResult.Failure) {
+                println("❌ Failed to generate summary: ${result.errorMessage}")
+                null
             } else {
-                println("❌ Failed to save summary")
+                println("ℹ️  No fitness logs found, skipping summary generation")
                 null
             }
         } catch (e: Exception) {

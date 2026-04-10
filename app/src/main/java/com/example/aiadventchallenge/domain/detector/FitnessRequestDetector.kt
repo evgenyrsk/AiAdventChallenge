@@ -4,7 +4,8 @@ enum class FitnessRequestType {
     ADD_FITNESS_LOG,
     GET_FITNESS_SUMMARY,
     RUN_SCHEDULED_SUMMARY,
-    GET_LATEST_SUMMARY
+    GET_LATEST_SUMMARY,
+    RUN_FITNESS_SUMMARY_EXPORT_PIPELINE
 }
 
 data class FitnessRequestParams(
@@ -17,7 +18,8 @@ data class FitnessRequestParams(
     val steps: Int? = null,
     val sleepHours: Double? = null,
     val notes: String? = null,
-    val period: String? = null
+    val period: String? = null,
+    val format: String? = null
 )
 
 interface FitnessRequestDetector {
