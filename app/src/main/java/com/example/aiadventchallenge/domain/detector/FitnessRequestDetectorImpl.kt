@@ -23,6 +23,14 @@ class FitnessRequestDetectorImpl : FitnessRequestDetector {
         "последн", "свеж", "актуальн", "текущ", "последняя"
     )
 
+    private val exportKeywords = listOf(
+        "экспорт", "экспортируй", "сохран", "в файл", "в json", "в txt",
+        "скачай", "выгрузи", "в документ", "в отчёт"
+    )
+
+    private val formatJsonKeywords = listOf("json")
+    private val formatTxtKeywords = listOf("txt", "текст")
+
     private val weightRegex = Regex("""(\d+[.,]\d+|\d+)\s*(кг|kg)""", RegexOption.IGNORE_CASE)
 
     private val caloriesRegex = Regex("""(\d+)\s*(кал|калори|kcal)""", RegexOption.IGNORE_CASE)
@@ -44,6 +52,7 @@ class FitnessRequestDetectorImpl : FitnessRequestDetector {
 
         return when {
             addLogKeywords.any { it in inputLower } -> detectAddLogRequest(userInput)
+            exportKeywords.any { it in inputLower } -> detectExportRequest(userInput)
             getSummaryKeywords.any { it in inputLower } -> detectGetSummaryRequest(userInput)
             runSummaryKeywords.any { it in inputLower } -> detectRunSummaryRequest()
             latestSummaryKeywords.any { it in inputLower } -> detectLatestSummaryRequest()
@@ -76,18 +85,22 @@ class FitnessRequestDetectorImpl : FitnessRequestDetector {
     }
 
     private fun detectGetSummaryRequest(userInput: String): FitnessRequestParams {
-        val periodMatch = periodRegex.find(userInput)
-        val period = when (periodMatch?.groupValues?.get(1)?.lowercase()) {
-            "за неделю", "за 7 дней" -> "last_7_days"
-            "за 30 дней", "за месяц" -> "last_30_days"
-            "за всё время", "за всё время" -> "all"
-            else -> "last_7_days"
-        }
+        val period = detectPeriod(userInput)
 
         return FitnessRequestParams(
             type = FitnessRequestType.GET_FITNESS_SUMMARY,
             period = period
         )
+    }
+
+    private fun detectPeriod(userInput: String): String {
+        val periodMatch = periodRegex.find(userInput)
+        return when (periodMatch?.groupValues?.get(1)?.lowercase()) {
+            "за неделю", "за 7 дней" -> "last_7_days"
+            "за 30 дней", "за месяц" -> "last_30_days"
+            "за всё время", "за всё время" -> "all"
+            else -> "last_7_days"
+        }
     }
 
     private fun detectRunSummaryRequest(): FitnessRequestParams {
@@ -99,6 +112,22 @@ class FitnessRequestDetectorImpl : FitnessRequestDetector {
     private fun detectLatestSummaryRequest(): FitnessRequestParams {
         return FitnessRequestParams(
             type = FitnessRequestType.GET_LATEST_SUMMARY
+        )
+    }
+
+    private fun detectExportRequest(userInput: String): FitnessRequestParams {
+        val inputLower = userInput.lowercase()
+        val period = detectPeriod(userInput)
+        val format = when {
+            formatJsonKeywords.any { it in inputLower } -> "json"
+            formatTxtKeywords.any { it in inputLower } -> "txt"
+            else -> "json"
+        }
+
+        return FitnessRequestParams(
+            type = FitnessRequestType.RUN_FITNESS_SUMMARY_EXPORT_PIPELINE,
+            period = period,
+            format = format
         )
     }
 

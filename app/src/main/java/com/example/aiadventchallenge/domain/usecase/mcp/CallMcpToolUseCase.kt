@@ -1,6 +1,7 @@
 package com.example.aiadventchallenge.domain.usecase.mcp
 
 import com.example.aiadventchallenge.data.mcp.McpRepository
+import com.example.aiadventchallenge.domain.mcp.McpToolData
 
 class CallMcpToolUseCase(
     private val mcpRepository: McpRepository
@@ -8,7 +9,7 @@ class CallMcpToolUseCase(
     suspend operator fun invoke(
         name: String,
         params: Map<String, Any?>
-    ): String {
+    ): McpToolData {
         return mcpRepository.callTool(name, params)
     }
 }

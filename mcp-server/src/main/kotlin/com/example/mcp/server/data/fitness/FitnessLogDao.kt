@@ -4,7 +4,7 @@ import com.example.mcp.server.model.fitness.FitnessLogEntity
 import java.sql.SQLException
 import java.sql.Types
 
-class FitnessLogDao(private val database: FitnessDatabase) {
+class FitnessLogDao(private val database: ReminderDatabase) {
 
     fun insert(log: FitnessLogEntity): Boolean {
         return try {

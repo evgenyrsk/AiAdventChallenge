@@ -1,0 +1,89 @@
+package com.example.mcp.server.pipeline.steps
+
+import com.example.mcp.server.pipeline.AbstractPipelineStep
+import com.example.mcp.server.pipeline.PipelineContext
+import com.example.mcp.server.pipeline.PipelineResult
+import com.example.mcp.server.service.file_export.SummaryFileExportService
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+class SaveSummaryToFileStep(
+    private val fileExportService: SummaryFileExportService
+) : AbstractPipelineStep<SaveSummaryToFileStepInput, SaveSummaryToFileStepOutput>(
+    stepName = "save_summary_to_file",
+    description = "Save summary to file"
+) {
+
+    override suspend fun doExecute(
+        input: SaveSummaryToFileStepInput,
+        context: PipelineContext
+    ): PipelineResult<SaveSummaryToFileStepOutput> {
+        fileExportService.ensureDirectoryExists()
+
+        val filename = fileExportService.generateFilename(
+            input.period,
+            input.format
+        )
+
+        val result = when (input.format.lowercase()) {
+            "txt" -> {
+                val metadata = listOf(
+                    "Period" to input.period,
+                    "Entries" to input.entriesCount,
+                    "Workouts" to input.workoutsCompleted,
+                    "Avg Weight" to (input.avgWeight?.let { "%.1f kg".format(it) } ?: "N/A"),
+                    "Avg Steps" to (input.avgSteps?.let { "%,d".format(it) } ?: "N/A"),
+                    "Avg Sleep" to (input.avgSleepHours?.let { "%.1f h".format(it) } ?: "N/A"),
+                    "Avg Protein" to (input.avgProtein?.let { "%d g".format(it) } ?: "N/A")
+                ).toMap()
+                fileExportService.exportToTxt(input.summaryText, metadata, filename)
+            }
+            else -> {
+                val summaryMap = listOf(
+                    "period" to input.period,
+                    "entriesCount" to input.entriesCount,
+                    "avgWeight" to input.avgWeight,
+                    "workoutsCompleted" to input.workoutsCompleted,
+                    "avgSteps" to input.avgSteps,
+                    "avgSleepHours" to input.avgSleepHours,
+                    "avgProtein" to input.avgProtein,
+                    "summaryText" to input.summaryText,
+                    "exportedAt" to SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
+                ).toMap()
+                fileExportService.exportToJson(summaryMap, filename)
+            }
+        }
+
+        if (result.success) {
+            return PipelineResult.Success(
+                stepName = stepName,
+                data = SaveSummaryToFileStepOutput(
+                    filePath = result.filePath ?: "",
+                    format = result.format,
+                    savedAt = System.currentTimeMillis()
+                )
+            )
+        } else {
+            return PipelineResult.Failure(
+                stepName = stepName,
+                errorMessage = result.error ?: "Unknown error while saving file"
+            )
+        }
+    }
+}
+            else -> {
+                val summaryMap = listOf<Pair<String, Any?>>(
+                    "period" to input.summaryData.period,
+                    "entriesCount" to input.summaryData.entriesCount,
+                    "avgWeight" to input.summaryData.avgWeight,
+                    "workoutsCompleted" to input.summaryData.workoutsCompleted,
+                    "avgSteps" to input.summaryData.avgSteps,
+                    "avgSleepHours" to input.summaryData.avgSleepHours,
+                    "avgProtein" to input.summaryData.avgProtein,
+                    "summaryText" to input.summaryData.summaryText,
+                    "exportedAt" to SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
+                ).toMap()
+                fileExportService.exportToJson(summaryMap, filename)
+            }
+        }

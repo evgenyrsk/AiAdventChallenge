@@ -7,6 +7,7 @@ import com.example.aiadventchallenge.domain.detector.NutritionRequestDetector
 import com.example.aiadventchallenge.domain.detector.FitnessRequestDetector
 import com.example.aiadventchallenge.domain.detector.FitnessRequestType
 import com.example.aiadventchallenge.domain.detector.FitnessRequestParams
+import com.example.aiadventchallenge.domain.mcp.McpToolData
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -52,6 +53,8 @@ class McpToolOrchestratorImpl(
                     callRunScheduledSummary()
                 FitnessRequestType.GET_LATEST_SUMMARY ->
                     callGetLatestScheduledSummary()
+                FitnessRequestType.RUN_FITNESS_SUMMARY_EXPORT_PIPELINE ->
+                    callRunFitnessSummaryExportPipeline(params)
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to call fitness tool", e)
@@ -75,7 +78,7 @@ class McpToolOrchestratorImpl(
                 )
             )
 
-            Log.d(TAG, "✅ Nutrition tool result: $toolResult")
+            Log.d(TAG, "✅ Nutrition tool result: ${toolResult.javaClass.simpleName}")
 
             val context = buildMcpContext("calculate_nutrition_plan", toolResult)
             ToolExecutionResult.Success(context)
@@ -108,7 +111,7 @@ class McpToolOrchestratorImpl(
             params = toolParams
         )
 
-        Log.d(TAG, "✅ add_fitness_log result: $toolResult")
+        Log.d(TAG, "✅ add_fitness_log result: ${toolResult.javaClass.simpleName}")
 
         val context = buildMcpContext("add_fitness_log", toolResult)
         return ToolExecutionResult.Success(context)
@@ -128,7 +131,7 @@ class McpToolOrchestratorImpl(
             params = toolParams
         )
 
-        Log.d(TAG, "✅ get_fitness_summary result: $toolResult")
+        Log.d(TAG, "✅ get_fitness_summary result: ${toolResult.javaClass.simpleName}")
 
         val context = buildMcpContext("get_fitness_summary", toolResult)
         return ToolExecutionResult.Success(context)
@@ -142,7 +145,7 @@ class McpToolOrchestratorImpl(
             params = emptyMap()
         )
 
-        Log.d(TAG, "✅ run_scheduled_summary result: $toolResult")
+        Log.d(TAG, "✅ run_scheduled_summary result: ${toolResult.javaClass.simpleName}")
 
         val context = buildMcpContext("run_scheduled_summary", toolResult)
         return ToolExecutionResult.Success(context)
@@ -156,13 +159,46 @@ class McpToolOrchestratorImpl(
             params = emptyMap()
         )
 
-        Log.d(TAG, "✅ get_latest_scheduled_summary result: $toolResult")
+        Log.d(TAG, "✅ get_latest_scheduled_summary result: ${toolResult.javaClass.simpleName}")
 
         val context = buildMcpContext("get_latest_scheduled_summary", toolResult)
         return ToolExecutionResult.Success(context)
     }
 
-    private fun buildMcpContext(toolName: String, toolResult: String): String {
+    private suspend fun callRunFitnessSummaryExportPipeline(
+        params: FitnessRequestParams
+    ): ToolExecutionResult {
+        val period = params.period ?: "last_7_days"
+        val format = params.format ?: "json"
+
+        val toolParams = mapOf(
+            "period" to period,
+            "format" to format
+        )
+
+        Log.d(TAG, "   Calling run_fitness_summary_export_pipeline with params: $toolParams")
+
+        val toolResult = callMcpToolUseCase(
+            name = "run_fitness_summary_export_pipeline",
+            params = toolParams
+        )
+
+        Log.d(TAG, "✅ run_fitness_summary_export_pipeline result: ${toolResult.javaClass.simpleName}")
+
+        val context = buildMcpExportContext(toolResult)
+        return ToolExecutionResult.Success(context)
+    }
+
+    private fun buildMcpContext(toolName: String, toolData: McpToolData): String {
+        val resultText = when (toolData) {
+            is McpToolData.StringResult -> toolData.message
+            is McpToolData.FitnessSummary -> formatFitnessSummary(toolData.summary)
+            is McpToolData.ScheduledSummary -> formatScheduledSummary(toolData.summary)
+            is McpToolData.AddFitnessLog -> formatAddFitnessLog(toolData.result)
+            is McpToolData.ExportResult -> formatExportResult(toolData.fullResponse)
+            is McpToolData.RunScheduledSummary -> formatRunScheduledSummary(toolData.result)
+        }
+
         return """
 
 ================================================================================
@@ -172,7 +208,7 @@ class McpToolOrchestratorImpl(
 Использованный инструмент: $toolName
 
 Результат выполнения:
-$toolResult
+$resultText
 
 ================================================================================
 📋 ИНСТРУКЦИЯ ДЛЯ LLM
@@ -199,5 +235,129 @@ $toolResult
 "Я не умею быть трекером. Это должен делать отдельный инструмент."
 ================================================================================
         """.trimIndent()
+    }
+
+    private fun buildMcpExportContext(toolData: McpToolData): String {
+        val resultText = when (toolData) {
+            is McpToolData.ExportResult -> formatExportResultForExport(toolData.fullResponse)
+            else -> "Неизвестный формат результата экспорта"
+        }
+
+        return """
+
+================================================================================
+🔧 ЭКСПОРТ ФИТНЕС-СВОДКИ - РЕЗУЛЬТАТ ВЫПОЛНЕНИЯ
+================================================================================
+
+Сводка успешно экспортирована в файл.
+
+Результат:
+$resultText
+
+================================================================================
+📋 ИНСТРУКЦИЯ ДЛЯ LLM
+================================================================================
+
+✅ ДАННЫЕ УЖЕ ЗАПИСАНЫ в файл на сервере.
+
+✅ ТЕБЕ НУЖНО:
+- Подтвердить успешный экспорт
+- Показать пользователю агрегированную сводку (вес, тренировки, шаги, сон, белок)
+- Предложить следующие действия
+
+📋 ПРИМЕР ПРАВИЛЬНОГО ОТВЕТА:
+"Отлично! Экспортировал твою сводку за неделю в файл.
+
+📊 Твоя сводка:
+- Средний вес: 82.1 кг
+- Тренировки: 5 из 7 дней
+- Средние шаги: 8,100
+- Средний сон: 7.2 ч
+- Средний белок: 165 г
+
+Отличный прогресс! Хочешь подробный анализ за месяц?"
+================================================================================
+        """.trimIndent()
+    }
+
+    private fun formatFitnessSummary(summary: FitnessSummaryData): String {
+        return """
+    Фитнес-сводка за период: ${summary.period}
+    Количество записей: ${summary.entriesCount}
+    Средний вес: ${summary.avgWeight?.toString() ?: "нет данных"} кг
+    Выполнено тренировок: ${summary.workoutsCompleted}
+    Средние шаги: ${summary.avgSteps?.toString() ?: "нет данных"}
+    Средний сон: ${summary.avgSleepHours?.toString() ?: "нет данных"} ч
+    Средний белок: ${summary.avgProtein?.toString() ?: "нет данных"} г
+    Оценка соблюдения: ${String.format("%.2f", summary.adherenceScore)}
+
+    Сводка: ${summary.summaryText}
+    """.trimIndent()
+    }
+
+    private fun formatScheduledSummary(summary: ScheduledSummaryData): String {
+        return """
+    Автоматическая сводка (ID: ${summary.id})
+    Период: ${summary.period}
+    Количество записей: ${summary.entriesCount}
+    Средний вес: ${summary.avgWeight?.toString() ?: "нет данных"} кг
+    Выполнено тренировок: ${summary.workoutsCompleted}
+    Средние шаги: ${summary.avgSteps?.toString() ?: "нет данных"}
+    Средний сон: ${summary.avgSleepHours?.toString() ?: "нет данных"} ч
+    Средний белок: ${summary.avgProtein?.toString() ?: "нет данных"} г
+    Оценка соблюдения: ${String.format("%.2f", summary.adherenceScore)}
+    Создано: ${summary.createdAt}
+
+    Сводка: ${summary.summaryText}
+    """.trimIndent()
+    }
+
+    private fun formatAddFitnessLog(result: AddFitnessLogData): String {
+        return """
+    Запись ${if (result.success) "успешно" else "не"} добавлена
+    ID записи: ${result.id}
+    Сообщение: ${result.message}
+    """.trimIndent()
+    }
+
+    private fun formatExportResult(fullResponse: ExportData): String {
+        return """
+    Файл: ${fullResponse.filePath ?: "не указан"}
+    Формат: ${fullResponse.format ?: "не указан"}
+    Сохранён: ${fullResponse.savedAt?.let { java.util.Date(it).toString() } ?: "нет"}
+    """.trimIndent()
+    }
+
+    private fun formatExportResultForExport(fullResponse: ExportData): String {
+        val summary = fullResponse.summaryData
+        val summaryText = if (summary != null) {
+            """
+
+📊 Сводка:
+- Период: ${summary.period ?: "не указан"}
+- Записей: ${summary.entriesCount ?: 0}
+- Средний вес: ${summary.avgWeight?.toString() ?: "нет данных"} кг
+- Тренировки: ${summary.workoutsCompleted ?: 0}
+- Средние шаги: ${summary.avgSteps?.toString() ?: "нет данных"}
+- Средний сон: ${summary.avgSleepHours?.toString() ?: "нет данных"} ч
+- Средний белок: ${summary.avgProtein?.toString() ?: "нет данных"} г
+            """.trimIndent()
+        } else {
+            "\nДетали сводки недоступны"
+        }
+
+        return """
+    Файл: ${fullResponse.filePath ?: "не указан"}
+    Формат: ${fullResponse.format ?: "не указан"}
+    $summaryText
+    """.trimIndent()
+    }
+
+    private fun formatRunScheduledSummary(result: RunScheduledSummaryData): String {
+        return """
+    Запуск сводки ${if (result.success) "успешен" else "не удался"}
+    ID сводки: ${result.summaryId ?: "нет"}
+    Сообщение: ${result.message}
+    """.trimIndent()
     }
 }

@@ -2,6 +2,9 @@ package com.example.aiadventchallenge.domain.mcp
 
 import com.example.aiadventchallenge.domain.model.mcp.CalculateNutritionParams
 import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
+import com.example.aiadventchallenge.domain.mcp.McpToolData
+import com.example.aiadventchallenge.domain.detector.NutritionRequestDetector
+import com.example.aiadventchallenge.domain.detector.FitnessRequestDetector
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -13,18 +16,21 @@ import org.junit.Before
 import org.junit.Test
 
 class McpToolOrchestratorTest {
-    
+
     private lateinit var callMcpToolUseCase: CallMcpToolUseCase
     private lateinit var nutritionRequestDetector: NutritionRequestDetector
+    private lateinit var fitnessRequestDetector: FitnessRequestDetector
     private lateinit var orchestrator: McpToolOrchestratorImpl
-    
+
     @Before
     fun setup() {
         callMcpToolUseCase = mockk(relaxed = true)
         nutritionRequestDetector = mockk(relaxed = true)
+        fitnessRequestDetector = mockk(relaxed = true)
         orchestrator = McpToolOrchestratorImpl(
             callMcpToolUseCase = callMcpToolUseCase,
-            nutritionRequestDetector = nutritionRequestDetector
+            nutritionRequestDetector = nutritionRequestDetector,
+            fitnessRequestDetector = fitnessRequestDetector
         )
     }
     
@@ -41,7 +47,7 @@ class McpToolOrchestratorTest {
             goal = "maintenance"
         )
         
-        coEvery { callMcpToolUseCase(any(), any()) } returns "Calories: 2500"
+        coEvery { callMcpToolUseCase(any(), any()) } returns McpToolData.StringResult("Calories: 2500")
         
         val result = orchestrator.detectAndExecuteTool(userInput)
         
