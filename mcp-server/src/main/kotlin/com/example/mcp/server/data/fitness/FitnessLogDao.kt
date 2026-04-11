@@ -141,9 +141,9 @@ class FitnessLogDao(private val database: ReminderDatabase) {
             val conn = database.getConnection()
             val statement = conn.createStatement()
             val resultSet = statement.executeQuery("SELECT COUNT(*) FROM fitness_logs")
-
+            
             val count = if (resultSet.next()) resultSet.getInt(1) else 0
-
+            
             resultSet.close()
             statement.close()
             count
@@ -152,7 +152,22 @@ class FitnessLogDao(private val database: ReminderDatabase) {
             0
         }
     }
-
+    
+    fun clear(): Boolean {
+        return try {
+            val conn = database.getConnection()
+            val statement = conn.createStatement()
+            val result = statement.executeUpdate("DELETE FROM fitness_logs")
+            
+            statement.close()
+            println("✅ Cleared $result fitness logs")
+            true
+        } catch (e: SQLException) {
+            println("❌ Error clearing fitness logs: ${e.message}")
+            false
+        }
+    }
+    
     fun getAllSortedByDateDesc(): List<FitnessLogEntity> {
         return try {
             val conn = database.getConnection()

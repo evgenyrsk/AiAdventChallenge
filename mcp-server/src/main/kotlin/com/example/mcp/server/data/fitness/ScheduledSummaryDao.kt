@@ -87,9 +87,9 @@ class ScheduledSummaryDao(private val database: ReminderDatabase) {
             val conn = database.getConnection()
             val statement = conn.createStatement()
             val resultSet = statement.executeQuery("SELECT COUNT(*) FROM scheduled_summaries")
-
+            
             val count = if (resultSet.next()) resultSet.getInt(1) else 0
-
+            
             resultSet.close()
             statement.close()
             count
@@ -98,7 +98,22 @@ class ScheduledSummaryDao(private val database: ReminderDatabase) {
             0
         }
     }
-
+    
+    fun clear(): Boolean {
+        return try {
+            val conn = database.getConnection()
+            val statement = conn.createStatement()
+            val result = statement.executeUpdate("DELETE FROM scheduled_summaries")
+            
+            statement.close()
+            println("✅ Cleared $result scheduled summaries")
+            true
+        } catch (e: SQLException) {
+            println("❌ Error clearing scheduled summaries: ${e.message}")
+            false
+        }
+    }
+    
     private fun mapToEntity(resultSet: java.sql.ResultSet): ScheduledSummaryEntity {
         return ScheduledSummaryEntity(
             id = resultSet.getString("id"),

@@ -190,9 +190,9 @@ class ReminderEventDao(private val database: ReminderDatabase) {
             val conn = database.getConnection()
             val statement = conn.createStatement()
             val resultSet = statement.executeQuery("SELECT COUNT(*) FROM reminder_events")
-
+            
             val count = if (resultSet.next()) resultSet.getInt(1) else 0
-
+            
             resultSet.close()
             statement.close()
             count
@@ -201,7 +201,22 @@ class ReminderEventDao(private val database: ReminderDatabase) {
             0
         }
     }
-
+    
+    fun clear(): Boolean {
+        return try {
+            val conn = database.getConnection()
+            val statement = conn.createStatement()
+            val result = statement.executeUpdate("DELETE FROM reminder_events")
+            
+            statement.close()
+            println("✅ Cleared $result reminder events")
+            true
+        } catch (e: SQLException) {
+            println("❌ Error clearing reminder events: ${e.message}")
+            false
+        }
+    }
+    
     private fun mapToEntity(resultSet: java.sql.ResultSet): ReminderEventEntity {
         val triggeredAt = resultSet.getLong("triggered_at").takeIf { !resultSet.wasNull() }
         return ReminderEventEntity(

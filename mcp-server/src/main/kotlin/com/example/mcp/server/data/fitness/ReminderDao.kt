@@ -117,9 +117,9 @@ class ReminderDao(private val database: ReminderDatabase) {
             val conn = database.getConnection()
             val statement = conn.createStatement()
             val resultSet = statement.executeQuery("SELECT COUNT(*) FROM reminders")
-
+            
             val count = if (resultSet.next()) resultSet.getInt(1) else 0
-
+            
             resultSet.close()
             statement.close()
             count
@@ -128,7 +128,22 @@ class ReminderDao(private val database: ReminderDatabase) {
             0
         }
     }
-
+    
+    fun clear(): Boolean {
+        return try {
+            val conn = database.getConnection()
+            val statement = conn.createStatement()
+            val result = statement.executeUpdate("DELETE FROM reminders")
+            
+            statement.close()
+            println("✅ Cleared $result reminders")
+            true
+        } catch (e: SQLException) {
+            println("❌ Error clearing reminders: ${e.message}")
+            false
+        }
+    }
+    
     private fun mapToEntity(resultSet: java.sql.ResultSet): ReminderEntity {
         return ReminderEntity(
             id = resultSet.getString("id"),

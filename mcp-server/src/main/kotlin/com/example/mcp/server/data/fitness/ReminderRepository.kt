@@ -133,4 +133,12 @@ class ReminderRepository(
 
         return if (addReminderEvent(event)) event else null
     }
+    
+    fun clearAll(): Boolean {
+        return reminderDao.clear()
+    }
+    
+    fun clearAllEvents(): Boolean {
+        return reminderEventDao.clear()
+    }
 }
