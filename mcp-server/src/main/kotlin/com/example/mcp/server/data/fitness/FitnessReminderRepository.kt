@@ -100,4 +100,23 @@ class FitnessReminderRepository(
     fun getReminderEventsCount(): Int = reminderRepository.getReminderEventsCount()
 
     fun getDatabase(): ReminderDatabase = database
+    
+    fun clearAllData(): Boolean {
+        println("\n🧹 Clearing all data...")
+        
+        val logsCleared = fitnessRepository.clearLogs()
+        val summariesCleared = fitnessRepository.clearScheduledSummaries()
+        val remindersCleared = reminderRepository.clearAll()
+        val eventsCleared = reminderRepository.clearAllEvents()
+        
+        val allCleared = logsCleared && summariesCleared && remindersCleared && eventsCleared
+        
+        if (allCleared) {
+            println("✅ All data cleared successfully")
+        } else {
+            println("⚠️  Some data clearing failed")
+        }
+        
+        return allCleared
+    }
 }

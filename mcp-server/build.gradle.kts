@@ -19,9 +19,25 @@ tasks.register("run", JavaExec::class) {
     mainClass.set("com.example.mcp.server.MainKt")
 }
 
-tasks.register("runDemo", JavaExec::class) {
-    group = "application"
-    description = "Run Fitness Summary Export Demo"
-    classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("com.example.mcp.server.demo.DemoFitnessSummaryExportKt")
-}
+    tasks.register("runDemo", JavaExec::class) {
+        group = "application"
+        description = "Run Fitness Summary Export Demo"
+        classpath = sourceSets["main"].runtimeClasspath
+        mainClass.set("com.example.mcp.server.demo.DemoFitnessSummaryExportKt")
+    }
+
+    tasks.register<JavaExec>("setupTestData") {
+        group = "application"
+        description = "Set up test fitness data for testing pipeline (supports 7 or 30 days)"
+        
+        classpath = sourceSets["main"].runtimeClasspath
+        mainClass.set("com.example.mcp.server.demo.SetupTestDataKt")
+        
+        val period = project.findProperty("period")?.toString() ?: "7"
+        args = listOf(period)
+        
+        doFirst {
+            println("📅 Setting up test data for $period days...")
+        }
+    }
+

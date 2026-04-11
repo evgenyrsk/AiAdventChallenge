@@ -49,92 +49,24 @@ class DemoFitnessSummaryExport(
 
     private suspend fun setupTestData() {
         println("\n📊 Adding test fitness logs for last 7 days...")
-
+        
         val today = LocalDate.now()
-        val testData = listOf(
-            FitnessLog(
-                date = today.minusDays(6).format(DateTimeFormatter.ISO_DATE),
-                weight = 82.5,
-                calories = 2450,
-                protein = 160,
-                workoutCompleted = true,
-                steps = 8200,
-                sleepHours = 7.5,
-                notes = "Тренировка ног"
-            ),
-            FitnessLog(
-                date = today.minusDays(5).format(DateTimeFormatter.ISO_DATE),
-                weight = 82.3,
-                calories = 2600,
-                protein = 175,
-                workoutCompleted = false,
-                steps = 6500,
-                sleepHours = 6.8,
-                notes = "День отдыха"
-            ),
-            FitnessLog(
-                date = today.minusDays(4).format(DateTimeFormatter.ISO_DATE),
-                weight = 82.1,
-                calories = 2500,
-                protein = 165,
-                workoutCompleted = true,
-                steps = 8800,
-                sleepHours = 7.2,
-                notes = "Тренировка спины"
-            ),
-            FitnessLog(
-                date = today.minusDays(3).format(DateTimeFormatter.ISO_DATE),
-                weight = 82.0,
-                calories = 2550,
-                protein = 170,
-                workoutCompleted = true,
-                steps = 9100,
-                sleepHours = 7.4,
-                notes = "Тренировка плеч"
-            ),
-            FitnessLog(
-                date = today.minusDays(2).format(DateTimeFormatter.ISO_DATE),
-                weight = 81.8,
-                calories = 2400,
-                protein = 155,
-                workoutCompleted = false,
-                steps = 7200,
-                sleepHours = 6.5,
-                notes = "День отдыха"
-            ),
-            FitnessLog(
-                date = today.minusDays(1).format(DateTimeFormatter.ISO_DATE),
-                weight = 81.9,
-                calories = 2580,
-                protein = 168,
-                workoutCompleted = true,
-                steps = 8500,
-                sleepHours = 7.1,
-                notes = "Тренировка груди"
-            ),
-            FitnessLog(
-                date = today.format(DateTimeFormatter.ISO_DATE),
-                weight = 81.7,
-                calories = 2420,
-                protein = 158,
-                workoutCompleted = true,
-                steps = 8900,
-                sleepHours = 7.3,
-                notes = "Тренировка рук"
-            )
-        )
-
+        val testData = SetupTestData(7).generate7DaysData(today)
+        
+        var successCount = 0
         testData.forEach { log ->
             val success = repository.addFitnessLog(log)
             if (success) {
+                successCount++
                 println("   ✅ Added log for ${log.date}: ${log.weight}kg, ${if (log.workoutCompleted) "workout" else "rest"}, ${log.steps} steps")
             } else {
                 println("   ❌ Failed to add log for ${log.date}")
             }
         }
-
-        println("   📊 Total logs added: ${testData.size}")
+        
+        println("   📊 Total logs added: $successCount/${testData.size}")
     }
+
 
     private suspend fun runIndividualTools() {
         println("\n🔧 Step 2.1: Running search_fitness_logs")

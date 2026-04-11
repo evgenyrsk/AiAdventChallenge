@@ -63,4 +63,12 @@ class FitnessRepository(
     fun getScheduledSummariesCount(): Int {
         return scheduledSummaryDao.count()
     }
+    
+    fun clearLogs(): Boolean {
+        return fitnessLogDao.clear()
+    }
+    
+    fun clearScheduledSummaries(): Boolean {
+        return scheduledSummaryDao.clear()
+    }
 }
