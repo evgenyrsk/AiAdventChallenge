@@ -1208,12 +1208,26 @@ class McpJsonRpcHandler {
             val params = request.params ?: throw Exception("Parameters are required")
 
             val period = params["period"]?.toString() ?: throw Exception("Missing parameter: period")
-            val entriesCount = params["entriesCount"]?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: entriesCount")
+            val entriesCount = when (val v = params["entriesCount"]) {
+                is Number -> v.toInt()
+                else -> v?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: entriesCount")
+            }
             val avgWeight = params["avgWeight"]?.toString()?.toDoubleOrNull()
-            val workoutsCompleted = params["workoutsCompleted"]?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: workoutsCompleted")
-            val avgSteps = params["avgSteps"]?.toString()?.toIntOrNull()
+            val workoutsCompleted = when (val v = params["workoutsCompleted"]) {
+                is Number -> v.toInt()
+                else -> v?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: workoutsCompleted")
+            }
+            val avgSteps = when (val v = params["avgSteps"]) {
+                is Number -> v.toInt()
+                null -> null
+                else -> v?.toString()?.toIntOrNull()
+            }
             val avgSleepHours = params["avgSleepHours"]?.toString()?.toDoubleOrNull()
-            val avgProtein = params["avgProtein"]?.toString()?.toIntOrNull()
+            val avgProtein = when (val v = params["avgProtein"]) {
+                is Number -> v.toInt()
+                null -> null
+                else -> v?.toString()?.toIntOrNull()
+            }
             val summaryText = params["summaryText"]?.toString() ?: throw Exception("Missing parameter: summaryText")
             val format = params["format"]?.toString() ?: "json"
 
@@ -1368,10 +1382,21 @@ class McpJsonRpcHandler {
             val params = request.params ?: throw Exception("Parameters are required")
 
             val period = params["period"]?.toString() ?: throw Exception("Missing parameter: period")
-            val workoutsCompleted = params["workoutsCompleted"]?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: workoutsCompleted")
+            val workoutsCompleted = when (val v = params["workoutsCompleted"]) {
+                is Number -> v.toInt()
+                else -> v?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: workoutsCompleted")
+            }
             val avgSleepHours = params["avgSleepHours"]?.toString()?.toDoubleOrNull() ?: throw Exception("Missing parameter: avgSleepHours")
-            val avgSteps = params["avgSteps"]?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: avgSteps")
-            val avgProtein = params["avgProtein"]?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: avgProtein")
+            val avgSteps = when (val v = params["avgSteps"]) {
+                is Number -> v.toInt()
+                null -> null
+                else -> v?.toString()?.toIntOrNull()
+            }
+            val avgProtein = when (val v = params["avgProtein"]) {
+                is Number -> v.toInt()
+                null -> null
+                else -> v?.toString()?.toIntOrNull()
+            }
             val summaryText = params["summaryText"]?.toString() ?: throw Exception("Missing parameter: summaryText")
 
             println("   Parameters: period=$period, workouts=$workoutsCompleted, sleep=$avgSleepHours, steps=$avgSteps, protein=$avgProtein")
@@ -1385,8 +1410,8 @@ class McpJsonRpcHandler {
                 period = period,
                 workoutsCompleted = workoutsCompleted,
                 avgSleepHours = avgSleepHours,
-                avgSteps = avgSteps,
-                avgProtein = avgProtein,
+                avgSteps = avgSteps ?: minSteps,
+                avgProtein = avgProtein ?: minProtein,
                 summaryText = summaryText,
                 minWorkouts = minWorkouts,
                 minSleepHours = minSleepHours,
