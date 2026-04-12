@@ -1,11 +1,12 @@
 package com.example.aiadventchallenge.domain.context
 
+import android.util.Log
 import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.data.model.MessageRole
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
-import com.example.aiadventchallenge.domain.model.FactEntry
 import com.example.aiadventchallenge.domain.repository.FactRepository
+import com.example.aiadventchallenge.domain.context.FactExtractor
 import kotlinx.coroutines.flow.first
 
 class StickyFactsStrategy(
@@ -13,6 +14,12 @@ class StickyFactsStrategy(
     private val factRepository: FactRepository,
     private val factExtractor: FactExtractor
 ) : ContextStrategy {
+
+    private var filteredMessagesCount: Int = 0
+
+    init {
+        require(config.windowSize > 0) { "windowSize must be positive, got ${config.windowSize}" }
+    }
 
     override suspend fun buildContext(
         chatId: String?,
@@ -31,12 +38,20 @@ class StickyFactsStrategy(
             result.add(
                 Message(
                     MessageRole.SYSTEM,
-                    "Known facts about the conversation:\n$factsText"
+                    "Known facts about conversation:\n$factsText"
                 )
             )
         }
 
         val windowMessages = messages.takeLast(config.windowSize)
+        filteredMessagesCount = messages.size - windowMessages.size
+
+        println("📝 StickyFacts context:")
+        println("  Total messages: ${messages.size}")
+        println("  Window size: ${config.windowSize}")
+        println("  Messages in context: ${windowMessages.size}")
+        println("  Messages filtered: $filteredMessagesCount")
+
         windowMessages.forEach { chatMessage ->
             val role = if (chatMessage.isFromUser) MessageRole.USER else MessageRole.ASSISTANT
             result.add(Message(role, chatMessage.content))
@@ -53,8 +68,8 @@ class StickyFactsStrategy(
                     factRepository.clearAllFacts()
                     updatedFacts.forEach { fact ->
                         factRepository.insertFact(fact)
+                        println("✅ StickyFacts: Updated ${updatedFacts.size} facts from conversation pair")
                     }
-                    println("📝 StickyFacts: Updated ${updatedFacts.size} facts from conversation pair")
                 }
                 .onFailure { error ->
                     println("❌ StickyFacts: Failed to extract facts - ${error.message}")
@@ -67,7 +82,9 @@ class StickyFactsStrategy(
     override fun getDebugInfo(): Map<String, Any> {
         return mapOf(
             "strategy" to "StickyFacts",
-            "windowSize" to config.windowSize
+            "windowSize" to config.windowSize,
+            "filteredMessagesCount" to filteredMessagesCount,
+            "messagesInContext" to config.windowSize
         )
     }
 }

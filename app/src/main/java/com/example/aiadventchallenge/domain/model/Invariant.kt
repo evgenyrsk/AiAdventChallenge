@@ -9,7 +9,7 @@ interface Invariant {
 
     fun validate(
         content: String,
-        context: TaskContext?,
+        context: Any?,
         role: MessageRole
     ): InvariantViolation?
 }

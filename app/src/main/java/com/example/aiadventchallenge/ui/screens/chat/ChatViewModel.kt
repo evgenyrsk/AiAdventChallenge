@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
-import com.example.aiadventchallenge.domain.context.BranchingStrategy
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
@@ -14,13 +13,8 @@ import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.RequestLog
-import com.example.aiadventchallenge.domain.model.TaskContext
-import com.example.aiadventchallenge.domain.model.TaskPhase
-import com.example.aiadventchallenge.data.config.EnhancedTaskAiResponse
 import com.example.aiadventchallenge.domain.repository.BranchRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
-import com.example.aiadventchallenge.domain.repository.FactRepository
-import com.example.aiadventchallenge.domain.repository.TaskRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
 import com.example.aiadventchallenge.domain.chat.ChatMessageResult
@@ -28,16 +22,8 @@ import com.example.aiadventchallenge.domain.branch.BranchOrchestrator
 import com.example.aiadventchallenge.domain.branch.BranchCreationResult
 import com.example.aiadventchallenge.domain.branch.BranchSwitchResult
 import com.example.aiadventchallenge.domain.branch.BranchCreationErrorType
-import com.example.aiadventchallenge.domain.task.TaskIntentHandler
-import com.example.aiadventchallenge.domain.task.TaskIntentResult
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.ToolExecutionResult
-import com.example.aiadventchallenge.domain.task.TaskCoordinator
-import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
-import com.example.aiadventchallenge.domain.detector.FitnessRequestDetector
-import com.example.aiadventchallenge.domain.detector.NutritionRequestDetector
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,19 +35,12 @@ class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val chatSettingsRepository: ChatSettingsRepository,
     private val contextStrategyFactory: ContextStrategyFactory,
-    private val factRepository: FactRepository,
     private val branchRepository: BranchRepository,
     private val aiRequestRepository: AiRequestRepository,
     private val fitnessProfileManager: FitnessProfileManager,
-    private val taskRepository: TaskRepository,
-    private val taskIntentHandler: TaskIntentHandler,
     private val chatMessageHandler: ChatMessageHandler,
     private val branchOrchestrator: BranchOrchestrator,
-    private val mcpToolOrchestrator: McpToolOrchestrator,
-    private val taskCoordinator: TaskCoordinator,
-    private val callMcpToolUseCase: CallMcpToolUseCase,
-    private val fitnessRequestDetector: FitnessRequestDetector,
-    private val nutritionRequestDetector: NutritionRequestDetector
+    private val mcpToolOrchestrator: McpToolOrchestrator
 ) : ViewModel() {
 
     private val TAG = "ChatViewModel"
@@ -91,9 +70,6 @@ class ChatViewModel(
     private val _chatUiState = MutableStateFlow(ChatUiState())
     val chatUiState: StateFlow<ChatUiState> = _chatUiState.asStateFlow()
 
-    private val _taskContext = MutableStateFlow<TaskContext?>(null)
-    val taskContext: StateFlow<TaskContext?> = _taskContext.asStateFlow()
-
     data class LastRequestTokens(
         val promptTokens: Int?,
         val completionTokens: Int?,
@@ -107,26 +83,6 @@ class ChatViewModel(
         loadStrategyConfig()
         loadBranchState()
         loadFitnessProfile()
-        loadActiveTask()
-    }
-
-    private fun loadActiveTask() {
-        viewModelScope.launch {
-            val task = taskRepository.getActiveTask()
-            _taskContext.value = task
-            if (task != null) {
-                Log.d(TAG, "=== Active Task Loaded ===")
-                Log.d(TAG, "Task ID: ${task.taskId}")
-                Log.d(TAG, "Query: ${task.query}")
-                Log.d(TAG, "Phase: ${task.phase.label} (step ${task.currentStep}/${task.totalSteps})")
-                Log.d(TAG, "isActive: ${task.isActive}")
-                Log.d(TAG, "AwaitingConfirmation: ${task.awaitingUserConfirmation}")
-                Log.d(TAG, "Progress: ${(task.progress * 100).toInt()}%")
-                Log.d(TAG, "=== Active Task Loaded End ===\n")
-            } else {
-                Log.d(TAG, "No active task found")
-            }
-        }
     }
 
     private fun loadStrategyConfig() {
@@ -190,7 +146,7 @@ class ChatViewModel(
     private fun updateBranchingStrategyState() {
         val currentConfig = _activeStrategyConfig.value ?: return
         val isBranching =
-            currentConfig.type == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
+            currentConfig.type == ContextStrategyType.BRANCHING
 
         _chatUiState.value = _chatUiState.value.copy(
             isBranchingStrategy = isBranching
@@ -201,7 +157,7 @@ class ChatViewModel(
         viewModelScope.launch {
             val currentConfig = chatSettingsRepository.getSettings()
             val isBranching =
-                currentConfig.type == com.example.aiadventchallenge.domain.model.ContextStrategyType.BRANCHING
+                currentConfig.type == ContextStrategyType.BRANCHING
 
             if (isBranching) {
                 val activeBranchId = branchRepository.getActiveBranchId()
@@ -240,14 +196,39 @@ class ChatViewModel(
         _isLoading.value = true
 
         viewModelScope.launch {
-            val activeTask = _taskContext.value
             val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
             val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
 
-            if (activeTask != null && activeTask.isActive && activeTask.phase != TaskPhase.DONE) {
-                processIntelligentMessage(userInput, activeBranchId, parentMessageId)
-            } else {
-                processNormalMessage(userInput, activeBranchId, parentMessageId)
+            val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(userInput)
+            val mcpContext = when (mcpToolResult) {
+                is ToolExecutionResult.Success -> mcpToolResult.context
+                is ToolExecutionResult.NoToolFound -> null
+                is ToolExecutionResult.Error -> {
+                    Log.e(TAG, "❌ MCP tool error: ${mcpToolResult.message}")
+                    null
+                }
+            }
+
+            val result = chatMessageHandler.handleUserMessage(
+                userInput = userInput,
+                fitnessProfile = _chatUiState.value.fitnessProfile,
+                activeBranchId = activeBranchId,
+                parentMessageId = parentMessageId,
+                mcpContext = mcpContext
+            )
+
+            when (result) {
+                is ChatMessageResult.Success -> {
+                    _isLoading.value = false
+                }
+                is ChatMessageResult.Error -> {
+                    addSystemMessage("Ошибка: ${result.errorMessage}")
+                    _isLoading.value = false
+                }
+                is ChatMessageResult.EmptyResponse -> {
+                    addSystemMessage(result.errorMessage)
+                    _isLoading.value = false
+                }
             }
         }
     }
@@ -266,131 +247,6 @@ class ChatViewModel(
         )
 
         chatRepository.insertMessage(message, activeBranchId, parentId)
-    }
-
-    private suspend fun extractAndRecordFitnessDataFromTask(): Boolean {
-        val task = _taskContext.value ?: return false
-
-        val fitnessParams = fitnessRequestDetector.detectParams(task.query)
-
-        if (fitnessParams?.type == com.example.aiadventchallenge.domain.detector.FitnessRequestType.ADD_FITNESS_LOG) {
-            val today = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-
-            val toolParams = mutableMapOf<String, Any?>(
-                "date" to (fitnessParams.date ?: today)
-            )
-            fitnessParams.weight?.let { toolParams["weight"] = it }
-            fitnessParams.calories?.let { toolParams["calories"] = it }
-            fitnessParams.protein?.let { toolParams["protein"] = it }
-            fitnessParams.workoutCompleted?.let { toolParams["workoutCompleted"] = it }
-            fitnessParams.steps?.let { toolParams["steps"] = it }
-            fitnessParams.sleepHours?.let { toolParams["sleepHours"] = it }
-            fitnessParams.notes?.let { toolParams["notes"] = it }
-
-            Log.d(TAG, "🔧 Extracting fitness data from task query: ${task.query}")
-            Log.d(TAG, "   Params: $toolParams")
-
-            val result = callMcpToolUseCase("add_fitness_log", toolParams)
-            Log.d(TAG, "✅ Fitness data recorded: $result")
-
-            return true
-        }
-
-        return false
-    }
-
-    private suspend fun processIntelligentMessage(userInput: String, activeBranchId: String, parentMessageId: String?) {
-        extractAndRecordFitnessDataFromTask()
-        val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(userInput)
-        val mcpContext = when (mcpToolResult) {
-            is ToolExecutionResult.Success -> mcpToolResult.context
-            is ToolExecutionResult.NoToolFound -> null
-            is ToolExecutionResult.Error -> {
-                Log.e(TAG, "❌ MCP tool error: ${mcpToolResult.message}")
-                null
-            }
-        }
-
-        val result = chatMessageHandler.handleUserMessage(
-            userInput = userInput,
-            taskContext = _taskContext.value,
-            fitnessProfile = _chatUiState.value.fitnessProfile,
-            activeBranchId = activeBranchId,
-            parentMessageId = parentMessageId,
-            mcpContext = mcpContext,
-        )
-
-        when (result) {
-            is ChatMessageResult.Success -> {
-                _isLoading.value = false
-                handleTaskIntent(result.aiResponse, userInput, activeBranchId)
-            }
-            is ChatMessageResult.Error -> {
-                addSystemMessage("Ошибка: ${result.errorMessage}")
-                _isLoading.value = false
-            }
-            is ChatMessageResult.EmptyResponse -> {
-                addSystemMessage(result.errorMessage)
-                _isLoading.value = false
-            }
-        }
-    }
-
-    private suspend fun processNormalMessage(userInput: String, activeBranchId: String, parentMessageId: String?) {
-        // Предварительное создание задачи перед LLM запросом
-        if (_taskContext.value == null) {
-            val profile = _chatUiState.value.fitnessProfile
-            val task = taskCoordinator.createTask(userInput, profile)
-            _taskContext.value = task
-        }
-
-        val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(userInput)
-        val mcpContext = when (mcpToolResult) {
-            is ToolExecutionResult.Success -> mcpToolResult.context
-            is ToolExecutionResult.NoToolFound -> null
-            is ToolExecutionResult.Error -> {
-                Log.e(TAG, "❌ MCP tool error: ${mcpToolResult.message}")
-                null
-            }
-        }
-
-        val result = chatMessageHandler.handleUserMessage(
-            userInput = userInput,
-            taskContext = _taskContext.value,
-            fitnessProfile = _chatUiState.value.fitnessProfile,
-            activeBranchId = activeBranchId,
-            parentMessageId = parentMessageId,
-            mcpContext = mcpContext
-        )
-
-        when (result) {
-            is ChatMessageResult.Success -> {
-                _isLoading.value = false
-                handleTaskIntent(result.aiResponse, userInput, activeBranchId)
-            }
-            is ChatMessageResult.Error -> {
-                addSystemMessage("Ошибка: ${result.errorMessage}")
-                _isLoading.value = false
-            }
-            is ChatMessageResult.EmptyResponse -> {
-                addSystemMessage(result.errorMessage)
-                _isLoading.value = false
-            }
-        }
-    }
-
-    private suspend fun handleTaskIntent(aiResponse: EnhancedTaskAiResponse, userInput: String, activeBranchId: String) {
-        val result = taskIntentHandler.handleIntent(
-            aiResponse = aiResponse,
-            userInput = userInput,
-            currentTask = _taskContext.value
-        )
-
-        when (result) {
-            is TaskIntentResult.TaskUpdated -> _taskContext.value = result.task
-            is TaskIntentResult.SystemMessage -> addSystemMessage(result.message)
-            TaskIntentResult.NoAction -> {}
-        }
     }
 
     fun clearChat() {
@@ -416,8 +272,7 @@ class ChatViewModel(
             chatSettingsRepository.updateStrategyType(type)
             _activeStrategyConfig.value = chatSettingsRepository.getSettings()
 
-            val isBranching =
-                type == ContextStrategyType.BRANCHING
+            val isBranching = type == ContextStrategyType.BRANCHING
             _chatUiState.value = _chatUiState.value.copy(
                 isBranchingStrategy = isBranching,
                 activeBranchId = null,
@@ -426,61 +281,14 @@ class ChatViewModel(
                 availableBranches = emptyList()
             )
 
-            factRepository.clearAllFacts()
             branchRepository.clearAllBranches()
             chatRepository.deleteMessagesByBranch("main")
 
             _messages.value = emptyList()
 
             if (isBranching) {
-                val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())
-                if (strategy is BranchingStrategy) {
-                    strategy.initialize()
-                }
+                contextStrategyFactory.create(chatSettingsRepository.getSettings())
             }
-        }
-    }
-
-    fun createTask(query: String) {
-        val profile = _chatUiState.value.fitnessProfile
-        viewModelScope.launch {
-            val task = taskCoordinator.createTask(query, profile)
-            _taskContext.value = task
-        }
-    }
-
-    fun advanceTask() {
-        viewModelScope.launch {
-            val updatedTask = taskCoordinator.advanceTask()
-            _taskContext.value = updatedTask
-        }
-    }
-
-    fun completeTask(finalResult: String = "") {
-        viewModelScope.launch {
-            val updatedTask = taskCoordinator.completeTask(finalResult)
-            _taskContext.value = updatedTask
-        }
-    }
-
-    fun pauseTask() {
-        viewModelScope.launch {
-            val updatedTask = taskCoordinator.pauseTask()
-            _taskContext.value = updatedTask
-        }
-    }
-
-    fun resumeTask() {
-        viewModelScope.launch {
-            val updatedTask = taskCoordinator.resumeTask()
-            _taskContext.value = updatedTask
-        }
-    }
-
-    fun transitionTaskTo(toPhase: TaskPhase) {
-        viewModelScope.launch {
-            val updatedTask = taskCoordinator.transitionTaskTo(toPhase)
-            _taskContext.value = updatedTask
         }
     }
 
@@ -517,8 +325,6 @@ class ChatViewModel(
                     )
                 }
                 is BranchSwitchResult.Error -> {
-                    // Ошибка переключения - показываем пользователю
-                    // Можно добавить отображение error state в ChatUiState
                 }
             }
         }
@@ -582,7 +388,6 @@ class ChatViewModel(
                             )
                         }
                         BranchCreationErrorType.UNKNOWN -> {
-                            // Неизвестная ошибка, закрываем диалог
                             _chatUiState.value = _chatUiState.value.copy(
                                 showCreateBranchDialog = false,
                                 branchCreationTargetMessageId = null,
@@ -613,7 +418,6 @@ class ChatViewModel(
             branchOrchestrator.deleteBranch(branchId)
 
             if (activeBranchId == branchId) {
-                // Удаляем активную ветку - переключаемся на main
                 val result = branchOrchestrator.switchToBranch("main")
 
                 when (result) {
@@ -625,8 +429,6 @@ class ChatViewModel(
                         )
                     }
                     is BranchSwitchResult.Error -> {
-                        // Ошибка переключения - просто скрываем ветку из списка
-                        // UI автоматически обновится через loadBranchState
                     }
                 }
             }

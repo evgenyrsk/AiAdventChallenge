@@ -6,6 +6,5 @@ import kotlinx.serialization.Serializable
 data class ContextStrategyConfig(
     val type: ContextStrategyType,
     val windowSize: Int = 10,
-    val settingsJson: String? = null,
-    val memoryConfig: MemoryConfig? = null
+    val settingsJson: String? = null
 )

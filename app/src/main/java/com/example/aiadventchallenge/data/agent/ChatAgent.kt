@@ -1,7 +1,6 @@
 package com.example.aiadventchallenge.data.agent
 
 import com.example.aiadventchallenge.data.config.Prompts
-import com.example.aiadventchallenge.data.config.TaskPromptBuilder
 import com.example.aiadventchallenge.data.mapper.MessageMapper
 import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.domain.agent.Agent
@@ -13,8 +12,6 @@ import com.example.aiadventchallenge.domain.model.InvariantValidationResult
 import com.example.aiadventchallenge.domain.model.MessageRole
 import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.domain.model.RequestType
-import com.example.aiadventchallenge.domain.model.TaskContext
-import com.example.aiadventchallenge.domain.model.TaskProtocol
 import com.example.aiadventchallenge.domain.model.UserProfile
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
@@ -58,7 +55,7 @@ class ChatAgent(
         messages: List<Message>,
         config: RequestConfig,
         userInput: String,
-        taskContext: TaskContext?
+        taskContext: Any?
     ): ChatResult<AnswerWithUsage> {
         if (userInput.isNotBlank()) {
             val userInputValidation = invariantValidator.validate(
@@ -118,6 +115,12 @@ class ChatAgent(
     }
 
     fun buildRequestConfig(fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE): RequestConfig {
+        return buildRequestConfigWithProfile(fitnessProfile)
+    }
+
+    fun buildRequestConfigWithProfile(
+        fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE
+    ): RequestConfig {
         val profilePrompt = Prompts.getFitnessProfilePrompt(fitnessProfile)
         val combinedPrompt = """
 ${Prompts.UNLIMITED_SYSTEM_PROMPT}
@@ -130,60 +133,11 @@ $profilePrompt
         )
     }
 
-    fun buildRequestConfigWithTask(
-        taskContext: TaskContext?,
-        fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE,
-        userInput: String? = null
-    ): RequestConfig {
-        if (taskContext == null) {
-            val taskCreationPrompt = TaskPromptBuilder.buildTaskCreationPrompt(
-                userInput = userInput ?: "",
-                fitnessProfile = fitnessProfile,
-                hasActiveTask = false
-            )
-
-            return RequestConfig(
-                systemPrompt = taskCreationPrompt
-            )
-        }
-
-        val taskPrompt = TaskPromptBuilder.buildSystemPrompt(taskContext, fitnessProfile)
-
-        val invariantsPrompt = buildInvariantsPrompt()
-        val enhancedPrompt = """
-$taskPrompt
-
-$invariantsPrompt
-        """.trimIndent()
-
-        return RequestConfig(
-            systemPrompt = enhancedPrompt
-        )
-    }
-
     private fun buildInvariantsPrompt(): String {
         return """
 ================================================================================
 🚨 ИНВАРИАНТЫ (КРИТИЧЕСКИЕ ПРАВИЛА)
 ================================================================================
-
- 0. MCP ИНСТРУМЕНТЫ - НОВЫЕ ПРАВИЛА ПРИОРИТЕТА
- ================================================================================
-
-  ✅ В системе ЕСТЬ инструменты MCP которые МОГУТ:
-  - calculate_nutrition_plan: рассчитать калории и БЖУ
-  - add_fitness_log: записать фитнес-лог (вес, калории, тренировки, шаги, сон)
-  - get_fitness_summary: показать сводку за период
-  - run_scheduled_summary: сгенерировать автоматическую сводку
-  - get_latest_scheduled_summary: показать последнюю сводку
-
- 🚨 КРИТИЧЕСКОЕ ПРАВИЛО ДЛЯ MCP:
- - Если видишь раздел "🔧 MCP ИНСТРУМЕНТЫ" → ДАННЫЕ УЖЕ ЗАПИСАНЫ
- - НЕ ОТКАЗЫВАЙСЬ saying "я не умею быть трекером"
- - НЕ ОТКАЗЫВАЙСЬ saying "я не умею записывать данные"
- - Используй результаты MCP для формирования ответа
-
- ================================================================================
 
 1. ОТВЕЧАЙ ТОЛЬКО на темы фитнеса, питания и здоровья
    - БЛОКИРУЕТСЯ: политика, религия, финансы, инвестиции, акции, налоги, законы
@@ -205,14 +159,6 @@ $invariantsPrompt
    - ОБЯЗАТЕЛЬНО: упражнения, подходы, повторения, вес, время
    - ПРИМЕР: "3 подхода по 12 повторений, 20 кг"
    - НЕЛЬЗЯ: общие фразы без цифр
-
-6. Переходы между фазами ТОЛЬКО с подтверждением пользователя
-   - НЕЛЬЗЯ: "переходим на фазу", "начинаем фазу"
-   - МОЖНО: задать вопрос для подтверждения
-
-7. НЕ ПРОПУСКАЙ шаги задачи
-   - НЕЛЬЗЯ: "пропускаем шаг", "сразу переходим"
-   - МОЖНО: только последовательное выполнение
 
 ЕСЛИ ЗАПРОС ПРОТИВОРЕЧИТ ЭТИМ ПРАВИЛАМ:
 - ВЕЖЛИВО ОТКАЖИСЬ и объясни причину

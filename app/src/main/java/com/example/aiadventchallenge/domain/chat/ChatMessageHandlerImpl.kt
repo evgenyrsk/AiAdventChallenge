@@ -3,16 +3,15 @@ package com.example.aiadventchallenge.domain.chat
 import android.util.Log
 import java.util.UUID
 import com.example.aiadventchallenge.data.agent.ChatAgent
-import com.example.aiadventchallenge.data.config.EnhancedTaskAiResponse
-import com.example.aiadventchallenge.data.config.TaskPromptBuilder
-import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
+import com.example.aiadventchallenge.data.mapper.MessageMapper
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
+
 import com.example.aiadventchallenge.domain.model.RequestConfig
-import com.example.aiadventchallenge.domain.model.TaskContext
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
+import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,13 +31,12 @@ class ChatMessageHandlerImpl(
     
     override suspend fun handleUserMessage(
         userInput: String,
-        taskContext: TaskContext?,
         fitnessProfile: FitnessProfileType,
         activeBranchId: String,
         parentMessageId: String?,
         mcpContext: String?
     ): ChatMessageResult {
-        logLlmRequest(userInput, taskContext)
+        logLlmRequest(userInput)
         
         val userMessage = createUserMessage(
             userInput = userInput,
@@ -50,10 +48,8 @@ class ChatMessageHandlerImpl(
         
         val activeMessages = chatRepository.getMessagesByBranch(activeBranchId)
         
-        var config = agent.buildRequestConfigWithTask(
-            taskContext = taskContext,
-            fitnessProfile = fitnessProfile,
-            userInput = userInput
+        var config = agent.buildRequestConfigWithProfile(
+            fitnessProfile = fitnessProfile
         )
         
         if (mcpContext != null) {
@@ -64,25 +60,25 @@ class ChatMessageHandlerImpl(
         
         val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())
         val apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
-        
+
         return when (val result = agent.processRequestWithContextAndUsage(
             messages = apiMessages,
             config = config,
             userInput = userInput,
-            taskContext = taskContext
+            taskContext = null
         )) {
             is ChatResult.Success -> {
                 val answerWithUsage = result.data
-                val aiResponse = TaskPromptBuilder.parseEnhancedAiResponse(answerWithUsage.content)
+                val aiResponseText = answerWithUsage.content
                 
-                logLlmResponse(aiResponse, answerWithUsage.totalTokens ?: 0, answerWithUsage.content.length)
+                logLlmResponse(aiResponseText, answerWithUsage.totalTokens ?: 0, aiResponseText.length)
                 
-                if (aiResponse.result.isEmpty()) {
+                if (aiResponseText.isEmpty()) {
                     return handleEmptyResponse(userMessage, activeBranchId)
                 }
                 
                 val aiMessage = createAiMessage(
-                    content = aiResponse.result,
+                    content = aiResponseText,
                     parentMessageId = userMessage.id,
                     activeBranchId = activeBranchId,
                     promptTokens = answerWithUsage.promptTokens,
@@ -103,7 +99,7 @@ class ChatMessageHandlerImpl(
                 ChatMessageResult.Success(
                     userMessage = userMessage,
                     aiMessage = aiMessage,
-                    aiResponse = aiResponse
+                    aiResponse = aiResponseText
                 )
             }
             is ChatResult.Error -> {
@@ -193,35 +189,26 @@ class ChatMessageHandlerImpl(
     }
     
     private fun logLlmRequest(
-        userInput: String,
-        taskContext: TaskContext?
+        userInput: String
     ) {
         Log.d(TAG, "📤 === OUTGOING LLM REQUEST ===")
         Log.d(TAG, "   User input: $userInput")
-        Log.d(TAG, "   Phase: ${taskContext?.phase?.label}")
-        Log.d(TAG, "   Active task: ${taskContext?.query}")
         Log.d(TAG, "   ============================")
     }
     
     private fun logLlmResponse(
-        aiResponse: EnhancedTaskAiResponse,
+        aiResponse: String,
         totalTokens: Int,
         contentLength: Int
     ) {
         Log.d(TAG, "📥 === INCOMING LLM RESPONSE ===")
         Log.d(TAG, "   Raw content length: $contentLength")
-        Log.d(TAG, "   Intent: ${aiResponse.taskIntent}")
-        Log.d(TAG, "   step_completed: ${aiResponse.stepCompleted}")
-        Log.d(TAG, "   plan_ready: ${aiResponse.planReady}")
-        Log.d(TAG, "   transitionTo: ${aiResponse.transitionTo}")
-        Log.d(TAG, "   taskCompleted: ${aiResponse.taskCompleted}")
-        Log.d(TAG, "   nextAction: ${aiResponse.nextAction}")
         Log.d(TAG, "   Tokens: $totalTokens")
         
-        if (aiResponse.result.isEmpty()) {
+        if (aiResponse.isEmpty()) {
             Log.w(TAG, "⚠️ Empty result detected - will show error to user")
         } else {
-            Log.d(TAG, "   Response preview: ${aiResponse.result.take(150)}...")
+            Log.d(TAG, "   Response preview: ${aiResponse.take(150)}...")
         }
         
         Log.d(TAG, "   ===============================")
