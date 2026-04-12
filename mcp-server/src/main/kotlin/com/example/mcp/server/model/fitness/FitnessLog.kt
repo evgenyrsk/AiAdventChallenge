@@ -1,6 +1,7 @@
 package com.example.mcp.server.model.fitness
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.time.LocalDate
 
 @Serializable
@@ -32,6 +33,10 @@ data class FitnessLog(
     companion object {
         fun generateId(): String {
             return "fitness_log_${System.currentTimeMillis()}_${(0..9999).random()}"
+        }
+
+        fun parseList(json: String): List<FitnessLog> {
+            return Json.decodeFromString(json)
         }
     }
 }

@@ -1,0 +1,67 @@
+> Task :mcp-server:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :mcp-server:processResources NO-SOURCE
+
+> Task :mcp-server:compileKotlin
+w: file:///Users/evgenyrsk/AndroidStudioProjects/AiAdventChallenge/mcp-server/src/main/kotlin/com/example/mcp/server/handler/McpJsonRpcHandler.kt:1118:38 Unchecked cast of 'kotlin.Any?' to 'kotlin.collections.Map<kotlin.String, kotlin.Any?>'.
+w: file:///Users/evgenyrsk/AndroidStudioProjects/AiAdventChallenge/mcp-server/src/main/kotlin/com/example/mcp/server/model/reminder/ReminderEvent.kt:65:13 Redundant creation of Json format. Creating instances for each usage can be slow.
+w: file:///Users/evgenyrsk/AndroidStudioProjects/AiAdventChallenge/mcp-server/src/main/kotlin/com/example/mcp/server/service/reminder/ReminderAnalysisService.kt:39:13 Condition is always 'true'.
+
+> Task :mcp-server:compileJava NO-SOURCE
+> Task :mcp-server:classes UP-TO-DATE
+
+> Task :mcp-server:run
+🚀 Starting MCP Server on http://10.0.2.2:8080
+🚀 Starting all schedulers...
+📅 Starting DailyReminderScheduler (interval: 60min)
+📅 Starting BackgroundSummaryScheduler (interval: 1440min)
+✅ All schedulers started
+🚀 Fitness Summary Export Scheduler started (interval: 1440min)
+🔍 Starting Fitness Summary Export Pipeline...
+🔧 Executing single step: check_reminders
+📊 About to execute pipeline with 3 steps
+🚀 Starting pipeline: Weekly Summary Pipeline (weekly_summary_6315036d-71d0-4e62-91d3-af882619dfdc)
+   ⏭️  Executing step: load_logs
+      Description: Load fitness logs for a specified period
+🚀 Starting pipeline: Fitness Summary Export Pipeline (fitness_summary_export_b899a533-3e04-407f-953a-aee584940665)
+   ⏭️  Executing step: search_fitness_logs
+      Description: Search fitness logs for a specified period
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+✅ MCP Server is running on http://10.0.2.2:8080
+📡 Android Emulator should use: http://10.0.2.2:8080
+🖥️  For testing from host: http://localhost:8080
+      ✅ Step completed successfully
+   ⏭️  Executing step: calculate_summary
+      Description: Calculate fitness summary from logs
+✅ Daily reminder check completed: 0 events created, 0 skipped
+      ✅ Step completed successfully
+   ⏭️  Executing step: summarize_fitness_logs
+      Description: Aggregate fitness logs and generate summary
+      ✅ Step completed successfully
+   ⏭️  Executing step: save_summary
+      Description: Save fitness summary to database
+      ✅ Step completed successfully
+   ⏭️  Executing step: save_summary_to_file
+      Description: Save summary to file
+      ✅ Step completed successfully
+   ✅ Pipeline completed successfully
+✅ Summary generated and saved: 7 entries
+   Summary: За период выполнено 5 тренировок, средний вес 82.0 кг, средний сон 7.1 ч. Хорошая регулярность тренировок, Хороший уровень потребления белка.
+      ✅ Step completed successfully
+   ✅ Pipeline completed successfully
+📊 Pipeline executed, result type: Success
+📊 Creating FitnessSummaryExportResult with filePath: /tmp/fitness-summary-last-7-days-2026-04-12.json
+✅ Fitness summary export completed: /tmp/fitness-summary-last-7-days-2026-04-12.json
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Gradle build daemon has been stopped: stop command received
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.

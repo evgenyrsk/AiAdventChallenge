@@ -1,7 +1,8 @@
 package com.example.aiadventchallenge.data.mcp
 
 import android.util.Log
-import com.example.aiadventchallenge.data.mcp.model.*
+import com.example.aiadventchallenge.data.mcp.model.JsonRpcRequest
+import com.example.aiadventchallenge.data.mcp.model.JsonRpcResponse
 import com.example.aiadventchallenge.domain.model.mcp.McpConnectionStatus
 import com.example.aiadventchallenge.domain.model.mcp.McpConnectionResult
 import com.example.aiadventchallenge.domain.model.mcp.McpTool
@@ -9,6 +10,7 @@ import com.example.aiadventchallenge.domain.mcp.McpToolData
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
@@ -103,86 +105,7 @@ class McpJsonRpcClient(
 
         val result = response.result ?: return McpToolData.StringResult("")
 
-        return when {
-            result.fitnessSummaryResult != null -> {
-                val s = result.fitnessSummaryResult
-                McpToolData.FitnessSummary(
-                    com.example.aiadventchallenge.domain.mcp.FitnessSummaryData(
-                        period = s.period,
-                        entriesCount = s.entriesCount,
-                        avgWeight = s.avgWeight,
-                        workoutsCompleted = s.workoutsCompleted,
-                        avgSteps = s.avgSteps,
-                        avgSleepHours = s.avgSleepHours,
-                        avgProtein = s.avgProtein,
-                        adherenceScore = s.adherenceScore,
-                        summaryText = s.summaryText
-                    )
-                )
-            }
-            result.scheduledSummaryResult != null -> {
-                val s = result.scheduledSummaryResult
-                McpToolData.ScheduledSummary(
-                    com.example.aiadventchallenge.domain.mcp.ScheduledSummaryData(
-                        id = s.id,
-                        period = s.period,
-                        entriesCount = s.entriesCount,
-                        avgWeight = s.avgWeight,
-                        workoutsCompleted = s.workoutsCompleted,
-                        avgSteps = s.avgSteps,
-                        avgSleepHours = s.avgSleepHours,
-                        avgProtein = s.avgProtein,
-                        adherenceScore = s.adherenceScore,
-                        summaryText = s.summaryText,
-                        createdAt = s.createdAt
-                    )
-                )
-            }
-            result.addFitnessLogResult != null -> {
-                val r = result.addFitnessLogResult
-                McpToolData.AddFitnessLog(
-                    com.example.aiadventchallenge.domain.mcp.AddFitnessLogData(
-                        success = r.success,
-                        id = r.id,
-                        message = r.message
-                    )
-                )
-            }
-            result.runScheduledSummaryResult != null -> {
-                val r = result.runScheduledSummaryResult
-                McpToolData.RunScheduledSummary(
-                    com.example.aiadventchallenge.domain.mcp.RunScheduledSummaryData(
-                        success = r.success,
-                        summaryId = r.summaryId,
-                        message = r.message
-                    )
-                )
-            }
-            result.fitnessSummaryExportFullResponse != null -> {
-                val r = result.fitnessSummaryExportFullResponse
-                val summary = r.summaryData.summaryResult
-                McpToolData.ExportResult(
-                    com.example.aiadventchallenge.domain.mcp.ExportData(
-                        filePath = r.exportResult.filePath,
-                        format = r.exportResult.format,
-                        savedAt = r.exportResult.savedAt,
-                        errorMessage = r.exportResult.errorMessage,
-                        summaryData = summary?.let {
-                            com.example.aiadventchallenge.domain.mcp.ExportSummaryData(
-                                period = it.period,
-                                entriesCount = it.entriesCount,
-                                avgWeight = it.avgWeight,
-                                workoutsCompleted = it.workoutsCompleted,
-                                avgSteps = it.avgSteps,
-                                avgSleepHours = it.avgSleepHours,
-                                avgProtein = it.avgProtein
-                            )
-                        }
-                    )
-                )
-            }
-            else -> McpToolData.StringResult(result.message ?: "")
-        }
+        return result.toMcpToolData()
     }
 
     private suspend fun sendRequest(request: JsonRpcRequest): String = suspendCancellableCoroutine { continuation ->

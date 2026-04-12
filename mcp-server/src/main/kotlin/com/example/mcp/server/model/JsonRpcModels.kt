@@ -1,11 +1,14 @@
 package com.example.mcp.server.model
 
 import com.example.mcp.server.dto.fitness_export.FitnessExportPipelineData
+import com.example.mcp.server.orchestration.CrossServerFlowContext
+import com.example.mcp.server.orchestration.CrossServerFlowStep
 import com.example.mcp.server.dto.fitness_export.FitnessSummaryExportFullResponse
 import com.example.mcp.server.model.fitness.AddFitnessLogResult
 import com.example.mcp.server.model.fitness.FitnessSummaryResult
 import com.example.mcp.server.model.fitness.RunScheduledSummaryResult
 import com.example.mcp.server.model.fitness.ScheduledSummaryResult
+import com.example.mcp.server.service.reminder.CreateReminderFromSummaryResult
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonElement
@@ -46,11 +49,11 @@ data class JsonRpcResult(
     val runJobNowResult: RunJobNowResult? = null,
     val getJobStatusResult: GetJobStatusResult? = null,
     val fitnessExportPipelineResult: FitnessExportPipelineData? = null,
-    val fitnessSummaryExportFullResponse: FitnessSummaryExportFullResponse? = null
-) {
-    @Transient
-    var toolResult: Map<String, Any?>? = null
-}
+    val fitnessSummaryExportFullResponse: FitnessSummaryExportFullResponse? = null,
+    val createReminderFromSummaryResult: CreateReminderFromSummaryResult? = null,
+    val flowResult: JsonObject? = null,
+    val toolResult: JsonObject? = null
+)
 
 @Serializable
 data class Tool(

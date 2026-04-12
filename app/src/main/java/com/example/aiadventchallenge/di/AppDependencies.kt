@@ -30,6 +30,7 @@ import com.example.aiadventchallenge.domain.detector.NutritionRequestDetector
 import com.example.aiadventchallenge.domain.detector.NutritionRequestDetectorImpl
 import com.example.aiadventchallenge.domain.detector.FitnessRequestDetector
 import com.example.aiadventchallenge.domain.detector.FitnessRequestDetectorImpl
+import com.example.aiadventchallenge.domain.detector.CrossServerFlowDetector
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestratorImpl
 import android.content.Context
@@ -153,7 +154,8 @@ object AppDependencies {
         McpToolOrchestratorImpl(
             callMcpToolUseCase = callMcpToolUseCase,
             nutritionRequestDetector = nutritionRequestDetector,
-            fitnessRequestDetector = fitnessRequestDetector
+            fitnessRequestDetector = fitnessRequestDetector,
+            crossServerFlowDetector = CrossServerFlowDetector
         )
     }
 
