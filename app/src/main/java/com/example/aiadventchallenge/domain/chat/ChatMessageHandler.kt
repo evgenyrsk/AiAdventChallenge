@@ -1,8 +1,8 @@
 package com.example.aiadventchallenge.domain.chat
 
-import com.example.aiadventchallenge.data.config.EnhancedTaskAiResponse
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ChatResult
+import com.example.aiadventchallenge.domain.model.FitnessProfileType
 
 /**
  * Обработчик сообщений чата.
@@ -18,7 +18,6 @@ interface ChatMessageHandler {
      * Обрабатывает пользовательское сообщение и вызывает LLM.
      * 
      * @param userInput Ввод пользователя
-     * @param taskContext Контекст задачи (может быть null)
      * @param fitnessProfile Фитнес-профиль пользователя
      * @param activeBranchId ID активной ветки
      * @param parentMessageId ID родительского сообщения
@@ -27,8 +26,7 @@ interface ChatMessageHandler {
      */
     suspend fun handleUserMessage(
         userInput: String,
-        taskContext: com.example.aiadventchallenge.domain.model.TaskContext?,
-        fitnessProfile: com.example.aiadventchallenge.domain.model.FitnessProfileType,
+        fitnessProfile: FitnessProfileType,
         activeBranchId: String,
         parentMessageId: String?,
         mcpContext: String? = null
@@ -39,7 +37,7 @@ sealed class ChatMessageResult {
     data class Success(
         val userMessage: ChatMessage,
         val aiMessage: ChatMessage,
-        val aiResponse: EnhancedTaskAiResponse
+        val aiResponse: String
     ) : ChatMessageResult()
     
     data class Error(

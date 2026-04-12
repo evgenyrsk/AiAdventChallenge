@@ -11,18 +11,12 @@ import com.example.aiadventchallenge.data.local.dao.FactDao
 import com.example.aiadventchallenge.data.local.dao.BranchDao
 import com.example.aiadventchallenge.data.local.dao.ChatSettingsDao
 import com.example.aiadventchallenge.data.local.dao.AiRequestDao
-import com.example.aiadventchallenge.data.local.dao.MemoryDao
-import com.example.aiadventchallenge.data.local.dao.MemoryClassificationDao
-import com.example.aiadventchallenge.data.local.dao.TaskDao
 import com.example.aiadventchallenge.data.local.entity.ChatMessageEntity
 import com.example.aiadventchallenge.data.local.entity.SummaryEntity
 import com.example.aiadventchallenge.data.local.entity.FactEntity
 import com.example.aiadventchallenge.data.local.entity.BranchEntity
 import com.example.aiadventchallenge.data.local.entity.ChatSettingsEntity
 import com.example.aiadventchallenge.data.local.entity.AiRequestEntity
-import com.example.aiadventchallenge.data.local.entity.MemoryEntity
-import com.example.aiadventchallenge.data.local.entity.MemoryClassificationEntity
-import com.example.aiadventchallenge.data.local.entity.TaskEntity
 
 @Database(
     entities = [
@@ -31,12 +25,9 @@ import com.example.aiadventchallenge.data.local.entity.TaskEntity
         FactEntity::class,
         BranchEntity::class,
         ChatSettingsEntity::class,
-        AiRequestEntity::class,
-        MemoryEntity::class,
-        MemoryClassificationEntity::class,
-        TaskEntity::class
+        AiRequestEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -45,82 +36,26 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun branchDao(): BranchDao
     abstract fun chatSettingsDao(): ChatSettingsDao
     abstract fun aiRequestDao(): AiRequestDao
-    abstract fun memoryEntriesDao(): MemoryDao
-    abstract fun memoryClassificationDao(): MemoryClassificationDao
-    abstract fun taskDao(): TaskDao
-
+    
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("""
-                    CREATE TABLE IF NOT EXISTS memory_entries (
-                        id TEXT PRIMARY KEY NOT NULL,
-                        key TEXT NOT NULL,
-                        value TEXT NOT NULL,
-                        memoryType TEXT NOT NULL,
-                        reason TEXT NOT NULL,
-                        source TEXT NOT NULL,
-                        importance REAL NOT NULL,
-                        branchId TEXT NOT NULL,
-                        createdAt INTEGER NOT NULL,
-                        updatedAt INTEGER NOT NULL,
-                        isActive INTEGER NOT NULL DEFAULT 1,
-                        ttl INTEGER
-                    )
-                """)
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_memory_entries_type ON memory_entries (memoryType)")
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_memory_entries_branchId ON memory_entries (branchId)")
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_memory_entries_active ON memory_entries (isActive)")
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_memory_entries_key ON memory_entries (key)")
+                // Migration removed (memory entries table deleted)
             }
         }
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("""
-                    CREATE TABLE IF NOT EXISTS memory_classifications (
-                        id TEXT PRIMARY KEY NOT NULL,
-                        userMessage TEXT NOT NULL,
-                        branchId TEXT NOT NULL,
-                        action TEXT NOT NULL,
-                        memoryType TEXT,
-                        reason TEXT,
-                        importance REAL,
-                        createdAt INTEGER NOT NULL,
-                        executionTimeMs INTEGER NOT NULL,
-                        promptTokens INTEGER,
-                        completionTokens INTEGER,
-                        totalTokens INTEGER
-                    )
-                """)
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_memory_classifications_branchId ON memory_classifications (branchId)")
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_memory_classifications_createdAt ON memory_classifications (createdAt)")
+                // Migration removed (memory classifications table deleted)
             }
         }
 
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("""
-                    CREATE TABLE IF NOT EXISTS tasks (
-                        taskId TEXT PRIMARY KEY NOT NULL,
-                        query TEXT NOT NULL,
-                        phase TEXT NOT NULL,
-                        currentStep INTEGER NOT NULL,
-                        totalSteps INTEGER NOT NULL,
-                        currentAction TEXT NOT NULL,
-                        plan TEXT NOT NULL,
-                        done TEXT NOT NULL,
-                        profile TEXT NOT NULL,
-                        isActive INTEGER NOT NULL,
-                        createdAt INTEGER NOT NULL,
-                        updatedAt INTEGER NOT NULL
-                    )
-                """)
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_tasks_active ON tasks (isActive)")
-                database.execSQL("CREATE INDEX IF NOT EXISTS index_tasks_updated ON tasks (updatedAt)")
+                // Migration removed (tasks table deleted)
             }
         }
 
@@ -137,6 +72,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Clean up - drop memory-related tables if they exist
+                database.execSQL("DROP TABLE IF EXISTS memory_entries")
+                database.execSQL("DROP TABLE IF EXISTS memory_classifications")
+                database.execSQL("DROP TABLE IF EXISTS tasks")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -144,7 +88,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance

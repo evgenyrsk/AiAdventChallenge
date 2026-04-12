@@ -6,7 +6,7 @@ import com.example.aiadventchallenge.domain.model.*
 interface InvariantValidator {
     suspend fun validate(
         content: String,
-        context: TaskContext?,
+        context: Any?,
         role: MessageRole
     ): InvariantValidationResult
 }
@@ -19,7 +19,7 @@ class InvariantValidatorImpl(
 
     override suspend fun validate(
         content: String,
-        context: TaskContext?,
+        context: Any?,
         role: MessageRole
     ): InvariantValidationResult {
         val violations = mutableListOf<InvariantViolation>()

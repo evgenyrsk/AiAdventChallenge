@@ -1,5 +1,6 @@
 package com.example.aiadventchallenge.domain.context
 
+import android.util.Log
 import com.example.aiadventchallenge.data.model.Message
 import com.example.aiadventchallenge.data.model.MessageRole
 import com.example.aiadventchallenge.domain.model.ChatMessage
@@ -9,7 +10,6 @@ class SlidingWindowStrategy(
     private val config: ContextStrategyConfig
 ) : ContextStrategy {
 
-    private var totalMessagesCount: Int = 0
     private var filteredMessagesCount: Int = 0
 
     init {

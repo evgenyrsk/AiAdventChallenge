@@ -62,9 +62,6 @@ import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestLog
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.ui.screens.chat.components.StrategySettingsBottomSheet
-import com.example.aiadventchallenge.ui.screens.mcp.McpDebugSheet
-import com.example.aiadventchallenge.ui.screens.mcp.McpDebugViewModel
-import com.example.aiadventchallenge.ui.screens.mcp.McpDebugViewModelFactory
 import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchChip
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchPickerSheet
@@ -72,8 +69,6 @@ import com.example.aiadventchallenge.ui.screens.chat.components.CreateBranchDial
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchStartDivider
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchIndicatorBadge
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchInputHint
-import com.example.aiadventchallenge.ui.screens.chat.components.TaskInputHint
-import com.example.aiadventchallenge.domain.model.TaskPhase
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,7 +80,6 @@ fun ChatScreen(
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val chatUiState by viewModel.chatUiState.collectAsStateWithLifecycle()
-    val taskContext by viewModel.taskContext.collectAsStateWithLifecycle()
     var userInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -111,11 +105,6 @@ fun ChatScreen(
     var showStrategySettings by remember { mutableStateOf(false) }
     var showClearChatDialog by remember { mutableStateOf(false) }
     var pendingStrategyChange by remember { mutableStateOf<ContextStrategyType?>(null) }
-    var showMcpDebug by remember { mutableStateOf(false) }
-
-    val mcpViewModel: McpDebugViewModel = viewModelCompose(
-        factory = McpDebugViewModelFactory(AppDependencies.getMcpToolsUseCase)
-    )
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -153,7 +142,7 @@ fun ChatScreen(
                                 .size(40.dp)
                                 .combinedClickable(
                                     onClick = { showTokenStats = true },
-                                    onLongClick = { showDebugLog = true }
+                                     onLongClick = { showDebugLog = true }
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
@@ -163,16 +152,7 @@ fun ChatScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        IconButton(
-                            onClick = { showMcpDebug = true },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Build,
-                                contentDescription = "MCP Debug",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+
                         IconButton(
                             onClick = { showStrategySettings = true },
                             modifier = Modifier.size(40.dp)
@@ -291,10 +271,6 @@ fun ChatScreen(
                         )
                     }
                     
-                    if (taskContext?.isActive == true) {
-                        TaskInputHint(taskContext = taskContext)
-                    }
-                    
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -371,28 +347,13 @@ fun ChatScreen(
             ) {
                 DebugLogDisplay(
                     requestLogs = requestLogs,
-                    onClose = { showDebugLog = false },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                )
-            }
-        }
-
-        if (showMcpDebug) {
-            ModalBottomSheet(
-                onDismissRequest = { showMcpDebug = false },
-                sheetState = sheetState
-            ) {
-                McpDebugSheet(
-                    viewModel = mcpViewModel,
-                    onClose = { showMcpDebug = false },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                )
-            }
-        }
+                     onClose = { showDebugLog = false },
+                     modifier = Modifier
+                         .fillMaxWidth()
+                         .padding(16.dp)
+                 )
+             }
+         }
 
         if (showStrategySettings) {
             ModalBottomSheet(
