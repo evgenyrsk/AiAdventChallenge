@@ -1,6 +1,7 @@
 package com.example.mcp.server.orchestration
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class CrossServerFlowContext(
@@ -10,7 +11,7 @@ data class CrossServerFlowContext(
     val startedAt: Long = System.currentTimeMillis(),
     var currentStepIndex: Int = 0,
     @kotlinx.serialization.Transient
-    val stepResults: MutableMap<String, Any?> = mutableMapOf(),
+    val stepResults: MutableMap<String, JsonElement> = mutableMapOf(),
     var status: FlowStatus = FlowStatus.STARTED,
     var completedAt: Long? = null,
     var errorMessage: String? = null
@@ -41,9 +42,9 @@ data class CrossServerFlowContext(
         completedAt = System.currentTimeMillis()
     }
     
-    fun getStepResult(stepId: String): Any? = stepResults[stepId]
-    
-    fun setStepResult(stepId: String, result: Any?) {
+    fun getStepResult(stepId: String): JsonElement? = stepResults[stepId]
+
+    fun setStepResult(stepId: String, result: JsonElement) {
         stepResults[stepId] = result
     }
 }

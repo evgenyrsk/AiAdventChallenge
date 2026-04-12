@@ -2,6 +2,11 @@ package com.example.mcp.server.orchestration
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonObject
 import okhttp3.OkHttpClient
 import com.example.mcp.server.model.reminder.Reminder
 import com.example.mcp.server.model.reminder.ReminderType
@@ -92,9 +97,32 @@ class SimpleMultiServerOrchestrator(
     ): Any? {
         if (value is String && value.startsWith("$.")) {
             val reference = value.substring(2)
-            return flowContext.getStepResult(reference)
+            val result = flowContext.getStepResult(reference)
+            return convertJsonElement(result)
         }
         return value
+    }
+
+    private fun convertJsonElement(json: JsonElement?): Any? {
+        if (json == null) return null
+        return when (json) {
+            is JsonPrimitive -> {
+                when {
+                    json.isString -> json.content
+                    json.content.toBooleanStrictOrNull() != null -> json.content.toBooleanStrict()
+                    json.content.toLongOrNull() != null -> json.content.toLong()
+                    json.content.toDoubleOrNull() != null -> json.content.toDouble()
+                    else -> json.content
+                }
+            }
+            is JsonArray -> {
+                json.map { convertJsonElement(it) }
+            }
+            is JsonObject -> {
+                json.jsonObject.mapValues { entry -> convertJsonElement(entry.value) }
+            }
+            else -> json
+        }
     }
     
     private fun callSearchFitnessLogs(serverId: String, params: Map<String, Any?>): String? {

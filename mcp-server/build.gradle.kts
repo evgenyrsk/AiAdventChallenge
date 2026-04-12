@@ -37,14 +37,21 @@ tasks.register("runMultiMcpDemo", JavaExec::class) {
 tasks.register<JavaExec>("setupTestData") {
     group = "application"
     description = "Set up test fitness data for testing pipeline (supports 7 or 30 days)"
-    
+
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.example.mcp.server.demo.SetupTestDataKt")
-    
+
     val period = project.findProperty("period")?.toString() ?: "7"
     args = listOf(period)
-    
+
     doFirst {
         println("📅 Setting up test data for $period days...")
     }
+}
+
+tasks.register("runFitnessFlowDebug", JavaExec::class) {
+    group = "application"
+    description = "Run Fitness Flow Debug Script"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.example.mcp.server.debug.FitnessFlowDebugKt")
 }

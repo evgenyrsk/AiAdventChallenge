@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -73,18 +74,15 @@ class MultiServerOrchestrator(
         println("📊 Steps executed: ${executionSteps.size}/${flowContext.steps.size}")
         println("⏱️  Total duration: ${flowContext.durationMs}ms")
 
+        println("\n📦 Building finalResult with stepResults:")
         val finalResultJson = buildJsonObject {
             flowContext.stepResults.forEach { (key, value) ->
-                when (value) {
-                    is String -> put(key, value)
-                    is Int -> put(key, value)
-                    is Double -> put(key, value)
-                    is Boolean -> put(key, value)
-                    else -> put(key, value.toString())
-                }
+                println("   📦 Adding to finalResult: $key -> ${value::class.simpleName}")
+                put(key, value)
             }
         }
-        
+        println("📦 finalResult completed with ${flowContext.stepResults.size} entries\n")
+
         return CrossServerFlowResult(
             success = true,
             flowName = flowContext.flowName,
@@ -110,7 +108,18 @@ class MultiServerOrchestrator(
             val inputParams = prepareInputParameters(flowContext, step)
 
             if (handler != null) {
-                val result = invokeTool(handler, step.toolName, inputParams)
+                println("   🔧 Calling invokeTool with ${inputParams.size} params")
+                inputParams.forEach { (k, v) ->
+                    println("      📌 Param: $k = ${v?.javaClass?.simpleName}")
+                }
+
+                val result = try {
+                    invokeTool(handler, step.toolName, inputParams)
+                } catch (e: Exception) {
+                    println("   ❌ invokeTool failed: ${e.message}")
+                    e.printStackTrace()
+                    throw e
+                }
 
                 val outputText = try {
                     if (result is kotlinx.serialization.json.JsonObject) {
@@ -126,12 +135,13 @@ class MultiServerOrchestrator(
                     output = outputText,
                     status = "COMPLETED"
                 )
-                
+
                 flowContext.setStepResult(step.stepId, result)
-                
+                println("💾 Saved result for step ${step.stepId}: ${result::class.simpleName}")
+
                 val duration = System.currentTimeMillis() - startTime
                 mutableResult = mutableResult.copy(durationMs = duration)
-                
+
             } else {
                 mutableResult = mutableResult.copy(
                     status = "FAILED",
@@ -139,6 +149,8 @@ class MultiServerOrchestrator(
                 )
             }
         } catch (e: Exception) {
+            println("   ❌ Step execution failed: ${e.message}")
+            e.printStackTrace()
             mutableResult = mutableResult.copy(
                 status = "FAILED",
                 error = e.message ?: "Unknown error"
@@ -153,66 +165,96 @@ class MultiServerOrchestrator(
         step: CrossServerFlowStep
     ): Map<String, Any?> {
         val params = mutableMapOf<String, Any?>()
-        
+        println("🔍 Preparing inputs for step: ${step.stepId} (${step.toolName})")
+
         step.inputMapping.forEach { (key, mapping) ->
             if (mapping.startsWith("$")) {
                 val reference = mapping.substring(1)
                 val parts = reference.split(".")
-                
+                println("   🔎 Processing mapping: $key -> $reference")
+
                 if (parts.isNotEmpty() && parts[0] == "stepResults") {
                     val stepId = parts[1]
                     val result = flowContext.getStepResult(stepId)
-                    if (result is JsonElement) {
+                    if (result != null) {
                         val path = if (parts.size > 2) parts.drop(2).joinToString(".") else ""
-                        params[key] = extractValue(result, path)
+                        val extracted = extractValue(result, path)
+                        println("   ✅ Extracted value for $key: $extracted (type: ${extracted?.javaClass?.simpleName})")
+                        params[key] = extracted
+                    } else {
+                        println("   ❌ Step result not found for stepId: $stepId")
                     }
                 } else if (parts.isNotEmpty() && flowContext.stepResults.containsKey(parts[0])) {
-                    params[key] = flowContext.stepResults[parts[0]]
+                    val converted = convertJsonElement(flowContext.stepResults[parts[0]]!!)
+                    println("   ✅ Direct mapping for $key: $converted (type: ${converted?.javaClass?.simpleName})")
+                    params[key] = converted
                 }
             } else {
+                println("   📌 Static value: $key = $mapping")
                 params[key] = mapping
             }
         }
-        
+
+        println("   📦 Final params count: ${params.size}")
         return params
     }
     
     private fun extractValue(json: JsonElement, path: String): Any? {
-        if (path.isEmpty()) return json
+        println("      📂 extractValue called with path: '$path', json type: ${json::class.simpleName}")
+
+        if (path.isEmpty()) {
+            val result = convertJsonElement(json)
+            println("      📂 Returning root element: $result (type: ${result?.javaClass?.simpleName})")
+            return result
+        }
 
         val parts = path.split(".")
         var current: JsonElement = json
 
+        println("      📂 Navigating through path parts: $parts")
+
         for (part in parts) {
             current = when (current) {
                 is JsonObject -> {
-                    current.jsonObject[part] ?: return null
+                    val found = current.jsonObject[part]
+                    if (found == null) {
+                        println("      📂   ❌ Looking for '$part': NOT FOUND")
+                        return null
+                    }
+                    println("      📂   Looking for '$part': ${found::class.simpleName}")
+                    found
                 }
-                else -> return null
+                else -> {
+                    println("      📂   ❌ Cannot navigate '$part' - not a JsonObject (current: ${current::class.simpleName})")
+                    return null
+                }
             }
         }
 
-        return when (current) {
+        val result = convertJsonElement(current)
+        println("      📂 Final result: $result (type: ${result?.javaClass?.simpleName})")
+        return result
+    }
+
+    private fun convertJsonElement(json: JsonElement): Any? {
+        return when (json) {
             is JsonPrimitive -> {
                 when {
-                    current.isString -> current.content
-                    current.content.toBooleanStrictOrNull() != null -> current.content.toBooleanStrict()
-                    current.content.toDoubleOrNull() != null -> current.content.toDouble()
-                    else -> current.content
+                    json.isString -> json.content
+                    json.content.toBooleanStrictOrNull() != null -> json.content.toBooleanStrict()
+                    json.content.toLongOrNull() != null -> json.content.toLong()
+                    json.content.toDoubleOrNull() != null -> json.content.toDouble()
+                    else -> json.content
                 }
             }
             is JsonArray -> {
-                current.map { element ->
-                    when (element) {
-                        is JsonPrimitive -> element.content
-                        else -> element
-                    }
-                }
+                json.map { convertJsonElement(it) }
             }
             is JsonObject -> {
-                current.jsonObject.toMap()
+                json.jsonObject.mapValues { (_, value) -> convertJsonElement(value) }
             }
-            else -> current
+            is JsonNull -> null
+            else -> json
         }
     }
     
@@ -226,32 +268,68 @@ class MultiServerOrchestrator(
                 when (value) {
                     is String -> put(key, value)
                     is Int -> put(key, value)
+                    is Long -> put(key, value.toInt())
                     is Double -> put(key, value)
                     is Boolean -> put(key, value)
                     is List<*> -> {
-                        val jsonArray = buildJsonArray {
-                            value.forEach { item ->
-                                add(JsonPrimitive(item?.toString() ?: ""))
-                            }
-                        }
-                        put(key, jsonArray)
+                        put(key, convertListToJsonArray(value))
+                    }
+                    is Map<*, *> -> {
+                        put(key, convertMapToJsonObject(value))
                     }
                     else -> put(key, value.toString())
                 }
             }
         }
-        
+
         val request = buildJsonObject {
             put("jsonrpc", "2.0")
             put("id", 1)
             put("method", toolName)
             put("params", paramsJson)
         }
-        
+
         val response = handler.handle(request.toString())
         val responseJson = json.parseToJsonElement(response)
-        
+
         return@withContext responseJson.jsonObject["result"] ?: responseJson
+    }
+
+    private fun convertListToJsonArray(list: List<*>): kotlinx.serialization.json.JsonArray {
+        return buildJsonArray {
+            list.forEach { item ->
+                when (item) {
+                    is String -> add(JsonPrimitive(item))
+                    is Int -> add(JsonPrimitive(item))
+                    is Long -> add(JsonPrimitive(item))
+                    is Double -> add(JsonPrimitive(item))
+                    is Boolean -> add(JsonPrimitive(item))
+                    is List<*> -> add(convertListToJsonArray(item))
+                    is Map<*, *> -> add(convertMapToJsonObject(item))
+                    null -> add(JsonNull)
+                    else -> add(JsonPrimitive(item?.toString() ?: ""))
+                }
+            }
+        }
+    }
+
+    private fun convertMapToJsonObject(map: Map<*, *>): kotlinx.serialization.json.JsonObject {
+        return buildJsonObject {
+            map.forEach { (k, v) ->
+                val key = k?.toString() ?: ""
+                when (v) {
+                    is String -> put(key, JsonPrimitive(v))
+                    is Int -> put(key, JsonPrimitive(v))
+                    is Long -> put(key, JsonPrimitive(v))
+                    is Double -> put(key, JsonPrimitive(v))
+                    is Boolean -> put(key, JsonPrimitive(v))
+                    is List<*> -> put(key, convertListToJsonArray(v))
+                    is Map<*, *> -> put(key, convertMapToJsonObject(v))
+                    null -> put(key, JsonNull)
+                    else -> put(key, JsonPrimitive(v?.toString() ?: ""))
+                }
+            }
+        }
     }
     
     fun isCrossServerFlow(toolName: String): Boolean {
