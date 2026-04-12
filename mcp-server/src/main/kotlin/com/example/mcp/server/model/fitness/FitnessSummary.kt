@@ -17,6 +17,7 @@ data class FitnessSummaryResult(
 
 @Serializable
 data class ScheduledSummaryResult(
+    val success: Boolean = true,
     val id: String,
     val period: String,
     val entriesCount: Int,

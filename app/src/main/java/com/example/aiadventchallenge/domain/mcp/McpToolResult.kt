@@ -17,6 +17,7 @@ sealed class McpToolData {
     data class AddFitnessLog(val result: AddFitnessLogData) : McpToolData()
     data class ExportResult(val fullResponse: ExportData) : McpToolData()
     data class RunScheduledSummary(val result: RunScheduledSummaryData) : McpToolData()
+    data class MultiServerFlow(val result: com.example.aiadventchallenge.domain.model.mcp.MultiServerFlowResult) : McpToolData()
 }
 
 data class FitnessSummaryData(
@@ -34,15 +35,15 @@ data class FitnessSummaryData(
 data class ScheduledSummaryData(
     val id: String,
     val period: String,
-    val entriesCount: Int,
-    val avgWeight: Double?,
-    val workoutsCompleted: Int,
-    val avgSteps: Int?,
-    val avgSleepHours: Double?,
-    val avgProtein: Int?,
-    val adherenceScore: Double,
-    val summaryText: String,
-    val createdAt: String
+    val entriesCount: Int = 0,
+    val avgWeight: Double? = null,
+    val workoutsCompleted: Int = 0,
+    val avgSteps: Int? = null,
+    val avgSleepHours: Double? = null,
+    val avgProtein: Int? = null,
+    val adherenceScore: Double = 0.0,
+    val summaryText: String = "",
+    val createdAt: String = ""
 )
 
 data class AddFitnessLogData(

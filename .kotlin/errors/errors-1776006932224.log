@@ -1,0 +1,278 @@
+kotlin version: 2.1.0
+error message: org.jetbrains.kotlin.backend.common.CompilationException: Back-end: Please report this problem https://kotl.in/issue
+/Users/evgenyrsk/AndroidStudioProjects/AiAdventChallenge/app/src/main/java/com/example/aiadventchallenge/domain/model/mcp/MultiServerFlowResult.kt:6:1
+Problem with `@Serializable
+@StabilityInferred(parameters = 0)
+data class MultiServerFlowResult {
+  constructor(success: Boolean, flowName: String, flowId: String, stepsExecuted: Int, totalSteps: Int, finalResult: Map<String, Any?>? = null, executionSteps: List<ExecutionStepResult>, durationMs: Long, errorMessage: String? = null) /* primary */ {
+    super/*Any*/()
+    /* <init>() */
+
+  }
+
+  val success: Boolean
+    field = success
+    get
+
+  val flowName: String
+    field = flowName
+    get
+
+  val flowId: String
+    field = flowId
+    get
+
+  val stepsExecuted: Int
+    field = stepsExecuted
+    get
+
+  val totalSteps: Int
+    field = totalSteps
+    get
+
+  @Contextual
+  val finalResult: Map<String, Any?>?
+    field = finalResult
+    get
+
+  val executionSteps: List<ExecutionStepResult>
+    field = executionSteps
+    get
+
+  val durationMs: Long
+    field = durationMs
+    get
+
+  val errorMessage: String?
+    field = errorMessage
+    get
+
+  companion object Companion {
+    private constructor() /* primary */ {
+      super/*Any*/()
+      /* <init>() */
+
+    }
+
+    fun serializer(): KSerializer<MultiServerFlowResult>
+
+    /* fake */ override operator fun equals(other: Any?): Boolean
+
+    /* fake */ override fun hashCode(): Int
+
+    /* fake */ override fun toString(): String
+
+  }
+
+  @Deprecated(message = "This synthesized declaration should not be used directly", level = DeprecationLevel.HIDDEN)
+  @StabilityInferred(parameters = 0)
+  object $serializer : GeneratedSerializer<MultiServerFlowResult> {
+    private constructor() /* primary */ {
+      super/*Any*/()
+      /* <init>() */
+
+    }
+
+    override fun serialize(encoder: Encoder, value: MultiServerFlowResult)
+
+    override fun deserialize(decoder: Decoder): MultiServerFlowResult
+
+    override val descriptor: SerialDescriptor
+      override get
+
+    override fun childSerializers(): Array<KSerializer<*>>
+
+    /* fake */ override fun typeParametersSerializers(): Array<KSerializer<*>>
+
+    /* fake */ override operator fun equals(other: Any?): Boolean
+
+    /* fake */ override fun hashCode(): Int
+
+    /* fake */ override fun toString(): String
+
+    /* static final field */ val $stable: Int = 8
+  }
+
+  operator fun component1(): Boolean {
+    return <this>.#success
+  }
+
+  operator fun component2(): String {
+    return <this>.#flowName
+  }
+
+  operator fun component3(): String {
+    return <this>.#flowId
+  }
+
+  operator fun component4(): Int {
+    return <this>.#stepsExecuted
+  }
+
+  operator fun component5(): Int {
+    return <this>.#totalSteps
+  }
+
+  operator fun component6(): Map<String, Any?>? {
+    return <this>.#finalResult
+  }
+
+  operator fun component7(): List<ExecutionStepResult> {
+    return <this>.#executionSteps
+  }
+
+  operator fun component8(): Long {
+    return <this>.#durationMs
+  }
+
+  operator fun component9(): String? {
+    return <this>.#errorMessage
+  }
+
+  fun copy(success: Boolean = <this>.#success, flowName: String = <this>.#flowName, flowId: String = <this>.#flowId, stepsExecuted: Int = <this>.#stepsExecuted, totalSteps: Int = <this>.#totalSteps, finalResult: Map<String, Any?>? = <this>.#finalResult, executionSteps: List<ExecutionStepResult> = <this>.#executionSteps, durationMs: Long = <this>.#durationMs, errorMessage: String? = <this>.#errorMessage): MultiServerFlowResult {
+    return MultiServerFlowResult(success = success, flowName = flowName, flowId = flowId, stepsExecuted = stepsExecuted, totalSteps = totalSteps, finalResult = finalResult, executionSteps = executionSteps, durationMs = durationMs, errorMessage = errorMessage)
+  }
+
+  override fun toString(): String {
+    return "MultiServerFlowResult(" + "success=" + <this>.#success + ", " + "flowName=" + <this>.#flowName + ", " + "flowId=" + <this>.#flowId + ", " + "stepsExecuted=" + <this>.#stepsExecuted + ", " + "totalSteps=" + <this>.#totalSteps + ", " + "finalResult=" + <this>.#finalResult + ", " + "executionSteps=" + <this>.#executionSteps + ", " + "durationMs=" + <this>.#durationMs + ", " + "errorMessage=" + <this>.#errorMessage + ")"
+  }
+
+  override fun hashCode(): Int {
+    var result: Int = <this>.#success.hashCode()
+    result = result.times(other = 31).plus(other = <this>.#flowName.hashCode())
+    result = result.times(other = 31).plus(other = <this>.#flowId.hashCode())
+    result = result.times(other = 31).plus(other = <this>.#stepsExecuted.hashCode())
+    result = result.times(other = 31).plus(other = <this>.#totalSteps.hashCode())
+    result = result.times(other = 31).plus(other = when {
+      EQEQ(arg0 = <this>.#finalResult, arg1 = null) -> 0
+      else -> <this>.#finalResult.hashCode()
+    })
+    result = result.times(other = 31).plus(other = <this>.#executionSteps.hashCode())
+    result = result.times(other = 31).plus(other = <this>.#durationMs.hashCode())
+    result = result.times(other = 31).plus(other = when {
+      EQEQ(arg0 = <this>.#errorMessage, arg1 = null) -> 0
+      else -> <this>.#errorMessage.hashCode()
+    })
+    return result
+  }
+
+  override operator fun equals(other: Any?): Boolean {
+    when {
+      EQEQEQ(arg0 = <this>, arg1 = other) -> return true
+    }
+    when {
+      other !is MultiServerFlowResult -> return false
+    }
+    val tmp0_other_with_cast: MultiServerFlowResult = other as MultiServerFlowResult
+    when {
+      EQEQ(arg0 = <this>.#success, arg1 = tmp0_other_with_cast.#success).not() -> return false
+    }
+    when {
+      EQEQ(arg0 = <this>.#flowName, arg1 = tmp0_other_with_cast.#flowName).not() -> return false
+    }
+    when {
+      EQEQ(arg0 = <this>.#flowId, arg1 = tmp0_other_with_cast.#flowId).not() -> return false
+    }
+    when {
+      EQEQ(arg0 = <this>.#stepsExecuted, arg1 = tmp0_other_with_cast.#stepsExecuted).not() -> return false
+    }
+    when {
+      EQEQ(arg0 = <this>.#totalSteps, arg1 = tmp0_other_with_cast.#totalSteps).not() -> return false
+    }
+    when {
+      EQEQ(arg0 = <this>.#finalResult, arg1 = tmp0_other_with_cast.#finalResult).not() -> return false
+    }
+    when {
+      EQEQ(arg0 = <this>.#executionSteps, arg1 = tmp0_other_with_cast.#executionSteps).not() -> return false
+    }
+    when {
+      EQEQ(arg0 = <this>.#durationMs, arg1 = tmp0_other_with_cast.#durationMs).not() -> return false
+    }
+    when {
+      EQEQ(arg0 = <this>.#errorMessage, arg1 = tmp0_other_with_cast.#errorMessage).not() -> return false
+    }
+    return true
+  }
+
+  /* static final field */ val $stable: Int = 8
+  @JvmStatic
+  internal /* static */ fun write$Self(self: MultiServerFlowResult, output: CompositeEncoder, serialDesc: SerialDescriptor)
+
+  internal constructor(seen0: Int, success: Boolean, flowName: String?, flowId: String?, stepsExecuted: Int, totalSteps: Int, finalResult: Map<String, Any?>?, executionSteps: List<ExecutionStepResult>?, durationMs: Long, errorMessage: String?, serializationConstructorMarker: SerializationConstructorMarker?)
+
+}
+
+`
+Details: kotlinx.serialization compiler plugin internal error: unable to transform declaration, see cause
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializerClassLowering.lower(SerializationLoweringExtension.kt:230)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializationLoweringExtensionKt$runOnFileInOrder$1.visitClass(SerializationLoweringExtension.kt:46)
+	at org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid$DefaultImpls.visitClass(IrElementVisitorVoid.kt:48)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializationLoweringExtensionKt$runOnFileInOrder$1.visitClass(SerializationLoweringExtension.kt:40)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializationLoweringExtensionKt$runOnFileInOrder$1.visitClass(SerializationLoweringExtension.kt:40)
+	at org.jetbrains.kotlin.ir.declarations.IrClass.accept(IrClass.kt:72)
+	at org.jetbrains.kotlin.ir.declarations.IrFile.acceptChildren(IrFile.kt:34)
+	at org.jetbrains.kotlin.ir.visitors.IrVisitorsKt.acceptChildrenVoid(IrVisitors.kt:15)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializationLoweringExtensionKt$runOnFileInOrder$1.visitElement(SerializationLoweringExtension.kt:42)
+	at org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid$DefaultImpls.visitPackageFragment(IrElementVisitorVoid.kt:172)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializationLoweringExtensionKt$runOnFileInOrder$1.visitPackageFragment(SerializationLoweringExtension.kt:40)
+	at org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid$DefaultImpls.visitFile(IrElementVisitorVoid.kt:188)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializationLoweringExtensionKt$runOnFileInOrder$1.visitFile(SerializationLoweringExtension.kt:40)
+	at org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid$DefaultImpls.visitFile(IrElementVisitorVoid.kt:184)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializationLoweringExtensionKt$runOnFileInOrder$1.visitFile(SerializationLoweringExtension.kt:40)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializationLoweringExtensionKt$runOnFileInOrder$1.visitFile(SerializationLoweringExtension.kt:40)
+	at org.jetbrains.kotlin.ir.declarations.IrFile.accept(IrFile.kt:28)
+	at org.jetbrains.kotlin.ir.visitors.IrVisitorsKt.acceptVoid(IrVisitors.kt:11)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializationLoweringExtensionKt.runOnFileInOrder(SerializationLoweringExtension.kt:40)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializationLoweringExtension.generate(SerializationLoweringExtension.kt:194)
+	at org.jetbrains.kotlin.fir.pipeline.ConvertToIrKt.applyIrGenerationExtensions(convertToIr.kt:472)
+	at org.jetbrains.kotlin.fir.pipeline.Fir2IrPipeline.runActualizationPipeline(convertToIr.kt:241)
+	at org.jetbrains.kotlin.fir.pipeline.Fir2IrPipeline.convertToIrAndActualize(convertToIr.kt:130)
+	at org.jetbrains.kotlin.fir.pipeline.ConvertToIrKt.convertToIrAndActualize(convertToIr.kt:100)
+	at org.jetbrains.kotlin.fir.pipeline.ConvertToIrKt.convertToIrAndActualize$default(convertToIr.kt:75)
+	at org.jetbrains.kotlin.cli.jvm.compiler.pipeline.JvmCompilerPipelineKt.convertToIrAndActualizeForJvm(jvmCompilerPipeline.kt:134)
+	at org.jetbrains.kotlin.cli.jvm.compiler.pipeline.JvmCompilerPipelineKt.convertAnalyzedFirToIr(jvmCompilerPipeline.kt:107)
+	at org.jetbrains.kotlin.cli.jvm.compiler.pipeline.JvmCompilerPipelineKt.runBackend(jvmCompilerPipeline.kt:73)
+	at org.jetbrains.kotlin.cli.jvm.compiler.pipeline.JvmCompilerPipelineLightTreeKt.compileModule(jvmCompilerPipelineLightTree.kt:264)
+	at org.jetbrains.kotlin.cli.jvm.compiler.pipeline.JvmCompilerPipelineLightTreeKt.compileSingleModuleUsingFrontendIrAndLightTree(jvmCompilerPipelineLightTree.kt:231)
+	at org.jetbrains.kotlin.cli.jvm.compiler.pipeline.JvmCompilerPipelineLightTreeKt.compileModulesUsingFrontendIrAndLightTree(jvmCompilerPipelineLightTree.kt:86)
+	at org.jetbrains.kotlin.cli.jvm.K2JVMCompiler.doExecute(K2JVMCompiler.kt:146)
+	at org.jetbrains.kotlin.cli.jvm.K2JVMCompiler.doExecute(K2JVMCompiler.kt:43)
+	at org.jetbrains.kotlin.cli.common.CLICompiler.execImpl(CLICompiler.kt:102)
+	at org.jetbrains.kotlin.cli.common.CLICompiler.exec(CLICompiler.kt:316)
+	at org.jetbrains.kotlin.incremental.IncrementalJvmCompilerRunner.runCompiler(IncrementalJvmCompilerRunner.kt:464)
+	at org.jetbrains.kotlin.incremental.IncrementalJvmCompilerRunner.runCompiler(IncrementalJvmCompilerRunner.kt:73)
+	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.doCompile(IncrementalCompilerRunner.kt:506)
+	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compileImpl(IncrementalCompilerRunner.kt:423)
+	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compileNonIncrementally(IncrementalCompilerRunner.kt:301)
+	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compile(IncrementalCompilerRunner.kt:129)
+	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.execIncrementalCompiler(CompileServiceImpl.kt:674)
+	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.access$execIncrementalCompiler(CompileServiceImpl.kt:91)
+	at org.jetbrains.kotlin.daemon.CompileServiceImpl.compile(CompileServiceImpl.kt:1659)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source)
+	at java.base/java.lang.reflect.Method.invoke(Unknown Source)
+	at java.rmi/sun.rmi.server.UnicastServerRef.dispatch(Unknown Source)
+	at java.rmi/sun.rmi.transport.Transport$1.run(Unknown Source)
+	at java.rmi/sun.rmi.transport.Transport$1.run(Unknown Source)
+	at java.base/java.security.AccessController.doPrivileged(Unknown Source)
+	at java.rmi/sun.rmi.transport.Transport.serviceCall(Unknown Source)
+	at java.rmi/sun.rmi.transport.tcp.TCPTransport.handleMessages(Unknown Source)
+	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run0(Unknown Source)
+	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.lambda$run$0(Unknown Source)
+	at java.base/java.security.AccessController.doPrivileged(Unknown Source)
+	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run(Unknown Source)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
+	at java.base/java.lang.Thread.run(Unknown Source)
+Caused by: java.lang.IllegalStateException: Serializer for element of type kotlin.Any? has not been found
+	at org.jetbrains.kotlinx.serialization.compiler.backend.ir.SerializerSearchUtilKt.findTypeSerializerOrContext(SerializerSearchUtil.kt:84)
+	at org.jetbrains.kotlinx.serialization.compiler.backend.ir.BaseIrGenerator.serializerInstance(BaseIrGenerator.kt:721)
+	at org.jetbrains.kotlinx.serialization.compiler.backend.ir.BaseIrGenerator.serializerInstance$instantiate(BaseIrGenerator.kt:554)
+	at org.jetbrains.kotlinx.serialization.compiler.backend.ir.BaseIrGenerator.serializerInstance(BaseIrGenerator.kt:597)
+	at org.jetbrains.kotlinx.serialization.compiler.backend.ir.BaseIrGenerator.cacheableChildSerializerInstance(BaseIrGenerator.kt:495)
+	at org.jetbrains.kotlinx.serialization.compiler.backend.ir.BaseIrGenerator.createCachedChildSerializers(BaseIrGenerator.kt:467)
+	at org.jetbrains.kotlinx.serialization.compiler.backend.ir.SerializableIrGenerator.<init>(SerializableIrGenerator.kt:60)
+	at org.jetbrains.kotlinx.serialization.compiler.backend.ir.SerializableIrGenerator$Companion.generate(SerializableIrGenerator.kt:399)
+	at org.jetbrains.kotlinx.serialization.compiler.extensions.SerializerClassLowering.lower(SerializationLoweringExtension.kt:146)
+	... 58 more
+
+

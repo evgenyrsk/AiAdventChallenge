@@ -12,7 +12,7 @@ import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.domain.model.TaskContext
 import com.example.aiadventchallenge.domain.model.TaskPhase
-import com.example.aiadventchallenge.domain.repository.ChatRepository
+import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify

@@ -13,10 +13,13 @@ import com.example.mcp.server.model.fitness.FitnessSummaryResult
 import com.example.mcp.server.model.fitness.RunScheduledSummaryResult
 import com.example.mcp.server.model.fitness.ScheduledSummaryResult
 import com.example.mcp.server.scheduler.SchedulerOrchestrator
+import com.example.mcp.server.orchestration.MultiServerOrchestrator
+import okhttp3.OkHttpClient
 import com.example.mcp.server.service.fitness.FitnessSummaryService
 import com.example.mcp.server.service.file_export.SummaryFileExportService
 import com.example.mcp.server.service.reminder.ReminderAnalysisService
 import com.example.mcp.server.service.reminder.ReminderService
+import com.example.mcp.server.service.reminder.ReminderFromSummaryService
 import com.example.mcp.server.pipeline.usecases.FitnessSummaryExportPipeline
 import com.example.mcp.server.dto.adapter.FitnessExportAdapter
 import com.example.mcp.server.pipeline.steps.SearchFitnessLogsStepInput
@@ -25,6 +28,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.encodeToJsonElement
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.LocalTime
@@ -73,6 +82,10 @@ class McpJsonRpcHandler {
         val scope = CoroutineScope(Dispatchers.IO)
         schedulerOrchestrator.startAll()
     }
+
+    private val httpClient = OkHttpClient()
+    private val reminderFromSummaryService = ReminderFromSummaryService(reminderService)
+    private val multiServerOrchestrator = MultiServerOrchestrator(handler = this)
 
     private val tools = listOf(
         Tool(
@@ -142,6 +155,14 @@ class McpJsonRpcHandler {
         Tool(
             name = "run_fitness_summary_export_pipeline",
             description = "Runs the complete fitness summary export pipeline (search → summarize → save). Parameters: period (last_7_days, last_30_days), days (default 7), format (json/txt). Returns export result with file path and timestamp."
+        ),
+        Tool(
+            name = "create_reminder_from_summary",
+            description = "Creates a reminder based on fitness summary metrics. Parameters: summary (object with avgWeight, workoutsCompleted, avgSteps, avgSleepHours, avgProtein), conditions (object with thresholds). Creates reminder if metrics below thresholds. Returns reminder ID if created, null otherwise."
+        ),
+        Tool(
+            name = "execute_multi_server_flow",
+            description = "Executes a cross-server flow using multiple MCP tools across different servers. Parameters: prompt (text description of what to do). Automatically selects tools and orchestrates execution across fitness and reminder servers. Returns flow execution result with steps and final result."
         )
     )
 
@@ -169,6 +190,8 @@ class McpJsonRpcHandler {
                 "summarize_fitness_logs" -> handleSummarizeFitnessLogs(request)
                 "save_summary_to_file" -> handleSaveSummaryToFile(request)
                 "run_fitness_summary_export_pipeline" -> handleRunFitnessSummaryExportPipeline(request)
+                "create_reminder_from_summary" -> handleCreateReminderFromSummary(request)
+                "execute_multi_server_flow" -> handleExecuteMultiServerFlow(request)
                 else -> handleUnknownMethod(request)
             }
         } catch (e: Exception) {
@@ -1036,13 +1059,13 @@ class McpJsonRpcHandler {
                 val mcpOutput = FitnessExportAdapter.toMcpOutput(stepOutput)
 
                 val resultJson = JsonRpcResult(
-                    message = "Found ${stepOutput.entries.size} fitness logs for period $period"
-                )
-                resultJson.toolResult = mapOf(
-                    "success" to mcpOutput.success,
-                    "tool" to mcpOutput.tool,
-                    "data" to mcpOutput.data,
-                    "timestamp" to System.currentTimeMillis()
+                    message = "Found ${stepOutput.entries.size} fitness logs for period $period",
+                    toolResult = kotlinx.serialization.json.buildJsonObject {
+                        put("success", mcpOutput.success)
+                        put("tool", mcpOutput.tool)
+                        put("data", json.encodeToJsonElement(mcpOutput.data))
+                        put("timestamp", System.currentTimeMillis())
+                    }
                 )
 
                 val response = JsonRpcResponse(
@@ -1132,13 +1155,13 @@ class McpJsonRpcHandler {
                 val mcpOutput = FitnessExportAdapter.toMcpOutput(stepOutput)
 
                 val resultJson = JsonRpcResult(
-                    message = "Generated fitness summary for $period with ${stepOutput.entriesCount} entries"
-                )
-                resultJson.toolResult = mapOf(
-                    "success" to mcpOutput.success,
-                    "tool" to mcpOutput.tool,
-                    "data" to mcpOutput.data,
-                    "timestamp" to System.currentTimeMillis()
+                    message = "Generated fitness summary for $period with ${stepOutput.entriesCount} entries",
+                    toolResult = kotlinx.serialization.json.buildJsonObject {
+                        put("success", mcpOutput.success)
+                        put("tool", mcpOutput.tool)
+                        put("data", json.encodeToJsonElement(mcpOutput.data))
+                        put("timestamp", System.currentTimeMillis())
+                    }
                 )
 
                 val response = JsonRpcResponse(
@@ -1227,13 +1250,13 @@ class McpJsonRpcHandler {
                 val mcpOutput = FitnessExportAdapter.toMcpOutput(stepOutput)
 
                 val resultJson = JsonRpcResult(
-                    message = "Summary saved to file: ${stepOutput.filePath}"
-                )
-                resultJson.toolResult = mapOf(
-                    "success" to mcpOutput.success,
-                    "tool" to mcpOutput.tool,
-                    "data" to mcpOutput.data,
-                    "timestamp" to System.currentTimeMillis()
+                    message = "Summary saved to file: ${stepOutput.filePath}",
+                    toolResult = kotlinx.serialization.json.buildJsonObject {
+                        put("success", mcpOutput.success)
+                        put("tool", mcpOutput.tool)
+                        put("data", json.encodeToJsonElement(mcpOutput.data))
+                        put("timestamp", System.currentTimeMillis())
+                    }
                 )
 
                 val response = JsonRpcResponse(
@@ -1335,6 +1358,146 @@ class McpJsonRpcHandler {
                 )
             )
             return json.encodeToString(response)
+        }
+    }
+
+    private fun handleCreateReminderFromSummary(request: JsonRpcRequest): String {
+        println("   Method: create_reminder_from_summary")
+
+        return try {
+            val params = request.params ?: throw Exception("Parameters are required")
+
+            val period = params["period"]?.toString() ?: throw Exception("Missing parameter: period")
+            val workoutsCompleted = params["workoutsCompleted"]?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: workoutsCompleted")
+            val avgSleepHours = params["avgSleepHours"]?.toString()?.toDoubleOrNull() ?: throw Exception("Missing parameter: avgSleepHours")
+            val avgSteps = params["avgSteps"]?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: avgSteps")
+            val avgProtein = params["avgProtein"]?.toString()?.toIntOrNull() ?: throw Exception("Missing parameter: avgProtein")
+            val summaryText = params["summaryText"]?.toString() ?: throw Exception("Missing parameter: summaryText")
+
+            println("   Parameters: period=$period, workouts=$workoutsCompleted, sleep=$avgSleepHours, steps=$avgSteps, protein=$avgProtein")
+
+            val minWorkouts = params["minWorkouts"]?.toString()?.toIntOrNull() ?: 3
+            val minSleepHours = params["minSleepHours"]?.toString()?.toDoubleOrNull() ?: 7.0
+            val minSteps = params["minSteps"]?.toString()?.toIntOrNull() ?: 7000
+            val minProtein = params["minProtein"]?.toString()?.toIntOrNull() ?: 120
+
+            val reminderResult = reminderFromSummaryService.createReminderIfNeeded(
+                period = period,
+                workoutsCompleted = workoutsCompleted,
+                avgSleepHours = avgSleepHours,
+                avgSteps = avgSteps,
+                avgProtein = avgProtein,
+                summaryText = summaryText,
+                minWorkouts = minWorkouts,
+                minSleepHours = minSleepHours,
+                minSteps = minSteps,
+                minProtein = minProtein
+            )
+
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = JsonRpcResult(
+                    message = reminderResult.message,
+                    createReminderFromSummaryResult = reminderResult
+                ),
+                error = null
+            )
+
+            json.encodeToString(response)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            val response = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = request.id,
+                result = null,
+                error = JsonRpcError(
+                    code = -32602,
+                    message = "Invalid params: ${e.message}"
+                )
+            )
+            json.encodeToString(response)
+        }
+    }
+
+    private fun handleExecuteMultiServerFlow(request: JsonRpcRequest): String {
+        println("   Method: execute_multi_server_flow")
+
+        return kotlinx.coroutines.runBlocking {
+            try {
+                val params = request.params ?: throw Exception("Parameters are required")
+                val prompt = params["prompt"]?.toString() ?: throw Exception("Missing parameter: prompt")
+
+                println("   Parameters: prompt=$prompt")
+
+                val flowResult = multiServerOrchestrator.handleMultiServerRequest(prompt, this@McpJsonRpcHandler)
+
+                val flowResultJson = buildJsonObject {
+                    put("success", kotlinx.serialization.json.JsonPrimitive(flowResult.success))
+                    put("flowName", kotlinx.serialization.json.JsonPrimitive(flowResult.flowName))
+                    put("flowId", kotlinx.serialization.json.JsonPrimitive(flowResult.flowId))
+                    put("stepsExecuted", kotlinx.serialization.json.JsonPrimitive(flowResult.stepsExecuted))
+                    put("totalSteps", kotlinx.serialization.json.JsonPrimitive(flowResult.totalSteps))
+                    put("durationMs", kotlinx.serialization.json.JsonPrimitive(flowResult.durationMs))
+
+                    if (flowResult.errorMessage != null) {
+                        put("errorMessage", kotlinx.serialization.json.JsonPrimitive(flowResult.errorMessage))
+                    } else {
+                        put("errorMessage", kotlinx.serialization.json.JsonNull)
+                    }
+
+                    val stepsArray = kotlinx.serialization.json.buildJsonArray {
+                        flowResult.executionSteps.forEach { step ->
+                            add(kotlinx.serialization.json.buildJsonObject {
+                                put("stepId", kotlinx.serialization.json.JsonPrimitive(step.stepId))
+                                put("serverId", kotlinx.serialization.json.JsonPrimitive(step.serverId))
+                                put("toolName", kotlinx.serialization.json.JsonPrimitive(step.toolName))
+                                put("status", kotlinx.serialization.json.JsonPrimitive(step.status))
+                                put("durationMs", kotlinx.serialization.json.JsonPrimitive(step.durationMs))
+
+                                if (step.output != null) {
+                                    put("output", kotlinx.serialization.json.JsonPrimitive(step.output))
+                                }
+
+                                if (step.error != null) {
+                                    put("error", kotlinx.serialization.json.JsonPrimitive(step.error))
+                                } else {
+                                    put("error", kotlinx.serialization.json.JsonNull)
+                                }
+                            })
+                        }
+                    }
+                    put("executionSteps", stepsArray)
+
+                    put("finalResult", flowResult.finalResult ?: kotlinx.serialization.json.buildJsonObject {})
+                }
+
+                val resultObject = JsonRpcResult(
+                    message = if (flowResult.success) "Multi-server flow completed successfully" else "Multi-server flow failed",
+                    flowResult = flowResultJson
+                )
+
+                val response = JsonRpcResponse(
+                    jsonrpc = "2.0",
+                    id = request.id,
+                    result = resultObject,
+                    error = null
+                )
+
+                json.encodeToString(response)
+            } catch (e: Exception) {
+                println("   Error: ${e.message}")
+                val response = JsonRpcResponse(
+                    jsonrpc = "2.0",
+                    id = request.id,
+                    result = null,
+                    error = JsonRpcError(
+                        code = -32602,
+                        message = "Invalid params: ${e.message}"
+                    )
+                )
+                json.encodeToString(response)
+            }
         }
     }
 }

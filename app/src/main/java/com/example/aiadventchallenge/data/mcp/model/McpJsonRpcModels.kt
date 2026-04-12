@@ -2,6 +2,7 @@ package com.example.aiadventchallenge.data.mcp.model
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class JsonRpcRequest(
@@ -27,7 +28,9 @@ data class JsonRpcResult(
     val fitnessSummaryResult: FitnessSummaryResult? = null,
     val scheduledSummaryResult: ScheduledSummaryResult? = null,
     val runScheduledSummaryResult: RunScheduledSummaryResult? = null,
-    val fitnessSummaryExportFullResponse: FitnessSummaryExportFullResponse? = null
+    val fitnessSummaryExportFullResponse: FitnessSummaryExportFullResponse? = null,
+    val createReminderFromSummaryResult: CreateReminderFromSummaryResult? = null,
+    val flowResult: FlowResult? = null
 )
 
 @Serializable
@@ -145,4 +148,37 @@ data class FitnessLogEntry(
     val steps: Int?,
     val sleepHours: Double?,
     val notes: String?
+)
+
+@Serializable
+data class CreateReminderFromSummaryResult(
+    val success: Boolean,
+    val reminderId: String?,
+    val message: String,
+    val reasons: List<String>,
+    val triggered: Boolean
+)
+
+@Serializable
+data class FlowResult(
+    val success: Boolean,
+    val flowName: String?,
+    val flowId: String?,
+    val stepsExecuted: Int?,
+    val totalSteps: Int?,
+    val durationMs: Long?,
+    val errorMessage: String? = null,
+    val executionSteps: List<FlowExecutionStep>?,
+    val finalResult: JsonObject?
+)
+
+@Serializable
+data class FlowExecutionStep(
+    val stepId: String?,
+    val serverId: String?,
+    val toolName: String?,
+    val status: String?,
+    val durationMs: Long?,
+    val output: String?,
+    val error: String? = null
 )
