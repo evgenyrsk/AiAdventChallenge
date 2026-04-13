@@ -53,9 +53,13 @@ class ChatMessageHandlerImpl(
         )
         
         if (mcpContext != null) {
+            Log.d(TAG, "🔧 Adding MCP context to system prompt (length=${mcpContext.length})")
+            Log.d(TAG, "🔧 MCP Context preview: ${mcpContext.take(200)}...")
             config = config.copy(
                 systemPrompt = config.systemPrompt + mcpContext
             )
+        } else {
+            Log.d(TAG, "ℹ️ No MCP context to add")
         }
         
         val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())

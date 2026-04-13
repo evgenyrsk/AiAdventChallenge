@@ -11,8 +11,62 @@ class McpToolOrchestratorImpl(
     
     override suspend fun detectAndExecuteTool(userInput: String): ToolExecutionResult {
         Log.d(TAG, "🔍 Checking for MCP tool in LLM response...")
-        
+
+        if (isFitnessFlowRequest(userInput)) {
+            Log.d(TAG, "✅ Detected fitness flow request")
+
+            return try {
+                val flowResult = callMcpToolUseCase.executeMultiServerFlow(userInput)
+                val context = formatMultiServerFlowContext(flowResult)
+                Log.d(TAG, "📝 MCP Context to add to LLM (length=${context.length}):")
+                Log.d(TAG, context)
+                ToolExecutionResult.Success(context)
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to execute fitness flow", e)
+                ToolExecutionResult.Error(e.message ?: "Неизвестная ошибка")
+            }
+        }
+
         return ToolExecutionResult.NoToolFound
+    }
+
+    private fun isFitnessFlowRequest(input: String): Boolean {
+        val keywords = listOf(
+            "фитнес", "тренировк", "спорт", "workout", "fitness",
+            "лог", "запис", "log",
+            "сводк", "статистик", "анализ", "summary",
+            "напомин", "напомни", "напомн", "напомни", "reminder"
+        )
+        val lowerInput = input.lowercase()
+        return keywords.any { lowerInput.contains(it) }
+    }
+
+    private fun formatMultiServerFlowContext(result: com.example.aiadventchallenge.domain.model.mcp.MultiServerFlowResult): String {
+        return """
+        ================================================================================
+        🏋️ FITNESS MCP FLOW - ВЫПОЛНЕНИЕ СЦЕНАРИЯ
+        ================================================================================
+
+        Flow: ${result.flowName}
+        Статус: ${if (result.success) "✅ Успешно" else "❌ Ошибка"}
+        Шагов выполнено: ${result.stepsExecuted}/${result.totalSteps}
+        Длительность: ${result.durationMs}ms
+
+        Шаги выполнения:
+        ${result.executionSteps.joinToString("\n") { step ->
+            val statusEmoji = when (step.status) {
+                "COMPLETED" -> "✅"
+                "FAILED" -> "❌"
+                "RUNNING" -> "⏳"
+                else -> "⏭️"
+            }
+            "$statusEmoji ${step.serverId} → ${step.toolName} (${step.durationMs}ms)"
+        }}
+
+        ${if (result.errorMessage != null) "❌ Ошибка: ${result.errorMessage}" else ""}
+
+        ================================================================================
+        """.trimIndent()
     }
     
     suspend fun executeTool(
