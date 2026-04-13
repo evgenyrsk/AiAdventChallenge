@@ -24,7 +24,19 @@ sealed class ToolExecutionResult {
     data class Success(val context: String) : ToolExecutionResult()
     object NoToolFound : ToolExecutionResult()
     data class Error(val message: String) : ToolExecutionResult()
+    data class MissingParameters(val missingParams: List<ParameterInfo>) : ToolExecutionResult()
 }
+
+sealed class ValidationResult {
+    object Valid : ValidationResult()
+    data class Invalid(val missingParams: List<ParameterInfo>) : ValidationResult()
+}
+
+data class ParameterInfo(
+    val name: String,
+    val description: String,
+    val example: String
+)
 
 data class ToolExecutionStep(
     val tool: String,

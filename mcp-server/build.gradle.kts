@@ -15,9 +15,37 @@ dependencies {
 
 tasks.register("run", JavaExec::class) {
     group = "application"
-    description = "Run the MCP Server"
+    description = "Run MCP Server (single server on port 8080)"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.example.mcp.server.MainKt")
+}
+
+tasks.register("runMultiServer", JavaExec::class) {
+    group = "application"
+    description = "Run all 3 MCP servers (ports 8081, 8082, 8083)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.example.mcp.server.MultiServerLauncherKt")
+}
+
+tasks.register("runNutritionServer", JavaExec::class) {
+    group = "application"
+    description = "Run Nutrition Metrics Server (port 8081)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.example.mcp.server.servers.NutritionMetricsServerKt")
+}
+
+tasks.register("runMealServer", JavaExec::class) {
+    group = "application"
+    description = "Run Meal Guidance Server (port 8082)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.example.mcp.server.servers.MealGuidanceServerKt")
+}
+
+tasks.register("runTrainingServer", JavaExec::class) {
+    group = "application"
+    description = "Run Training Guidance Server (port 8083)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.example.mcp.server.servers.TrainingGuidanceServerKt")
 }
 
 tasks.register("runDemo", JavaExec::class) {

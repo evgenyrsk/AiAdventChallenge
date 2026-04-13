@@ -116,6 +116,124 @@ class ChatMessageHandlerImpl(
         }
     }
     
+    override suspend fun saveUserMessage(
+        userInput: String,
+        activeBranchId: String,
+        parentMessageId: String?
+    ): ChatMessage {
+        val userMessage = createUserMessage(
+            userInput = userInput,
+            activeBranchId = activeBranchId,
+            parentMessageId = parentMessageId
+        )
+        
+        chatRepository.insertMessage(userMessage, activeBranchId, parentMessageId)
+        return userMessage
+    }
+    
+    override suspend fun generateAiResponse(
+        userInput: String,
+        fitnessProfile: FitnessProfileType,
+        activeBranchId: String,
+        parentMessageId: String?,
+        mcpContext: String?
+    ): ChatMessageResult {
+        val activeMessages = chatRepository.getMessagesByBranch(activeBranchId)
+        
+        var config = agent.buildRequestConfigWithProfile(fitnessProfile)
+        
+        if (mcpContext != null) {
+            Log.d(TAG, "🔧 Adding MCP context to system prompt (length=${mcpContext.length})")
+            config = config.copy(systemPrompt = config.systemPrompt + mcpContext)
+        } else {
+            Log.d(TAG, "ℹ️ No MCP context to add")
+        }
+        
+        val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())
+        val apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
+
+        return when (val result = agent.processRequestWithContextAndUsage(
+            messages = apiMessages,
+            config = config,
+            userInput = userInput,
+            taskContext = null
+        )) {
+            is ChatResult.Success -> {
+                val answerWithUsage = result.data
+                val aiResponseText = answerWithUsage.content.trim()
+                
+                logLlmResponse(aiResponseText, answerWithUsage.totalTokens ?: 0, aiResponseText.length)
+                
+                if (aiResponseText.isEmpty()) {
+                    return ChatMessageResult.EmptyResponse("Пустой ответ от AI", null)
+                }
+                
+                val aiMessage = createAiMessage(
+                    content = aiResponseText,
+                    parentMessageId = parentMessageId,
+                    activeBranchId = activeBranchId,
+                    promptTokens = answerWithUsage.promptTokens,
+                    completionTokens = answerWithUsage.completionTokens,
+                    totalTokens = answerWithUsage.totalTokens
+                )
+                
+                chatRepository.insertMessage(aiMessage, activeBranchId, aiMessage.parentMessageId)
+                
+                ChatMessageResult.Success(null, aiMessage, aiResponseText)
+            }
+            is ChatResult.Error -> {
+                Log.e(TAG, "❌ AI response error: ${result.message}")
+                ChatMessageResult.Error(result.message, null)
+            }
+        }
+    }
+    
+    override suspend fun handleSystemPrompt(systemPrompt: String): SystemPromptResult {
+        Log.d(TAG, "📤 === SYSTEM PROMPT REQUEST ===")
+        Log.d(TAG, "   Prompt: $systemPrompt")
+        
+        val config = RequestConfig(
+            systemPrompt = systemPrompt,
+            temperature = 0.7
+        )
+        
+        val messages = listOf(
+            com.example.aiadventchallenge.data.model.Message(
+                role = com.example.aiadventchallenge.data.model.MessageRole.SYSTEM,
+                content = systemPrompt
+            ),
+            com.example.aiadventchallenge.data.model.Message(
+                role = com.example.aiadventchallenge.data.model.MessageRole.USER,
+                content = "Пожалуйста, ответьте на запрос выше."
+            )
+        )
+        
+        return when (val result = agent.processRequestWithContextAndUsage(
+            messages = messages,
+            config = config,
+            userInput = "Пожалуйста, ответьте на запрос выше.",
+            taskContext = null
+        )) {
+            is ChatResult.Success -> {
+                val answer = result.data
+                val messageText = answer.content.trim()
+                
+                Log.d(TAG, "📥 === SYSTEM PROMPT RESPONSE ===")
+                Log.d(TAG, "   Response: ${messageText.take(150)}...")
+                
+                if (messageText.isEmpty()) {
+                    SystemPromptResult.Error("Получен пустой ответ от AI")
+                } else {
+                    SystemPromptResult.Success(messageText)
+                }
+            }
+            is ChatResult.Error -> {
+                Log.e(TAG, "❌ System prompt error: ${result.message}")
+                SystemPromptResult.Error(result.message)
+            }
+        }
+    }
+    
     private fun createUserMessage(
         userInput: String,
         activeBranchId: String,
@@ -132,7 +250,7 @@ class ChatMessageHandlerImpl(
     
     private fun createAiMessage(
         content: String,
-        parentMessageId: String,
+        parentMessageId: String?,
         activeBranchId: String,
         promptTokens: Int?,
         completionTokens: Int?,

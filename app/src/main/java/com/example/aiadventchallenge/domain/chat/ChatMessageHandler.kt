@@ -31,22 +31,43 @@ interface ChatMessageHandler {
         parentMessageId: String?,
         mcpContext: String? = null
     ): ChatMessageResult
+    
+    suspend fun saveUserMessage(
+        userInput: String,
+        activeBranchId: String,
+        parentMessageId: String?
+    ): ChatMessage
+    
+    suspend fun generateAiResponse(
+        userInput: String,
+        fitnessProfile: FitnessProfileType,
+        activeBranchId: String,
+        parentMessageId: String?,
+        mcpContext: String?
+    ): ChatMessageResult
+    
+    suspend fun handleSystemPrompt(systemPrompt: String): SystemPromptResult
 }
 
 sealed class ChatMessageResult {
     data class Success(
-        val userMessage: ChatMessage,
-        val aiMessage: ChatMessage,
+        val userMessage: ChatMessage?,
+        val aiMessage: ChatMessage?,
         val aiResponse: String
     ) : ChatMessageResult()
     
     data class Error(
         val errorMessage: String,
-        val userMessage: ChatMessage
+        val userMessage: ChatMessage?
     ) : ChatMessageResult()
     
     data class EmptyResponse(
         val errorMessage: String,
-        val userMessage: ChatMessage
+        val userMessage: ChatMessage?
     ) : ChatMessageResult()
+}
+
+sealed class SystemPromptResult {
+    data class Success(val message: String) : SystemPromptResult()
+    data class Error(val errorMessage: String) : SystemPromptResult()
 }

@@ -94,7 +94,7 @@ class ChatViewModel(
     private fun initializeMcpConnection() {
         viewModelScope.launch {
             try {
-                val result = AppDependencies.mcpRepository.connectAndListTools()
+                val result = AppDependencies.multiServerRepository.connectAndListTools()
                 _mcpConnectionStatus.value = when {
                     result.isConnected -> McpConnectionStatus.CONNECTED
                     else -> McpConnectionStatus.DISCONNECTED
@@ -221,37 +221,95 @@ class ChatViewModel(
             val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
             val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
 
+            val userMessage = chatMessageHandler.saveUserMessage(
+                userInput = userInput,
+                activeBranchId = activeBranchId,
+                parentMessageId = parentMessageId
+            )
+
             val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(userInput)
-            val mcpContext = when (mcpToolResult) {
+            
+            when (mcpToolResult) {
                 is ToolExecutionResult.Success -> {
-                    mcpToolResult.context
+                    val result = chatMessageHandler.generateAiResponse(
+                        userInput = userInput,
+                        fitnessProfile = _chatUiState.value.fitnessProfile,
+                        activeBranchId = activeBranchId,
+                        parentMessageId = userMessage.id,
+                        mcpContext = mcpToolResult.context
+                    )
+                    
+                    when (result) {
+                        is ChatMessageResult.Success -> {
+                            _isLoading.value = false
+                        }
+                        is ChatMessageResult.Error -> {
+                            addSystemMessage("Ошибка: ${result.errorMessage}")
+                            _isLoading.value = false
+                        }
+                        is ChatMessageResult.EmptyResponse -> {
+                            addSystemMessage(result.errorMessage)
+                            _isLoading.value = false
+                        }
+                    }
                 }
-                is ToolExecutionResult.NoToolFound -> null
+                is ToolExecutionResult.NoToolFound -> {
+                    val result = chatMessageHandler.generateAiResponse(
+                        userInput = userInput,
+                        fitnessProfile = _chatUiState.value.fitnessProfile,
+                        activeBranchId = activeBranchId,
+                        parentMessageId = userMessage.id,
+                        mcpContext = null
+                    )
+                    
+                    when (result) {
+                        is ChatMessageResult.Success -> {
+                            _isLoading.value = false
+                        }
+                        is ChatMessageResult.Error -> {
+                            addSystemMessage("Ошибка: ${result.errorMessage}")
+                            _isLoading.value = false
+                        }
+                        is ChatMessageResult.EmptyResponse -> {
+                            addSystemMessage(result.errorMessage)
+                            _isLoading.value = false
+                        }
+                    }
+                }
                 is ToolExecutionResult.Error -> {
                     Log.e(TAG, "❌ MCP tool error: ${mcpToolResult.message}")
                     addSystemMessage("❌ Ошибка MCP: ${mcpToolResult.message}")
-                    null
-                }
-            }
-
-            val result = chatMessageHandler.handleUserMessage(
-                userInput = userInput,
-                fitnessProfile = _chatUiState.value.fitnessProfile,
-                activeBranchId = activeBranchId,
-                parentMessageId = parentMessageId,
-                mcpContext = mcpContext
-            )
-
-            when (result) {
-                is ChatMessageResult.Success -> {
                     _isLoading.value = false
                 }
-                is ChatMessageResult.Error -> {
-                    addSystemMessage("Ошибка: ${result.errorMessage}")
-                    _isLoading.value = false
-                }
-                is ChatMessageResult.EmptyResponse -> {
-                    addSystemMessage(result.errorMessage)
+                is ToolExecutionResult.MissingParameters -> {
+                    val prompt = buildString {
+                        appendLine("Пользователь хочет выполнить действие, но не указал необходимые параметры:")
+                        appendLine(mcpToolResult.missingParams.joinToString("\n") {
+                            "- ${it.name}: ${it.description} (пример: ${it.example})"
+                        })
+                        appendLine()
+                        appendLine("Пожалуйста, попросите пользователя ввести эти параметры естественным образом.")
+                    }
+                    
+                    val result = chatMessageHandler.handleSystemPrompt(prompt)
+                    when (result) {
+                        is com.example.aiadventchallenge.domain.chat.SystemPromptResult.Success -> {
+                            val aiMessage = ChatMessage(
+                                id = UUID.randomUUID().toString(),
+                                parentMessageId = userMessage.id,
+                                content = result.message,
+                                isFromUser = false,
+                                isSystemMessage = false,
+                                branchId = activeBranchId
+                            )
+                            chatRepository.insertMessage(aiMessage, activeBranchId, aiMessage.parentMessageId)
+                        }
+                        is com.example.aiadventchallenge.domain.chat.SystemPromptResult.Error -> {
+                            Log.e(TAG, "❌ Failed to generate prompt for missing parameters: ${result.errorMessage}")
+                            addSystemMessage("Не удалось сгенерировать запрос. Пожалуйста, укажите ваш рост и вес.")
+                        }
+                    }
+                    
                     _isLoading.value = false
                 }
             }
