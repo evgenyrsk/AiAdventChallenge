@@ -75,33 +75,6 @@ class ChatViewModel(
     private val _mcpConnectionStatus = MutableStateFlow<McpConnectionStatus>(McpConnectionStatus.DISCONNECTED)
     val mcpConnectionStatus: StateFlow<McpConnectionStatus> = _mcpConnectionStatus.asStateFlow()
 
-    private val _lastFlowResult = MutableStateFlow<com.example.aiadventchallenge.domain.model.mcp.MultiServerFlowResult?>(null)
-    val lastFlowResult: StateFlow<com.example.aiadventchallenge.domain.model.mcp.MultiServerFlowResult?> = _lastFlowResult.asStateFlow()
-
-    fun dismissFlowResult() {
-        _lastFlowResult.value = null
-    }
-
-    suspend fun executeFitnessFlowAndSaveResult(userInput: String): String? {
-        return try {
-            val flowResult = AppDependencies.mcpRepository.executeMultiServerFlow(userInput)
-            if (flowResult.success) {
-                _lastFlowResult.value = flowResult
-                Log.d(TAG, "💾 Saved flow result for display: ${flowResult.flowName}")
-            }
-            flowResult.toString()
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to execute fitness flow", e)
-            null
-        }
-    }
-
-    data class LastRequestTokens(
-        val promptTokens: Int?,
-        val completionTokens: Int?,
-        val totalTokens: Int?
-    )
-
     init {
         initializeMcpConnection()
         loadMessagesFromDatabase()
