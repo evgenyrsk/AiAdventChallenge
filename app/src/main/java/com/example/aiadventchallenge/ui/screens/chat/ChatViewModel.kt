@@ -24,6 +24,8 @@ import com.example.aiadventchallenge.domain.branch.BranchSwitchResult
 import com.example.aiadventchallenge.domain.branch.BranchCreationErrorType
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.ToolExecutionResult
+import com.example.aiadventchallenge.domain.model.mcp.McpConnectionStatus
+import com.example.aiadventchallenge.di.AppDependencies
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +72,30 @@ class ChatViewModel(
     private val _chatUiState = MutableStateFlow(ChatUiState())
     val chatUiState: StateFlow<ChatUiState> = _chatUiState.asStateFlow()
 
+    private val _mcpConnectionStatus = MutableStateFlow<McpConnectionStatus>(McpConnectionStatus.DISCONNECTED)
+    val mcpConnectionStatus: StateFlow<McpConnectionStatus> = _mcpConnectionStatus.asStateFlow()
+
+    private val _lastFlowResult = MutableStateFlow<com.example.aiadventchallenge.domain.model.mcp.MultiServerFlowResult?>(null)
+    val lastFlowResult: StateFlow<com.example.aiadventchallenge.domain.model.mcp.MultiServerFlowResult?> = _lastFlowResult.asStateFlow()
+
+    fun dismissFlowResult() {
+        _lastFlowResult.value = null
+    }
+
+    suspend fun executeFitnessFlowAndSaveResult(userInput: String): String? {
+        return try {
+            val flowResult = AppDependencies.mcpRepository.executeMultiServerFlow(userInput)
+            if (flowResult.success) {
+                _lastFlowResult.value = flowResult
+                Log.d(TAG, "💾 Saved flow result for display: ${flowResult.flowName}")
+            }
+            flowResult.toString()
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to execute fitness flow", e)
+            null
+        }
+    }
+
     data class LastRequestTokens(
         val promptTokens: Int?,
         val completionTokens: Int?,
@@ -77,12 +103,29 @@ class ChatViewModel(
     )
 
     init {
+        initializeMcpConnection()
         loadMessagesFromDatabase()
         loadDialogStats()
         loadAllTimeStats()
         loadStrategyConfig()
         loadBranchState()
         loadFitnessProfile()
+    }
+
+    private fun initializeMcpConnection() {
+        viewModelScope.launch {
+            try {
+                val result = AppDependencies.mcpRepository.connectAndListTools()
+                _mcpConnectionStatus.value = when {
+                    result.isConnected -> McpConnectionStatus.CONNECTED
+                    else -> McpConnectionStatus.DISCONNECTED
+                }
+                Log.d(TAG, "🔗 MCP Connection: ${result.isConnected}")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ MCP Connection failed", e)
+                _mcpConnectionStatus.value = McpConnectionStatus.DISCONNECTED
+            }
+        }
     }
 
     private fun loadStrategyConfig() {
@@ -201,10 +244,13 @@ class ChatViewModel(
 
             val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(userInput)
             val mcpContext = when (mcpToolResult) {
-                is ToolExecutionResult.Success -> mcpToolResult.context
+                is ToolExecutionResult.Success -> {
+                    mcpToolResult.context
+                }
                 is ToolExecutionResult.NoToolFound -> null
                 is ToolExecutionResult.Error -> {
                     Log.e(TAG, "❌ MCP tool error: ${mcpToolResult.message}")
+                    addSystemMessage("❌ Ошибка MCP: ${mcpToolResult.message}")
                     null
                 }
             }

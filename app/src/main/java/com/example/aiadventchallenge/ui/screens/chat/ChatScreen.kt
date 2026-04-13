@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -61,6 +63,9 @@ import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestLog
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
+import com.example.aiadventchallenge.domain.model.mcp.McpConnectionStatus
+import com.example.aiadventchallenge.domain.model.mcp.MultiServerFlowResult
+import com.example.aiadventchallenge.domain.model.mcp.ExecutionStepResult
 import com.example.aiadventchallenge.ui.screens.chat.components.StrategySettingsBottomSheet
 import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchChip
@@ -80,6 +85,8 @@ fun ChatScreen(
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val chatUiState by viewModel.chatUiState.collectAsStateWithLifecycle()
+    val mcpConnectionStatus by viewModel.mcpConnectionStatus.collectAsStateWithLifecycle()
+    val lastFlowResult by viewModel.lastFlowResult.collectAsStateWithLifecycle()
     var userInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -137,6 +144,25 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        IconButton(
+                            onClick = { /* показать детали */ },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (mcpConnectionStatus == McpConnectionStatus.CONNECTED) {
+                                    Icons.Default.Cloud
+                                } else {
+                                    Icons.Default.CloudOff
+                                },
+                                contentDescription = "MCP Connection Status",
+                                tint = if (mcpConnectionStatus == McpConnectionStatus.CONNECTED) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                }
+                            )
+                        }
+
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
@@ -436,6 +462,51 @@ fun ChatScreen(
                 onNameChange = { name -> viewModel.onNewBranchNameChanged(name) },
                 onCreate = { switchToNew -> viewModel.onCreateBranchConfirmed(switchToNew) },
                 onDismiss = { viewModel.onCreateBranchDialogDismiss() }
+            )
+        }
+
+        val flowResult = lastFlowResult
+        if (flowResult != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissFlowResult() },
+                title = { Text("🏋️ Результат выполнения MCP Flow") },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Flow: ${flowResult.flowName}")
+                        Text("Статус: ${if (flowResult.success) "✅ Успешно" else "❌ Ошибка"}")
+                        Text("Шаги: ${flowResult.stepsExecuted}/${flowResult.totalSteps}")
+                        Text("Длительность: ${flowResult.durationMs}ms")
+
+                        if (flowResult.errorMessage != null) {
+                            Text("Ошибка: ${flowResult.errorMessage}", color = MaterialTheme.colorScheme.error)
+                        }
+
+                        HorizontalDivider()
+
+                        Text("Шаги выполнения:", style = MaterialTheme.typography.titleSmall)
+
+                        flowResult.executionSteps.forEach { step ->
+                            val statusEmoji = when (step.status) {
+                                "COMPLETED" -> "✅"
+                                "FAILED" -> "❌"
+                                "RUNNING" -> "⏳"
+                                else -> "⏭️"
+                            }
+                            Text("$statusEmoji ${step.serverId} → ${step.toolName}")
+                            Text("  Время: ${step.durationMs}ms", style = MaterialTheme.typography.bodySmall)
+                            if (step.error != null) {
+                                Text("  Ошибка: ${step.error}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.dismissFlowResult() }) {
+                        Text("Закрыть")
+                    }
+                }
             )
         }
     }
