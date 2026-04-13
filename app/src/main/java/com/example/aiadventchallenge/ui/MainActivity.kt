@@ -31,7 +31,6 @@ import com.example.aiadventchallenge.domain.chat.ChatMessageHandlerImpl
 import com.example.aiadventchallenge.domain.branch.BranchOrchestrator
 import com.example.aiadventchallenge.domain.branch.BranchOrchestratorImpl
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
-import com.example.aiadventchallenge.domain.mcp.McpToolOrchestratorImpl
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
@@ -60,9 +59,7 @@ class MainActivity : ComponentActivity() {
         )
     }
     private val mcpToolOrchestrator by lazy {
-        McpToolOrchestratorImpl(
-            callMcpToolUseCase = AppDependencies.callMcpToolUseCase
-        )
+        AppDependencies.multiServerOrchestrator
     }
 
     private val chatViewModel: ChatViewModel by viewModels {

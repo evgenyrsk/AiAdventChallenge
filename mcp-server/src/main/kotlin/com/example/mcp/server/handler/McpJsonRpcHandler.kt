@@ -21,74 +21,27 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.*
 
-class McpJsonRpcHandler {
-    private val json = Json {
+abstract class AbstractMcpJsonRpcHandler {
+    protected val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
 
-    private val nutritionMetricsService = NutritionMetricsService()
-    private val mealGuidanceService = MealGuidanceService()
-    private val trainingGuidanceService = TrainingGuidanceService()
+    protected val nutritionMetricsService by lazy { NutritionMetricsService() }
+    protected val mealGuidanceService by lazy { MealGuidanceService() }
+    protected val trainingGuidanceService by lazy { TrainingGuidanceService() }
 
-    private val tools = listOf(
-        Tool(
-            name = "ping",
-            description = "Simple ping tool to test MCP connection. Returns 'pong' message."
-        ),
-        Tool(
-            name = "get_app_info",
-            description = "Returns information about application including version, platform, and build details."
-        ),
-        Tool(
-            name = "calculate_nutrition_metrics",
-            description = "Calculates BMR, TDEE, target calories and macros. Parameters: sex (male/female), age (years), heightCm (cm), weightKg (kg), activityLevel (sedentary/light/moderate/active/very_active), goal (weight_loss/maintenance/muscle_gain). Returns BMR, TDEE, targetCalories, protein_g, fat_g, carbs_g, notes."
-        ),
-        Tool(
-            name = "generate_meal_guidance",
-            description = "Generates meal guidance based on nutrition metrics. Parameters: goal, targetCalories, proteinG, fatG, carbsG, mealsPerDay (optional, default 3), dietaryPreferences (optional), dietaryRestrictions (optional, default none). Returns mealStrategy, mealDistribution, recommendedFoods, foodsToLimit, notes."
-        ),
-        Tool(
-            name = "generate_training_guidance",
-            description = "Generates training plan. Parameters: goal, trainingLevel (optional, default beginner), trainingDaysPerWeek (optional, default 3), sessionDurationMinutes (optional, default 60), availableEquipment (optional, default gym), restrictions (optional, default none). Returns trainingSplit, weeklyPlan, exercisePrinciples, recoveryNotes, notes."
-        )
-    )
+    abstract val tools: List<Tool>
 
-    fun handle(requestBody: String): String {
-        return try {
-            val request = json.decodeFromString<JsonRpcRequest>(requestBody)
+    protected abstract fun getServerInfo(): String
 
-            when (request.method) {
-                "initialize" -> handleInitialize(request)
-                "tools/list" -> handleListTools(request)
-                "ping" -> handlePing(request)
-                "get_app_info" -> handleGetAppInfo(request)
-                "calculate_nutrition_metrics" -> handleCalculateNutritionMetrics(request)
-                "generate_meal_guidance" -> handleGenerateMealGuidance(request)
-                "generate_training_guidance" -> handleGenerateTrainingGuidance(request)
-                else -> handleUnknownMethod(request)
-            }
-        } catch (e: Exception) {
-            val errorResponse = JsonRpcResponse(
-                jsonrpc = "2.0",
-                id = -1,
-                result = null,
-                error = JsonRpcError(
-                    code = -32600,
-                    message = "Invalid Request: ${e.message}"
-                )
-            )
-            json.encodeToString(errorResponse)
-        }
-    }
-
-    private fun handleInitialize(request: JsonRpcRequest): String {
+    protected open fun handleInitialize(request: JsonRpcRequest): String {
         println("   Method: initialize")
 
         val resultJson = buildJsonObject {
             put("message", "Initialized")
             put("serverInfo", buildJsonObject {
-                put("name", "MCP Fitness Server")
+                put("name", getServerInfo())
                 put("version", "2.0.0")
                 put("platform", "Kotlin/JVM")
             })
@@ -97,7 +50,7 @@ class McpJsonRpcHandler {
         return buildSuccessResponse(request.id, resultJson)
     }
 
-    private fun handleListTools(request: JsonRpcRequest): String {
+    protected open fun handleListTools(request: JsonRpcRequest): String {
         println("   Method: tools/list")
 
         val resultJson = buildJsonObject {
@@ -107,7 +60,7 @@ class McpJsonRpcHandler {
         return buildSuccessResponse(request.id, resultJson)
     }
 
-    private fun handlePing(request: JsonRpcRequest): String {
+    protected open fun handlePing(request: JsonRpcRequest): String {
         println("   Method: ping")
 
         val resultJson = buildJsonObject {
@@ -118,14 +71,14 @@ class McpJsonRpcHandler {
         return buildSuccessResponse(request.id, resultJson)
     }
 
-    private fun handleGetAppInfo(request: JsonRpcRequest): String {
+    protected open fun handleGetAppInfo(request: JsonRpcRequest): String {
         println("   Method: get_app_info")
 
         val resultJson = buildJsonObject {
-            put("name", "MCP Fitness Server")
+            put("name", getServerInfo())
             put("version", "2.0.0")
             put("platform", "Kotlin/JVM")
-            put("build", Date().toString())
+            put("build", java.util.Date().toString())
             put("tools", tools.size)
             put("description", "MCP server for fitness nutrition, meal and training guidance")
         }
@@ -133,25 +86,25 @@ class McpJsonRpcHandler {
         return buildSuccessResponse(request.id, resultJson)
     }
 
-    private fun handleCalculateNutritionMetrics(request: JsonRpcRequest): String {
+    protected open fun handleCalculateNutritionMetrics(request: JsonRpcRequest): String {
         println("   Method: calculate_nutrition_metrics")
 
         return try {
             val paramsElement = request.params ?: throw Exception("Missing params")
-            
-            val sex = paramsElement["sex"]?.jsonPrimitive?.content 
+
+            val sex = paramsElement["sex"]?.jsonPrimitive?.content
                 ?: throw Exception("Missing sex parameter")
-            val age = paramsElement["age"]?.jsonPrimitive?.content?.toInt() 
+            val age = paramsElement["age"]?.jsonPrimitive?.content?.toInt()
                 ?: throw Exception("Missing age parameter")
-            val heightCm = paramsElement["heightCm"]?.jsonPrimitive?.content?.toInt() 
+            val heightCm = paramsElement["heightCm"]?.jsonPrimitive?.content?.toInt()
                 ?: throw Exception("Missing heightCm parameter")
-            val weightKg = paramsElement["weightKg"]?.jsonPrimitive?.content?.toDouble() 
+            val weightKg = paramsElement["weightKg"]?.jsonPrimitive?.content?.toDouble()
                 ?: throw Exception("Missing weightKg parameter")
-            val activityLevel = paramsElement["activityLevel"]?.jsonPrimitive?.content 
+            val activityLevel = paramsElement["activityLevel"]?.jsonPrimitive?.content
                 ?: throw Exception("Missing activityLevel parameter")
-            val goal = paramsElement["goal"]?.jsonPrimitive?.content 
+            val goal = paramsElement["goal"]?.jsonPrimitive?.content
                 ?: throw Exception("Missing goal parameter")
-            
+
             val nutritionRequest = NutritionMetricsRequest(
                 sex = sex,
                 age = age,
@@ -185,27 +138,23 @@ class McpJsonRpcHandler {
         }
     }
 
-    private fun buildSuccessResponse(id: Int, resultData: JsonObject): String {
-        return """{"jsonrpc":"2.0","id":$id,"result":${json.encodeToString(resultData)},"error":null}"""
-    }
-
-    private fun handleGenerateMealGuidance(request: JsonRpcRequest): String {
+    protected open fun handleGenerateMealGuidance(request: JsonRpcRequest): String {
         println("   Method: generate_meal_guidance")
 
         return try {
             val paramsElement = request.params ?: throw Exception("Missing params")
-            
-            val goal = paramsElement["goal"]?.jsonPrimitive?.content 
+
+            val goal = paramsElement["goal"]?.jsonPrimitive?.content
                 ?: throw Exception("Missing goal parameter")
-            val targetCalories = paramsElement["targetCalories"]?.jsonPrimitive?.content?.toInt() 
+            val targetCalories = paramsElement["targetCalories"]?.jsonPrimitive?.content?.toInt()
                 ?: throw Exception("Missing targetCalories parameter")
-            val proteinG = paramsElement["proteinG"]?.jsonPrimitive?.content?.toInt() 
+            val proteinG = paramsElement["proteinG"]?.jsonPrimitive?.content?.toInt()
                 ?: throw Exception("Missing proteinG parameter")
-            val fatG = paramsElement["fatG"]?.jsonPrimitive?.content?.toInt() 
+            val fatG = paramsElement["fatG"]?.jsonPrimitive?.content?.toInt()
                 ?: throw Exception("Missing fatG parameter")
-            val carbsG = paramsElement["carbsG"]?.jsonPrimitive?.content?.toInt() 
+            val carbsG = paramsElement["carbsG"]?.jsonPrimitive?.content?.toInt()
                 ?: throw Exception("Missing carbsG parameter")
-            
+
             val mealRequest = MealGuidanceRequest(
                 goal = goal,
                 targetCalories = targetCalories,
@@ -239,15 +188,15 @@ class McpJsonRpcHandler {
         }
     }
 
-    private fun handleGenerateTrainingGuidance(request: JsonRpcRequest): String {
+    protected open fun handleGenerateTrainingGuidance(request: JsonRpcRequest): String {
         println("   Method: generate_training_guidance")
 
         return try {
             val paramsElement = request.params ?: throw Exception("Missing params")
-            
-            val goal = paramsElement["goal"]?.jsonPrimitive?.content 
+
+            val goal = paramsElement["goal"]?.jsonPrimitive?.content
                 ?: throw Exception("Missing goal parameter")
-            
+
             val trainingRequest = TrainingGuidanceRequest(
                 goal = goal,
                 trainingLevel = paramsElement["trainingLevel"]?.jsonPrimitive?.content,
@@ -279,11 +228,70 @@ class McpJsonRpcHandler {
         }
     }
 
-    private fun handleUnknownMethod(request: JsonRpcRequest): String {
+    protected open fun handleUnknownMethod(request: JsonRpcRequest): String {
         return """{"jsonrpc":"2.0","id":${request.id},"result":null,"error":{"code":-32601,"message":"Method not found: ${request.method}"}}"""
     }
 
-    private fun buildErrorResponse(id: Any?, error: Exception): String {
+    protected fun buildSuccessResponse(id: Int, resultData: JsonObject): String {
+        return """{"jsonrpc":"2.0","id":$id,"result":${json.encodeToString(resultData)},"error":null}"""
+    }
+
+    protected fun buildErrorResponse(id: Any?, error: Exception): String {
         return """{"jsonrpc":"2.0","id":$id,"result":null,"error":{"code":-32603,"message":"${error.message ?: "Unknown error"}"}}"""
     }
+
+    fun handle(requestBody: String): String {
+        return try {
+            val request = json.decodeFromString<JsonRpcRequest>(requestBody)
+
+            when (request.method) {
+                "initialize" -> handleInitialize(request)
+                "tools/list" -> handleListTools(request)
+                "ping" -> handlePing(request)
+                "get_app_info" -> handleGetAppInfo(request)
+                "calculate_nutrition_metrics" -> handleCalculateNutritionMetrics(request)
+                "generate_meal_guidance" -> handleGenerateMealGuidance(request)
+                "generate_training_guidance" -> handleGenerateTrainingGuidance(request)
+                else -> handleUnknownMethod(request)
+            }
+        } catch (e: Exception) {
+            val errorResponse = JsonRpcResponse(
+                jsonrpc = "2.0",
+                id = -1,
+                result = null,
+                error = JsonRpcError(
+                    code = -32600,
+                    message = "Invalid Request: ${e.message}"
+                )
+            )
+            json.encodeToString(errorResponse)
+        }
+    }
+}
+
+class McpJsonRpcHandler : AbstractMcpJsonRpcHandler() {
+    override val tools = listOf(
+        Tool(
+            name = "ping",
+            description = "Simple ping tool to test MCP connection. Returns 'pong' message."
+        ),
+        Tool(
+            name = "get_app_info",
+            description = "Returns information about application including version, platform, and build details."
+        ),
+        Tool(
+            name = "calculate_nutrition_metrics",
+            description = "Calculates BMR, TDEE, target calories and macros. Parameters: sex (male/female), age (years), heightCm (cm), weightKg (kg), activityLevel (sedentary/light/moderate/active/very_active), goal (weight_loss/maintenance/muscle_gain). Returns BMR, TDEE, targetCalories, protein_g, fat_g, carbs_g, notes."
+        ),
+        Tool(
+            name = "generate_meal_guidance",
+            description = "Generates meal guidance based on nutrition metrics. Parameters: goal, targetCalories, proteinG, fatG, carbsG, mealsPerDay (optional, default 3), dietaryPreferences (optional), dietaryRestrictions (optional, default none). Returns mealStrategy, mealDistribution, recommendedFoods, foodsToLimit, notes."
+        ),
+        Tool(
+            name = "generate_training_guidance",
+            description = "Generates training plan. Parameters: goal, trainingLevel (optional, default beginner), trainingDaysPerWeek (optional, default 3), sessionDurationMinutes (optional, default 60), availableEquipment (optional, default gym), restrictions (optional, default none). Returns trainingSplit, weeklyPlan, exercisePrinciples, recoveryNotes, notes."
+        )
+    )
+
+    override fun getServerInfo(): String = "MCP Fitness Server"
 }
