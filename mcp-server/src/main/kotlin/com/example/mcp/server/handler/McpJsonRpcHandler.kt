@@ -13,10 +13,12 @@ import com.example.mcp.server.service.training.TrainingGuidanceService
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonPrimitive
 import java.util.*
 
 class McpJsonRpcHandler {
@@ -135,15 +137,28 @@ class McpJsonRpcHandler {
         println("   Method: calculate_nutrition_metrics")
 
         return try {
-            val params = request.params as? Map<String, Any?> ?: throw Exception("Invalid params")
+            val paramsElement = request.params ?: throw Exception("Missing params")
+            
+            val sex = paramsElement["sex"]?.jsonPrimitive?.content 
+                ?: throw Exception("Missing sex parameter")
+            val age = paramsElement["age"]?.jsonPrimitive?.content?.toInt() 
+                ?: throw Exception("Missing age parameter")
+            val heightCm = paramsElement["heightCm"]?.jsonPrimitive?.content?.toInt() 
+                ?: throw Exception("Missing heightCm parameter")
+            val weightKg = paramsElement["weightKg"]?.jsonPrimitive?.content?.toDouble() 
+                ?: throw Exception("Missing weightKg parameter")
+            val activityLevel = paramsElement["activityLevel"]?.jsonPrimitive?.content 
+                ?: throw Exception("Missing activityLevel parameter")
+            val goal = paramsElement["goal"]?.jsonPrimitive?.content 
+                ?: throw Exception("Missing goal parameter")
             
             val nutritionRequest = NutritionMetricsRequest(
-                sex = params["sex"] as? String ?: throw Exception("Missing sex parameter"),
-                age = params["age"] as? Int ?: throw Exception("Missing age parameter"),
-                heightCm = params["heightCm"] as? Int ?: throw Exception("Missing heightCm parameter"),
-                weightKg = (params["weightKg"] as? Number)?.toDouble() ?: throw Exception("Missing weightKg parameter"),
-                activityLevel = params["activityLevel"] as? String ?: throw Exception("Missing activityLevel parameter"),
-                goal = params["goal"] as? String ?: throw Exception("Missing goal parameter")
+                sex = sex,
+                age = age,
+                heightCm = heightCm,
+                weightKg = weightKg,
+                activityLevel = activityLevel,
+                goal = goal
             )
 
             val validationResult = nutritionRequest.validate()
@@ -178,17 +193,28 @@ class McpJsonRpcHandler {
         println("   Method: generate_meal_guidance")
 
         return try {
-            val params = request.params as? Map<String, Any?> ?: throw Exception("Invalid params")
+            val paramsElement = request.params ?: throw Exception("Missing params")
+            
+            val goal = paramsElement["goal"]?.jsonPrimitive?.content 
+                ?: throw Exception("Missing goal parameter")
+            val targetCalories = paramsElement["targetCalories"]?.jsonPrimitive?.content?.toInt() 
+                ?: throw Exception("Missing targetCalories parameter")
+            val proteinG = paramsElement["proteinG"]?.jsonPrimitive?.content?.toInt() 
+                ?: throw Exception("Missing proteinG parameter")
+            val fatG = paramsElement["fatG"]?.jsonPrimitive?.content?.toInt() 
+                ?: throw Exception("Missing fatG parameter")
+            val carbsG = paramsElement["carbsG"]?.jsonPrimitive?.content?.toInt() 
+                ?: throw Exception("Missing carbsG parameter")
             
             val mealRequest = MealGuidanceRequest(
-                goal = params["goal"] as? String ?: throw Exception("Missing goal parameter"),
-                targetCalories = params["targetCalories"] as? Int ?: throw Exception("Missing targetCalories parameter"),
-                proteinG = params["proteinG"] as? Int ?: throw Exception("Missing proteinG parameter"),
-                fatG = params["fatG"] as? Int ?: throw Exception("Missing fatG parameter"),
-                carbsG = params["carbsG"] as? Int ?: throw Exception("Missing carbsG parameter"),
-                mealsPerDay = params["mealsPerDay"] as? Int,
-                dietaryPreferences = params["dietaryPreferences"] as? String,
-                dietaryRestrictions = params["dietaryRestrictions"] as? String
+                goal = goal,
+                targetCalories = targetCalories,
+                proteinG = proteinG,
+                fatG = fatG,
+                carbsG = carbsG,
+                mealsPerDay = paramsElement["mealsPerDay"]?.jsonPrimitive?.content?.toInt(),
+                dietaryPreferences = paramsElement["dietaryPreferences"]?.jsonPrimitive?.content,
+                dietaryRestrictions = paramsElement["dietaryRestrictions"]?.jsonPrimitive?.content
             )
 
             val validationResult = mealRequest.validate()
@@ -217,15 +243,18 @@ class McpJsonRpcHandler {
         println("   Method: generate_training_guidance")
 
         return try {
-            val params = request.params as? Map<String, Any?> ?: throw Exception("Invalid params")
+            val paramsElement = request.params ?: throw Exception("Missing params")
+            
+            val goal = paramsElement["goal"]?.jsonPrimitive?.content 
+                ?: throw Exception("Missing goal parameter")
             
             val trainingRequest = TrainingGuidanceRequest(
-                goal = params["goal"] as? String ?: throw Exception("Missing goal parameter"),
-                trainingLevel = params["trainingLevel"] as? String,
-                trainingDaysPerWeek = params["trainingDaysPerWeek"] as? Int,
-                sessionDurationMinutes = params["sessionDurationMinutes"] as? Int,
-                availableEquipment = (params["availableEquipment"] as? List<*>)?.filterIsInstance<String>(),
-                restrictions = params["restrictions"] as? String
+                goal = goal,
+                trainingLevel = paramsElement["trainingLevel"]?.jsonPrimitive?.content,
+                trainingDaysPerWeek = paramsElement["trainingDaysPerWeek"]?.jsonPrimitive?.content?.toInt(),
+                sessionDurationMinutes = paramsElement["sessionDurationMinutes"]?.jsonPrimitive?.content?.toInt(),
+                availableEquipment = (paramsElement["availableEquipment"] as? kotlinx.serialization.json.JsonArray)?.map { it.jsonPrimitive.content },
+                restrictions = paramsElement["restrictions"]?.jsonPrimitive?.content
             )
 
             val validationResult = trainingRequest.validate()

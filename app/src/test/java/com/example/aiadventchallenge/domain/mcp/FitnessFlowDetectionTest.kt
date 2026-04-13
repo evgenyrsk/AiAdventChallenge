@@ -105,9 +105,9 @@ class FitnessFlowDetectionTest {
 
     @Test
     fun `fitness flow execution fails - should return error`() = runTest {
-        val userInput = "Покажи мои фитнес логи"
+        val userInput = "Рассчитай калории для мужчины 30 лет"
 
-        coEvery { callMcpToolUseCase.executeMultiServerFlow(any()) } throws Exception("Connection failed")
+        coEvery { callMcpToolUseCase(any(), any()) } throws Exception("Connection failed")
 
         val result = orchestrator.detectAndExecuteTool(userInput)
 

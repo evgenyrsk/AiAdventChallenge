@@ -126,19 +126,64 @@ class McpToolOrchestratorImpl(
     
     private fun applyDefaults(params: Map<String, Any?>): Map<String, Any?> {
         val result = params.toMutableMap()
+        
+        // Обязательные параметры для calculate_nutrition_metrics
         if (!result.contains("sex")) result["sex"] = "male"
+        if (!result.contains("age")) result["age"] = 30
+        if (!result.contains("heightCm")) result["heightCm"] = 175
+        if (!result.contains("weightKg")) result["weightKg"] = 70.0
         if (!result.contains("activityLevel")) result["activityLevel"] = "moderate"
+        if (!result.contains("goal")) result["goal"] = "maintenance"
+        
+        // Опциональные параметры
         if (!result.contains("trainingDaysPerWeek")) result["trainingDaysPerWeek"] = 3
         if (!result.contains("mealsPerDay")) result["mealsPerDay"] = 3
         if (!result.contains("trainingLevel")) result["trainingLevel"] = "beginner"
+        
         return result
+    }
+    
+    private fun logAppliedDefaults(originalParams: Map<String, Any?>, finalParams: Map<String, Any?>) {
+        val defaultApplied = finalParams.keys.filterNot { originalParams.containsKey(it) }
+        
+        if (defaultApplied.isNotEmpty()) {
+            Log.d(TAG, "📝 Applied defaults for missing parameters:")
+            defaultApplied.forEach { key ->
+                Log.d(TAG, "   - $key = ${finalParams[key]}")
+            }
+        }
+    }
+    
+    private sealed class ValidationResult {
+        data object Valid : ValidationResult()
+        data class MissingParams(val missingParams: List<String>, val toolName: String) : ValidationResult()
+    }
+    
+    private fun validateToolParams(toolName: String, params: Map<String, Any?>): ValidationResult {
+        val requiredParams = when (toolName) {
+            "calculate_nutrition_metrics" -> listOf("sex", "age", "heightCm", "weightKg", "activityLevel", "goal")
+            "generate_meal_guidance" -> listOf("goal", "targetCalories", "proteinG", "fatG", "carbsG")
+            "generate_training_guidance" -> listOf("goal")
+            else -> emptyList()
+        }
+        
+        val missing = requiredParams.filterNot { params.containsKey(it) }
+        
+        return if (missing.isEmpty()) {
+            ValidationResult.Valid
+        } else {
+            ValidationResult.MissingParams(missing, toolName)
+        }
     }
     
     private fun selectTools(intent: com.example.aiadventchallenge.domain.model.mcp.FitnessIntent): List<com.example.aiadventchallenge.domain.model.mcp.ToolCall> {
         val calls = mutableListOf<com.example.aiadventchallenge.domain.model.mcp.ToolCall>()
+        val paramsWithDefaults = applyDefaults(intent.extractedParams)
+        
+        logAppliedDefaults(intent.extractedParams, paramsWithDefaults)
         
         if (intent.needsNutritionMetrics) {
-            val nutritionParams = applyDefaults(intent.extractedParams).filterKeys {
+            val nutritionParams = paramsWithDefaults.filterKeys {
                 it in listOf("sex", "age", "heightCm", "weightKg", "activityLevel", "goal")
             }
             
@@ -152,7 +197,7 @@ class McpToolOrchestratorImpl(
         }
         
         if (intent.needsMealGuidance) {
-            val mealParams = applyDefaults(intent.extractedParams)
+            val mealParams = paramsWithDefaults
             
             calls.add(
                 com.example.aiadventchallenge.domain.model.mcp.ToolCall(
@@ -166,7 +211,7 @@ class McpToolOrchestratorImpl(
         }
         
         if (intent.needsTrainingGuidance) {
-            val trainingParams = applyDefaults(intent.extractedParams)
+            val trainingParams = paramsWithDefaults
             
             calls.add(
                 com.example.aiadventchallenge.domain.model.mcp.ToolCall(
@@ -201,6 +246,33 @@ class McpToolOrchestratorImpl(
             val duration = System.currentTimeMillis() - startTime
             
             try {
+                val validationResult = validateToolParams(call.tool, finalParams)
+                if (validationResult is ValidationResult.MissingParams) {
+                    val missingParamsText = validationResult.missingParams.joinToString(", ")
+                    val paramHints = when (validationResult.toolName) {
+                        "calculate_nutrition_metrics" -> """
+                            |Пример: "Рассчитай калории для мужчины 30 лет, ростом 175 см, весом 70 кг с умеренной активностью для похудения"
+                            |Возможные цели: weight_loss (похудение), maintenance (поддержание веса), muscle_gain (набор массы)
+                            |Уровни активности: sedentary, light, moderate, active, very_active
+                        """.trimMargin()
+                        "generate_meal_guidance" -> """
+                            |Для генерации плана питания сначала нужно рассчитать метрики питания
+                            |Пример: "Рассчитай калории и составь план питания"
+                        """.trimMargin()
+                        "generate_training_guidance" -> """
+                            |Пример: "Составь план тренировок для набора массы"
+                        """.trimMargin()
+                        else -> ""
+                    }
+                    val error = """
+                        |Для инструмента ${validationResult.toolName} отсутствуют обязательные параметры: $missingParamsText
+                        |
+                        |$paramHints
+                    """.trimMargin()
+                    Log.e(TAG, "❌ $error")
+                    throw Exception(error.trim())
+                }
+                
                 val mcpData = callMcpToolUseCase(call.tool, finalParams)
                 
                 val result = when (mcpData) {
