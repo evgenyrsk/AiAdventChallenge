@@ -3,10 +3,7 @@ package com.example.aiadventchallenge.domain.mcp
 import com.example.aiadventchallenge.domain.mcp.McpToolData.*
 import com.example.aiadventchallenge.domain.model.mcp.*
 import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.coVerifyOrder
-import io.mockk.mockk
+import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -17,8 +14,13 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [30])
 class McpOrchestratorPipelineTest {
 
     private lateinit var callMcpToolUseCase: CallMcpToolUseCase
