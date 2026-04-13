@@ -7,10 +7,15 @@ import com.example.aiadventchallenge.domain.model.mcp.McpConnectionStatus
 import com.example.aiadventchallenge.domain.model.mcp.McpConnectionResult
 import com.example.aiadventchallenge.domain.model.mcp.McpTool
 import com.example.aiadventchallenge.domain.mcp.McpToolData
+import com.example.aiadventchallenge.domain.model.mcp.NutritionMetricsResponse
+import com.example.aiadventchallenge.domain.model.mcp.MealGuidanceResponse
+import com.example.aiadventchallenge.domain.model.mcp.TrainingGuidanceResponse
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.JsonObject
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
@@ -82,10 +87,10 @@ class McpJsonRpcClient(
     ): McpToolData {
         val jsonParams = params.mapValues { (_, value) ->
             when (value) {
-                is String -> kotlinx.serialization.json.JsonPrimitive(value)
-                is Number -> kotlinx.serialization.json.JsonPrimitive(value)
-                is Boolean -> kotlinx.serialization.json.JsonPrimitive(value)
-                else -> kotlinx.serialization.json.JsonPrimitive(value.toString())
+                is String -> JsonPrimitive(value)
+                is Number -> JsonPrimitive(value)
+                is Boolean -> JsonPrimitive(value)
+                else -> JsonPrimitive(value.toString())
             }
         }
 
@@ -103,9 +108,92 @@ class McpJsonRpcClient(
             throw McpException("Tool call failed: ${response.error.message}")
         }
 
-        val result = response.result ?: return McpToolData.StringResult("")
+        if (response.result == null) {
+            return McpToolData.StringResult("")
+        }
 
-        return result.toMcpToolData()
+        return when (name) {
+            "calculate_nutrition_metrics" -> {
+                val resultElement = json.parseToJsonElement(responseJson).jsonObject["result"]?.jsonObject
+                if (resultElement != null) {
+                    val bmr = resultElement["bmr"]?.toString()?.toIntOrNull() ?: 0
+                    val tdee = resultElement["tdee"]?.toString()?.toIntOrNull() ?: 0
+                    val targetCalories = resultElement["targetCalories"]?.toString()?.toIntOrNull() ?: 0
+                    val proteinG = resultElement["proteinG"]?.toString()?.toIntOrNull() ?: 0
+                    val fatG = resultElement["fatG"]?.toString()?.toIntOrNull() ?: 0
+                    val carbsG = resultElement["carbsG"]?.toString()?.toIntOrNull() ?: 0
+                    val notes = resultElement["notes"]?.toString() ?: ""
+                    
+                    McpToolData.NutritionMetrics(
+                        NutritionMetricsResponse(bmr, tdee, targetCalories, proteinG, fatG, carbsG, notes)
+                    )
+                } else {
+                    McpToolData.StringResult("")
+                }
+            }
+            "generate_meal_guidance" -> {
+                val resultElement = json.parseToJsonElement(responseJson).jsonObject["result"]?.jsonObject
+                if (resultElement != null) {
+                    val mealStrategy = resultElement["mealStrategy"]?.toString() ?: ""
+                    val recommendedFoods = (resultElement["recommendedFoods"] as? kotlinx.serialization.json.JsonArray)?.map { it.toString() } ?: emptyList()
+                    val foodsToLimit = (resultElement["foodsToLimit"] as? kotlinx.serialization.json.JsonArray)?.map { it.toString() } ?: emptyList()
+                    val notes = resultElement["notes"]?.toString() ?: ""
+                    val mealDistributionJson = resultElement["mealDistribution"] as? kotlinx.serialization.json.JsonArray
+                    
+                    val mealDistribution = mealDistributionJson?.map { mealJson ->
+                        val meal = mealJson.jsonObject
+                        com.example.aiadventchallenge.domain.model.mcp.MealSuggestion(
+                            meal = meal["meal"]?.toString()?.toIntOrNull() ?: 1,
+                            calories = meal["calories"]?.toString()?.toIntOrNull() ?: 0,
+                            proteinG = meal["proteinG"]?.toString()?.toIntOrNull() ?: 0,
+                            suggestions = meal["suggestions"]?.toString() ?: ""
+                        )
+                    } ?: emptyList()
+                    
+                    McpToolData.MealGuidance(
+                        MealGuidanceResponse(mealStrategy, mealDistribution, recommendedFoods, foodsToLimit, notes)
+                    )
+                } else {
+                    McpToolData.StringResult("")
+                }
+            }
+            "generate_training_guidance" -> {
+                val resultElement = json.parseToJsonElement(responseJson).jsonObject["result"]?.jsonObject
+                if (resultElement != null) {
+                    val trainingSplit = resultElement["trainingSplit"]?.toString() ?: ""
+                    val exercisePrinciples = resultElement["exercisePrinciples"]?.toString() ?: ""
+                    val recoveryNotes = resultElement["recoveryNotes"]?.toString() ?: ""
+                    val notes = resultElement["notes"]?.toString() ?: ""
+                    val weeklyPlanJson = resultElement["weeklyPlan"] as? kotlinx.serialization.json.JsonArray
+                    
+                    val weeklyPlan = weeklyPlanJson?.map { dayJson ->
+                        val day = dayJson.jsonObject
+                        val exercisesJson = day["exercises"] as? kotlinx.serialization.json.JsonArray
+                        val exercises = exercisesJson?.map { exerciseJson ->
+                            val exercise = exerciseJson.jsonObject
+                            com.example.aiadventchallenge.domain.model.mcp.Exercise(
+                                name = exercise["name"]?.toString() ?: "",
+                                sets = exercise["sets"]?.toString()?.toIntOrNull() ?: 0,
+                                reps = exercise["reps"]?.toString() ?: ""
+                            )
+                        } ?: emptyList()
+                        
+                        com.example.aiadventchallenge.domain.model.mcp.TrainingDay(
+                            day = day["day"]?.toString()?.toIntOrNull() ?: 1,
+                            focus = day["focus"]?.toString() ?: "",
+                            exercises = exercises
+                        )
+                    } ?: emptyList()
+                    
+                    McpToolData.TrainingGuidance(
+                        TrainingGuidanceResponse(trainingSplit, weeklyPlan, exercisePrinciples, recoveryNotes, notes)
+                    )
+                } else {
+                    McpToolData.StringResult("")
+                }
+            }
+            else -> McpToolData.StringResult(response.result.message ?: "")
+        }
     }
 
     private suspend fun sendRequest(request: JsonRpcRequest): String = suspendCancellableCoroutine { continuation ->

@@ -5,12 +5,8 @@ import com.example.aiadventchallenge.domain.model.mcp.McpConnectionResult
 import com.example.aiadventchallenge.domain.model.mcp.McpConnectionStatus
 import com.example.aiadventchallenge.domain.model.mcp.McpTool
 import com.example.aiadventchallenge.domain.mcp.McpToolData
-import com.example.aiadventchallenge.domain.model.mcp.MultiServerFlowResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 
 class McpRepository(
     private val client: McpJsonRpcClient
@@ -61,55 +57,6 @@ class McpRepository(
         
         Log.d(TAG, "✅ Tool result: ${result.javaClass.simpleName}")
         result
-    }
-    
-    suspend fun executeMultiServerFlow(
-        prompt: String
-    ): MultiServerFlowResult = withContext(Dispatchers.IO) {
-        try {
-            Log.d(TAG, "🎯 Executing multi-server flow for: $prompt")
-            
-            // Call the new execute_multi_server_flow tool
-            val params = mapOf(
-                "prompt" to prompt
-            )
-            
-            val result = client.callTool("execute_multi_server_flow", params)
-            
-            Log.d(TAG, "✅ Multi-server flow completed")
-            Log.d(TAG, "   Result: $result")
-            
-            (result as? McpToolData.MultiServerFlow)?.result ?: MultiServerFlowResult(
-                success = false,
-                flowName = "unknown",
-                flowId = "",
-                stepsExecuted = 0,
-                totalSteps = 0,
-                finalResult = null,
-                executionSteps = emptyList(),
-                durationMs = 0,
-                errorMessage = "Invalid result format"
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Multi-server flow failed", e)
-            
-            MultiServerFlowResult(
-                success = false,
-                flowName = "unknown",
-                flowId = "",
-                stepsExecuted = 0,
-                totalSteps = 0,
-                finalResult = null,
-                executionSteps = emptyList(),
-                durationMs = 0,
-                errorMessage = e.message ?: "Unknown error"
-            )
-        }
-    }
-    
-    suspend fun executeFitnessSummaryToReminderFlow(): MultiServerFlowResult {
-        val prompt = "Найди последние фитнес логи за неделю, составь из них краткое описание и создай напоминание на завтра утром"
-        return executeMultiServerFlow(prompt)
     }
     
     suspend fun listTools(): List<McpTool> = withContext(Dispatchers.IO) {

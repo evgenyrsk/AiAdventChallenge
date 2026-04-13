@@ -10,184 +10,335 @@ class McpToolOrchestratorImpl(
     private val TAG = "McpToolOrchestrator"
     
     override suspend fun detectAndExecuteTool(userInput: String): ToolExecutionResult {
-        Log.d(TAG, "🔍 Checking for MCP tool in LLM response...")
+        Log.d(TAG, "🔍 Checking for MCP tool in user input...")
 
-        if (isFitnessFlowRequest(userInput)) {
-            Log.d(TAG, "✅ Detected fitness flow request")
-
-            return try {
-                val flowResult = callMcpToolUseCase.executeMultiServerFlow(userInput)
-                val context = formatMultiServerFlowContext(flowResult)
-                Log.d(TAG, "📝 MCP Context to add to LLM (length=${context.length}):")
-                Log.d(TAG, context)
-                ToolExecutionResult.Success(context)
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ Failed to execute fitness flow", e)
-                ToolExecutionResult.Error(e.message ?: "Неизвестная ошибка")
-            }
+        val intent = extractFitnessIntent(userInput)
+        
+        val toolCalls = selectTools(intent)
+        
+        if (toolCalls.isEmpty()) {
+            Log.d(TAG, "ℹ️ No MCP tools needed for this request")
+            return ToolExecutionResult.NoToolFound
+        }
+        
+        Log.d(TAG, "✅ Detected ${toolCalls.size} MCP tools to call")
+        toolCalls.forEach { call ->
+            Log.d(TAG, "   - ${call.tool} (depends on: ${call.dependsOn ?: "none"})")
         }
 
-        return ToolExecutionResult.NoToolFound
-    }
-
-    private fun isFitnessFlowRequest(input: String): Boolean {
-        val keywords = listOf(
-            "фитнес", "тренировк", "спорт", "workout", "fitness",
-            "лог", "запис", "log",
-            "сводк", "статистик", "анализ", "summary",
-            "напомин", "напомни", "напомн", "напомни", "reminder"
-        )
-        val lowerInput = input.lowercase()
-        return keywords.any { lowerInput.contains(it) }
-    }
-
-    private fun formatMultiServerFlowContext(result: com.example.aiadventchallenge.domain.model.mcp.MultiServerFlowResult): String {
-        return """
-        ================================================================================
-        🏋️ FITNESS MCP FLOW - ВЫПОЛНЕНИЕ СЦЕНАРИЯ
-        ================================================================================
-
-        Flow: ${result.flowName}
-        Статус: ${if (result.success) "✅ Успешно" else "❌ Ошибка"}
-        Шагов выполнено: ${result.stepsExecuted}/${result.totalSteps}
-        Длительность: ${result.durationMs}ms
-
-        Шаги выполнения:
-        ${result.executionSteps.joinToString("\n") { step ->
-            val statusEmoji = when (step.status) {
-                "COMPLETED" -> "✅"
-                "FAILED" -> "❌"
-                "RUNNING" -> "⏳"
-                else -> "⏭️"
-            }
-            "$statusEmoji ${step.serverId} → ${step.toolName} (${step.durationMs}ms)"
-        }}
-
-        ${if (result.errorMessage != null) "❌ Ошибка: ${result.errorMessage}" else ""}
-
-        ================================================================================
-        """.trimIndent()
-    }
-    
-    suspend fun executeTool(
-        toolName: String,
-        params: Map<String, Any?>
-    ): ToolExecutionResult {
         return try {
-            Log.d(TAG, "🔧 Calling MCP tool: $toolName")
-            Log.d(TAG, "   Params: $params")
-            
-            val result = callMcpToolUseCase(toolName, params)
-            
-            Log.d(TAG, "✅ Tool result: ${result.javaClass.simpleName}")
-            
-            ToolExecutionResult.Success(formatResult(toolName, result))
+            val results = executeTools(toolCalls)
+            val context = formatResultsForLLM(results)
+            Log.d(TAG, "📝 MCP Context to add to LLM (length=${context.length}):")
+            Log.d(TAG, context)
+            ToolExecutionResult.Success(context)
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to call MCP tool", e)
+            Log.e(TAG, "❌ Failed to execute MCP tools", e)
             ToolExecutionResult.Error(e.message ?: "Неизвестная ошибка")
         }
     }
     
-    private fun formatResult(toolName: String, toolData: McpToolData): String {
-        val resultText = when (toolData) {
-            is McpToolData.StringResult -> toolData.message
-            is McpToolData.FitnessSummary -> formatFitnessSummary(toolData.summary)
-            is McpToolData.ScheduledSummary -> formatScheduledSummary(toolData.summary)
-            is McpToolData.AddFitnessLog -> formatAddFitnessLog(toolData.result)
-            is McpToolData.ExportResult -> formatExportResult(toolData.fullResponse)
-            is McpToolData.RunScheduledSummary -> formatRunScheduledSummary(toolData.result)
-            is McpToolData.MultiServerFlow -> formatMultiServerFlow(toolData.result)
+    private fun extractFitnessIntent(userInput: String): com.example.aiadventchallenge.domain.model.mcp.FitnessIntent {
+        val lowerInput = userInput.lowercase()
+        
+        val needsNutritionMetrics = listOf(
+            "калори", "bmr", "tdee", "питани", "раcсчит", "расчет",
+            "calories", "nutrition", "macros", "protein", "fat", "carbs"
+        ).any { lowerInput.contains(it) }
+        
+        val needsMealGuidance = listOf(
+            "питани", "ед", "рецепт", "прием пищ", "еда",
+            "meal", "food", "diet", "eating", "nutrition plan"
+        ).any { lowerInput.contains(it) }
+        
+        val needsTrainingGuidance = listOf(
+            "тренировк", "спорт", "фитнес", "упражнен", "зал",
+            "workout", "training", "exercise", "fitness", "gym"
+        ).any { lowerInput.contains(it) }
+        
+        val extractedParams = extractParameters(userInput)
+        
+        return com.example.aiadventchallenge.domain.model.mcp.FitnessIntent(
+            needsNutritionMetrics = needsNutritionMetrics || needsMealGuidance || needsTrainingGuidance,
+            needsMealGuidance = needsMealGuidance || needsNutritionMetrics,
+            needsTrainingGuidance = needsTrainingGuidance || needsNutritionMetrics,
+            extractedParams = extractedParams
+        )
+    }
+    
+    private fun extractParameters(userInput: String): Map<String, Any?> {
+        val lowerInput = userInput.lowercase()
+        val params = mutableMapOf<String, Any?>()
+        
+        val ageRegex = """(\d+)\s*(?:лет|год|годов|years?|y)""".toRegex(RegexOption.IGNORE_CASE)
+        ageRegex.find(userInput)?.let {
+            params["age"] = it.groupValues[1].toInt()
         }
         
-        return """
-        ================================================================================
-        🔧 MCP ИНСТРУМЕНТ - РЕЗУЛЬТАТ ВЫПОЛНЕНИЯ
-        ================================================================================
+        val heightRegex = """(\d+)\s*(?:см|cm)""".toRegex(RegexOption.IGNORE_CASE)
+        heightRegex.find(userInput)?.let {
+            params["heightCm"] = it.groupValues[1].toInt()
+        }
         
-        Инструмент: $toolName
+        val weightRegex = """(\d+(?:\.\d+)?)\s*(?:кг|kg)""".toRegex(RegexOption.IGNORE_CASE)
+        weightRegex.find(userInput)?.let {
+            params["weightKg"] = it.groupValues[1].toDouble()
+        }
         
-        Результат выполнения:
-        $resultText
+        if (lowerInput.contains("мужчин") || lowerInput.contains("мужской")) {
+            params["sex"] = "male"
+        } else if (lowerInput.contains("женщин") || lowerInput.contains("женский")) {
+            params["sex"] = "female"
+        }
         
-        ================================================================================
-        """.trimIndent()
+        if (lowerInput.contains("похуд") || lowerInput.contains("weight los") || lowerInput.contains("сброс")) {
+            params["goal"] = "weight_loss"
+        } else if (lowerInput.contains("набор") || lowerInput.contains("muscle") || lowerInput.contains("масс")) {
+            params["goal"] = "muscle_gain"
+        } else if (lowerInput.contains("поддержа") || lowerInput.contains("maintenanc")) {
+            params["goal"] = "maintenance"
+        }
+        
+        if (lowerInput.contains("сидяч") || lowerInput.contains("sedentary")) {
+            params["activityLevel"] = "sedentary"
+        } else if (lowerInput.contains("лёгк") || lowerInput.contains("light")) {
+            params["activityLevel"] = "light"
+        } else if (lowerInput.contains("умерен") || lowerInput.contains("moderate")) {
+            params["activityLevel"] = "moderate"
+        } else if (lowerInput.contains("активн") || lowerInput.contains("active")) {
+            params["activityLevel"] = "active"
+        } else if (lowerInput.contains("очень активн") || lowerInput.contains("very active")) {
+            params["activityLevel"] = "very_active"
+        }
+        
+        val daysRegex = """(\d+)\s*(?:раз|раза|times?)""".toRegex(RegexOption.IGNORE_CASE)
+        daysRegex.find(userInput)?.let {
+            params["trainingDaysPerWeek"] = it.groupValues[1].toInt()
+        }
+        
+        val mealsRegex = """(\d+)\s*(?:раз|раза|times?)\s*(?:в день|день|day)""".toRegex(RegexOption.IGNORE_CASE)
+        mealsRegex.find(userInput)?.let {
+            params["mealsPerDay"] = it.groupValues[1].toInt()
+        }
+        
+        return params
     }
     
-    private fun formatFitnessSummary(summary: com.example.aiadventchallenge.domain.mcp.FitnessSummaryData?): String {
-        if (summary == null) return "Нет данных"
-
-        return """
-        Период: ${summary.period}
-        Записей: ${summary.entriesCount}
-        Средний вес: ${summary.avgWeight?.toString() ?: "нет данных"}
-        Тренировок: ${summary.workoutsCompleted}
-        Средние шаги: ${summary.avgSteps?.toString() ?: "нет данных"}
-        Средний сон: ${summary.avgSleepHours?.toString() ?: "нет данных"}
-        Средний белок: ${summary.avgProtein?.toString() ?: "нет данных"}
-        """.trimIndent()
+    private fun applyDefaults(params: Map<String, Any?>): Map<String, Any?> {
+        val result = params.toMutableMap()
+        if (!result.contains("sex")) result["sex"] = "male"
+        if (!result.contains("activityLevel")) result["activityLevel"] = "moderate"
+        if (!result.contains("trainingDaysPerWeek")) result["trainingDaysPerWeek"] = 3
+        if (!result.contains("mealsPerDay")) result["mealsPerDay"] = 3
+        if (!result.contains("trainingLevel")) result["trainingLevel"] = "beginner"
+        return result
     }
     
-    private fun formatScheduledSummary(summary: com.example.aiadventchallenge.domain.mcp.ScheduledSummaryData?): String {
-        if (summary == null) return "Нет данных"
-
-        return """
-        Сводка успешно создана
-        ID: ${summary.id ?: "нет"}
-        Период: ${summary.period}
-        Записей: ${summary.entriesCount}
-        Средний вес: ${summary.avgWeight ?: "нет"}
-        Тренировок: ${summary.workoutsCompleted}
-        """.trimIndent()
-    }
-    
-    private fun formatAddFitnessLog(result: com.example.aiadventchallenge.domain.mcp.AddFitnessLogData?): String {
-        if (result == null) return "Нет данных"
-
-        return """
-        Запись ${if (result.success) "успешно добавлена" else "не добавлена"}
-        ID записи: ${result.id ?: "нет"}
-        """.trimIndent()
-    }
-    
-    private fun formatExportResult(exportData: com.example.aiadventchallenge.domain.mcp.ExportData): String {
-        return """
-        Файл: ${exportData.filePath ?: "нет"}
-        Формат: ${exportData.format ?: "нет"}
-        """.trimIndent()
-    }
-    
-    private fun formatRunScheduledSummary(result: com.example.aiadventchallenge.domain.mcp.RunScheduledSummaryData?): String {
-        if (result == null) return "Нет данных"
-
-        return """
-        Запуск сводки ${if (result.success) "успешен" else "не удался"}
-        Сводка ID: ${result.summaryId ?: "нет"}
-        """.trimIndent()
-    }
-
-    private fun formatMultiServerFlow(result: com.example.aiadventchallenge.domain.model.mcp.MultiServerFlowResult): String {
-        val statusEmoji = if (result.success) "✅" else "❌"
-        val statusText = if (result.success) "Успешно" else "Ошибка"
-
-        val stepsText = result.executionSteps.joinToString("\n") { step ->
-            val stepStatusEmoji = when (step.status) {
-                "COMPLETED" -> "✅"
-                "FAILED" -> "❌"
-                "RUNNING" -> "⏳"
-                else -> "⏭️"
+    private fun selectTools(intent: com.example.aiadventchallenge.domain.model.mcp.FitnessIntent): List<com.example.aiadventchallenge.domain.model.mcp.ToolCall> {
+        val calls = mutableListOf<com.example.aiadventchallenge.domain.model.mcp.ToolCall>()
+        
+        if (intent.needsNutritionMetrics) {
+            val nutritionParams = applyDefaults(intent.extractedParams).filterKeys {
+                it in listOf("sex", "age", "heightCm", "weightKg", "activityLevel", "goal")
             }
-            "$stepStatusEmoji ${step.serverId} → ${step.toolName} (${step.durationMs}ms)"
+            
+            calls.add(
+                com.example.aiadventchallenge.domain.model.mcp.ToolCall(
+                    tool = "calculate_nutrition_metrics",
+                    params = nutritionParams,
+                    dependsOn = null
+                )
+            )
         }
-
-        return """
-        Multi-Server Flow: ${result.flowName}
-        Статус: $statusEmoji $statusText
-        Шагов выполнено: ${result.stepsExecuted}/${result.totalSteps}
-        Длительность: ${result.durationMs}ms
-
-        Шаги выполнения:
-        $stepsText
-        ${if (result.errorMessage != null) "\n❌ Ошибка: ${result.errorMessage}" else ""}
-        """.trimIndent()
+        
+        if (intent.needsMealGuidance) {
+            val mealParams = applyDefaults(intent.extractedParams)
+            
+            calls.add(
+                com.example.aiadventchallenge.domain.model.mcp.ToolCall(
+                    tool = "generate_meal_guidance",
+                    params = mealParams.filterKeys {
+                        it in listOf("goal", "mealsPerDay", "dietaryPreferences", "dietaryRestrictions")
+                    },
+                    dependsOn = "calculate_nutrition_metrics"
+                )
+            )
+        }
+        
+        if (intent.needsTrainingGuidance) {
+            val trainingParams = applyDefaults(intent.extractedParams)
+            
+            calls.add(
+                com.example.aiadventchallenge.domain.model.mcp.ToolCall(
+                    tool = "generate_training_guidance",
+                    params = trainingParams.filterKeys {
+                        it in listOf("goal", "trainingLevel", "trainingDaysPerWeek", "sessionDurationMinutes", "availableEquipment", "restrictions")
+                    },
+                    dependsOn = "calculate_nutrition_metrics"
+                )
+            )
+        }
+        
+        return calls
+    }
+    
+    private suspend fun executeTools(calls: List<com.example.aiadventchallenge.domain.model.mcp.ToolCall>): Map<String, Any> {
+        val results = mutableMapOf<String, Any>()
+        val executionResults = mutableListOf<com.example.aiadventchallenge.domain.model.mcp.ToolExecutionResult>()
+        
+        for (call in calls) {
+            val startTime = System.currentTimeMillis()
+            val serverId = getServerIdForTool(call.tool)
+            
+            Log.d(TAG, "🔧 Executing tool: ${call.tool} (server: $serverId)")
+            
+            val finalParams = if (call.dependsOn != null) {
+                prepareParamsWithDependency(call, results)
+            } else {
+                call.params
+            }
+            
+            val duration = System.currentTimeMillis() - startTime
+            
+            try {
+                val mcpData = callMcpToolUseCase(call.tool, finalParams)
+                
+                val result = when (mcpData) {
+                    is McpToolData.NutritionMetrics -> mcpData.result
+                    is McpToolData.MealGuidance -> mcpData.result
+                    is McpToolData.TrainingGuidance -> mcpData.result
+                    is McpToolData.StringResult -> mcpData.message
+                    else -> throw Exception("Unknown tool data type")
+                }
+                
+                results[call.tool] = result
+                
+                val toolExecutionResult = com.example.aiadventchallenge.domain.model.mcp.ToolExecutionResult(
+                    tool = call.tool,
+                    serverId = serverId,
+                    success = true,
+                    durationMs = System.currentTimeMillis() - startTime,
+                    result = result,
+                    error = null
+                )
+                executionResults.add(toolExecutionResult)
+                
+                Log.d(TAG, "✅ Tool ${call.tool} completed in ${toolExecutionResult.durationMs}ms")
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Tool ${call.tool} failed", e)
+                
+                val toolExecutionResult = com.example.aiadventchallenge.domain.model.mcp.ToolExecutionResult(
+                    tool = call.tool,
+                    serverId = serverId,
+                    success = false,
+                    durationMs = System.currentTimeMillis() - startTime,
+                    result = null,
+                    error = e.message
+                )
+                executionResults.add(toolExecutionResult)
+                
+                throw e
+            }
+        }
+        
+        results["executionSteps"] = executionResults
+        return results
+    }
+    
+    private fun prepareParamsWithDependency(
+        call: com.example.aiadventchallenge.domain.model.mcp.ToolCall,
+        results: Map<String, Any>
+    ): Map<String, Any?> {
+        val params = mutableMapOf<String, Any?>()
+        
+        if (call.dependsOn == "calculate_nutrition_metrics") {
+            val nutritionResult = results["calculate_nutrition_metrics"] as? com.example.aiadventchallenge.domain.model.mcp.NutritionMetricsResponse
+            if (nutritionResult != null) {
+                when (call.tool) {
+                    "generate_meal_guidance" -> {
+                        params["goal"] = call.params["goal"] ?: "maintenance"
+                        params["targetCalories"] = nutritionResult.targetCalories
+                        params["proteinG"] = nutritionResult.proteinG
+                        params["fatG"] = nutritionResult.fatG
+                        params["carbsG"] = nutritionResult.carbsG
+                    }
+                    "generate_training_guidance" -> {
+                        params["goal"] = call.params["goal"] ?: "maintenance"
+                    }
+                }
+            }
+        }
+        
+        params.putAll(call.params)
+        return params
+    }
+    
+    private fun getServerIdForTool(toolName: String): String {
+        return when (toolName) {
+            "calculate_nutrition_metrics" -> "nutrition-metrics-server-1"
+            "generate_meal_guidance" -> "meal-guidance-server-1"
+            "generate_training_guidance" -> "training-guidance-server-1"
+            else -> "unknown-server"
+        }
+    }
+    
+    private fun formatResultsForLLM(results: Map<String, Any>): String {
+        val executionSteps = results["executionSteps"] as? List<com.example.aiadventchallenge.domain.model.mcp.ToolExecutionResult>
+        val stepsText = executionSteps?.joinToString("\n") { step ->
+            val statusEmoji = if (step.success) "✅" else "❌"
+            "$statusEmoji ${step.serverId} → ${step.tool} (${step.durationMs}ms)"
+        } ?: ""
+        
+        val nutritionResult = results["calculate_nutrition_metrics"] as? com.example.aiadventchallenge.domain.model.mcp.NutritionMetricsResponse
+        val mealResult = results["generate_meal_guidance"] as? com.example.aiadventchallenge.domain.model.mcp.MealGuidanceResponse
+        val trainingResult = results["generate_training_guidance"] as? com.example.aiadventchallenge.domain.model.mcp.TrainingGuidanceResponse
+        
+        val content = buildString {
+            appendLine("================================================================================")
+            appendLine("🏋️ FITNESS MCP FLOW - РЕЗУЛЬТАТЫ ВЫПОЛНЕНИЯ")
+            appendLine("================================================================================")
+            appendLine()
+            
+            if (nutritionResult != null) {
+                appendLine("📊 NUTRITION METRICS:")
+                appendLine("   BMR: ${nutritionResult.bmr} ккал")
+                appendLine("   TDEE: ${nutritionResult.tdee} ккал")
+                appendLine("   Target Calories: ${nutritionResult.targetCalories} ккал")
+                appendLine("   Protein: ${nutritionResult.proteinG}г")
+                appendLine("   Fat: ${nutritionResult.fatG}г")
+                appendLine("   Carbs: ${nutritionResult.carbsG}г")
+                appendLine("   Notes: ${nutritionResult.notes}")
+                appendLine()
+            }
+            
+            if (mealResult != null) {
+                appendLine("🍽️ MEAL GUIDANCE:")
+                appendLine("   Strategy: ${mealResult.mealStrategy}")
+                appendLine("   Recommended Foods: ${mealResult.recommendedFoods.joinToString(", ")}")
+                appendLine("   Foods to Limit: ${mealResult.foodsToLimit.joinToString(", ")}")
+                appendLine("   Notes: ${mealResult.notes}")
+                appendLine()
+            }
+            
+            if (trainingResult != null) {
+                appendLine("💪 TRAINING GUIDANCE:")
+                appendLine("   Split: ${trainingResult.trainingSplit}")
+                appendLine("   Principles: ${trainingResult.exercisePrinciples}")
+                appendLine("   Recovery: ${trainingResult.recoveryNotes}")
+                appendLine("   Notes: ${trainingResult.notes}")
+                appendLine()
+            }
+            
+            if (stepsText.isNotEmpty()) {
+                appendLine("Шаги выполнения:")
+                append(stepsText)
+                appendLine()
+            }
+            
+            appendLine("================================================================================")
+        }
+        
+        return content
     }
 }

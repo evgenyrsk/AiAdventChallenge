@@ -20,39 +20,39 @@ data class McpServer(
         get() = "$baseUrl/health"
     
     companion object {
-        fun fitnessServer(port: Int = 8081) = McpServer(
-            id = "fitness-server-1",
-            name = "Fitness MCP Server",
+        fun nutritionMetricsServer(port: Int = 8081) = McpServer(
+            id = "nutrition-metrics-server-1",
+            name = "Nutrition Metrics MCP Server",
             host = "localhost",
             port = port,
             tools = listOf(
                 "ping",
                 "get_app_info",
-                "calculate_nutrition_plan",
-                "add_fitness_log",
-                "get_fitness_summary",
-                "run_scheduled_summary",
-                "get_latest_scheduled_summary",
-                "search_fitness_logs",
-                "summarize_fitness_logs",
-                "save_summary_to_file",
-                "run_fitness_summary_export_pipeline"
+                "calculate_nutrition_metrics"
             )
         )
         
-        fun reminderServer(port: Int = 8082) = McpServer(
-            id = "reminder-server-1",
-            name = "Reminder MCP Server",
+        fun mealGuidanceServer(port: Int = 8082) = McpServer(
+            id = "meal-guidance-server-1",
+            name = "Meal Guidance MCP Server",
             host = "localhost",
             port = port,
             tools = listOf(
-                "create_reminder",
-                "check_due_reminders",
-                "get_active_reminders",
-                "list_available_jobs",
-                "run_job_now",
-                "get_job_status",
-                "create_reminder_from_summary"
+                "ping",
+                "get_app_info",
+                "generate_meal_guidance"
+            )
+        )
+        
+        fun trainingGuidanceServer(port: Int = 8083) = McpServer(
+            id = "training-guidance-server-1",
+            name = "Training Guidance MCP Server",
+            host = "localhost",
+            port = port,
+            tools = listOf(
+                "ping",
+                "get_app_info",
+                "generate_training_guidance"
             )
         )
     }
