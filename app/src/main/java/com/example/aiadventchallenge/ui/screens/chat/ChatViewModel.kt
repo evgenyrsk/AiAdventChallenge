@@ -72,6 +72,12 @@ class ChatViewModel(
     private val _chatUiState = MutableStateFlow(ChatUiState())
     val chatUiState: StateFlow<ChatUiState> = _chatUiState.asStateFlow()
 
+    data class LastRequestTokens(
+        val promptTokens: Int?,
+        val completionTokens: Int?,
+        val totalTokens: Int?
+    )
+
     private val _mcpConnectionStatus = MutableStateFlow<McpConnectionStatus>(McpConnectionStatus.DISCONNECTED)
     val mcpConnectionStatus: StateFlow<McpConnectionStatus> = _mcpConnectionStatus.asStateFlow()
 
