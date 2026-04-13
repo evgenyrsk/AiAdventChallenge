@@ -1,8 +1,9 @@
 package com.example.aiadventchallenge.domain.mcp
 
 import android.util.Log
-import com.example.aiadventchallenge.domain.model.mcp.FitnessIntent
 import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
+import com.example.aiadventchallenge.domain.mcp.ToolCall
+import com.example.aiadventchallenge.domain.mcp.ToolExecutionStep
 
 class McpToolOrchestratorImpl(
     private val callMcpToolUseCase: CallMcpToolUseCase
@@ -39,7 +40,7 @@ class McpToolOrchestratorImpl(
         }
     }
     
-    private fun extractFitnessIntent(userInput: String): com.example.aiadventchallenge.domain.model.mcp.FitnessIntent {
+    private fun extractFitnessIntent(userInput: String): FitnessIntent {
         val lowerInput = userInput.lowercase()
         
         val needsNutritionMetrics = listOf(
@@ -177,8 +178,8 @@ class McpToolOrchestratorImpl(
         }
     }
     
-    private fun selectTools(intent: com.example.aiadventchallenge.domain.model.mcp.FitnessIntent): List<com.example.aiadventchallenge.domain.model.mcp.ToolCall> {
-        val calls = mutableListOf<com.example.aiadventchallenge.domain.model.mcp.ToolCall>()
+    private fun selectTools(intent: FitnessIntent): List<ToolCall> {
+        val calls = mutableListOf<ToolCall>()
         val paramsWithDefaults = applyDefaults(intent.extractedParams)
         
         logAppliedDefaults(intent.extractedParams, paramsWithDefaults)
@@ -187,40 +188,36 @@ class McpToolOrchestratorImpl(
             val nutritionParams = paramsWithDefaults.filterKeys {
                 it in listOf("sex", "age", "heightCm", "weightKg", "activityLevel", "goal")
             }
-            
+
             calls.add(
-                com.example.aiadventchallenge.domain.model.mcp.ToolCall(
+                ToolCall(
                     tool = "calculate_nutrition_metrics",
-                    params = nutritionParams,
-                    dependsOn = null
+                    dependsOn = null,
+                    params = nutritionParams
                 )
             )
         }
-        
+
         if (intent.needsMealGuidance) {
             val mealParams = paramsWithDefaults
-            
+
             calls.add(
-                com.example.aiadventchallenge.domain.model.mcp.ToolCall(
+                ToolCall(
                     tool = "generate_meal_guidance",
-                    params = mealParams.filterKeys {
-                        it in listOf("goal", "mealsPerDay", "dietaryPreferences", "dietaryRestrictions")
-                    },
-                    dependsOn = "calculate_nutrition_metrics"
+                    dependsOn = "calculate_nutrition_metrics",
+                    params = mealParams
                 )
             )
         }
-        
+
         if (intent.needsTrainingGuidance) {
             val trainingParams = paramsWithDefaults
-            
+
             calls.add(
-                com.example.aiadventchallenge.domain.model.mcp.ToolCall(
+                ToolCall(
                     tool = "generate_training_guidance",
-                    params = trainingParams.filterKeys {
-                        it in listOf("goal", "trainingLevel", "trainingDaysPerWeek", "sessionDurationMinutes", "availableEquipment", "restrictions")
-                    },
-                    dependsOn = "calculate_nutrition_metrics"
+                    dependsOn = "calculate_nutrition_metrics",
+                    params = trainingParams
                 )
             )
         }
@@ -228,9 +225,9 @@ class McpToolOrchestratorImpl(
         return calls
     }
     
-    private suspend fun executeTools(calls: List<com.example.aiadventchallenge.domain.model.mcp.ToolCall>): Map<String, Any> {
+    private suspend fun executeTools(calls: List<ToolCall>): Map<String, Any> {
         val results = mutableMapOf<String, Any>()
-        val executionResults = mutableListOf<com.example.aiadventchallenge.domain.model.mcp.ToolExecutionResult>()
+        val executionResults = mutableListOf<ToolExecutionStep>()
         
         for (call in calls) {
             val startTime = System.currentTimeMillis()
@@ -285,8 +282,8 @@ class McpToolOrchestratorImpl(
                 }
                 
                 results[call.tool] = result
-                
-                val toolExecutionResult = com.example.aiadventchallenge.domain.model.mcp.ToolExecutionResult(
+
+                val toolExecutionResult = ToolExecutionStep(
                     tool = call.tool,
                     serverId = serverId,
                     success = true,
@@ -300,8 +297,8 @@ class McpToolOrchestratorImpl(
                 
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Tool ${call.tool} failed", e)
-                
-                val toolExecutionResult = com.example.aiadventchallenge.domain.model.mcp.ToolExecutionResult(
+
+                val toolExecutionResult = ToolExecutionStep(
                     tool = call.tool,
                     serverId = serverId,
                     success = false,
@@ -320,7 +317,7 @@ class McpToolOrchestratorImpl(
     }
     
     private fun prepareParamsWithDependency(
-        call: com.example.aiadventchallenge.domain.model.mcp.ToolCall,
+        call: ToolCall,
         results: Map<String, Any>
     ): Map<String, Any?> {
         val params = mutableMapOf<String, Any?>()
@@ -357,7 +354,7 @@ class McpToolOrchestratorImpl(
     }
     
     private fun formatResultsForLLM(results: Map<String, Any>): String {
-        val executionSteps = results["executionSteps"] as? List<com.example.aiadventchallenge.domain.model.mcp.ToolExecutionResult>
+        val executionSteps = results["executionSteps"] as? List<ToolExecutionStep>
         val stepsText = executionSteps?.joinToString("\n") { step ->
             val statusEmoji = if (step.success) "✅" else "❌"
             "$statusEmoji ${step.serverId} → ${step.tool} (${step.durationMs}ms)"
