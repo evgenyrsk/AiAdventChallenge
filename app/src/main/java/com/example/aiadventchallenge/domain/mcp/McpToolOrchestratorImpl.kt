@@ -1,6 +1,7 @@
 package com.example.aiadventchallenge.domain.mcp
 
 import android.util.Log
+import com.example.aiadventchallenge.domain.model.mcp.FitnessIntent
 import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
 
 class McpToolOrchestratorImpl(
@@ -58,7 +59,7 @@ class McpToolOrchestratorImpl(
         
         val extractedParams = extractParameters(userInput)
         
-        return com.example.aiadventchallenge.domain.model.mcp.FitnessIntent(
+        return FitnessIntent(
             needsNutritionMetrics = needsNutritionMetrics || needsMealGuidance || needsTrainingGuidance,
             needsMealGuidance = needsMealGuidance || needsNutritionMetrics,
             needsTrainingGuidance = needsTrainingGuidance || needsNutritionMetrics,
