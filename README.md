@@ -116,6 +116,28 @@ app/src/main/java/com/example/aiadventchallenge/
 
 ---
 
+## Document Indexing
+
+В проекте есть локальный document indexing / retrieval feature для MCP server:
+
+- локальная индексация markdown, text, code и PDF
+- две стратегии chunking: `fixed_size` и `structure_aware`
+- локальный SQLite index + JSON export
+- MCP tools для index/stats/compare/search/retrieve
+
+Документация по feature:
+
+- [Feature Overview](docs/DOCUMENT_INDEXING_FEATURE.md)
+- [Demo Corpus](demo/document-indexing-corpus/README.md)
+- [Fitness Demo Corpus](demo/fitness-knowledge-corpus/README.md)
+- [Fitness Demo Script](docs/FITNESS_DEMO_SCRIPT.md)
+- [Fitness Video Demo](docs/FITNESS_VIDEO_DEMO.md)
+- [Demo Flow](docs/DOCUMENT_INDEXING_DEMO.md)
+- [Result Demo](docs/DOCUMENT_INDEXING_RESULT_DEMO.md)
+- [Acceptance](docs/DOCUMENT_INDEXING_ACCEPTANCE.md)
+
+---
+
 ## Технологии
 
 - **Kotlin** — основной язык
