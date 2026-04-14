@@ -13,9 +13,12 @@ import com.example.aiadventchallenge.domain.model.mcp.TrainingGuidanceResponse
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.JsonObject
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
@@ -85,14 +88,7 @@ class McpJsonRpcClient(
         name: String,
         params: Map<String, Any?>
     ): McpToolData {
-        val jsonParams = params.mapValues { (_, value) ->
-            when (value) {
-                is String -> JsonPrimitive(value)
-                is Number -> JsonPrimitive(value)
-                is Boolean -> JsonPrimitive(value)
-                else -> JsonPrimitive(value.toString())
-            }
-        }
+        val jsonParams = params.mapValues { (_, value) -> toJsonElement(value) }
 
         val request = JsonRpcRequest(
             id = ++requestId,
@@ -192,8 +188,27 @@ class McpJsonRpcClient(
                     McpToolData.StringResult("")
                 }
             }
-            else -> McpToolData.StringResult(response.result.message ?: "")
+            else -> {
+                val rawResult = json.parseToJsonElement(responseJson).jsonObject["result"]
+                McpToolData.StringResult(rawResult?.toString() ?: response.result.message.orEmpty())
+            }
         }
+    }
+
+    private fun toJsonElement(value: Any?): JsonElement = when (value) {
+        null -> JsonNull
+        is JsonElement -> value
+        is String -> JsonPrimitive(value)
+        is Number -> JsonPrimitive(value)
+        is Boolean -> JsonPrimitive(value)
+        is Map<*, *> -> JsonObject(
+            value.entries.associate { (key, nestedValue) ->
+                key.toString() to toJsonElement(nestedValue)
+            }
+        )
+        is Iterable<*> -> JsonArray(value.map { toJsonElement(it) })
+        is Array<*> -> JsonArray(value.map { toJsonElement(it) })
+        else -> JsonPrimitive(value.toString())
     }
 
     private suspend fun sendRequest(request: JsonRpcRequest): String = suspendCancellableCoroutine { continuation ->

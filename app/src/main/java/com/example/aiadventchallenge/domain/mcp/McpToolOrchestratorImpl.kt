@@ -62,8 +62,8 @@ class McpToolOrchestratorImpl(
         
         return FitnessIntent(
             needsNutritionMetrics = needsNutritionMetrics || needsMealGuidance || needsTrainingGuidance,
-            needsMealGuidance = needsMealGuidance || needsNutritionMetrics,
-            needsTrainingGuidance = needsTrainingGuidance || needsNutritionMetrics,
+            needsMealGuidance = needsMealGuidance,
+            needsTrainingGuidance = needsTrainingGuidance,
             extractedParams = extractedParams
         )
     }

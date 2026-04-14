@@ -55,10 +55,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel as viewModelCompose
+import com.example.aiadventchallenge.domain.mcp.RetrievalSourceCard
+import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestLog
@@ -288,6 +291,13 @@ fun ChatScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    chatUiState.latestRetrievalSummary?.let { retrievalSummary ->
+                        RetrievalSummaryCard(
+                            summary = retrievalSummary,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
                     if (chatUiState.isBranchingStrategy && chatUiState.activeBranchName != null) {
                         BranchInputHint(
                             branchName = chatUiState.activeBranchName!!
@@ -504,6 +514,82 @@ fun MessageBubble(
                 } else {
                     MaterialTheme.typography.bodyMedium
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun RetrievalSummaryCard(
+    summary: RetrievalSummary,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Knowledge Base Context",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Text(
+                text = "Source: ${summary.source} • Strategy: ${summary.strategy} • Chunks: ${summary.selectedCount}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Text(
+                text = summary.query,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            summary.chunks.take(3).forEach { chunk ->
+                RetrievalSourceRow(chunk = chunk)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RetrievalSourceRow(chunk: RetrievalSourceCard) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.45f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = chunk.title.ifBlank { chunk.relativePath },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = listOf(chunk.section, chunk.relativePath)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" • "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "score=${"%.3f".format(chunk.score)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

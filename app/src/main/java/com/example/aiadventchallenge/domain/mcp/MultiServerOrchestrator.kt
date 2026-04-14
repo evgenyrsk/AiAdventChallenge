@@ -1,12 +1,18 @@
 package com.example.aiadventchallenge.domain.mcp
 
 import android.util.Log
+import com.example.aiadventchallenge.data.mcp.DocumentRetrievalConfig
 import com.example.aiadventchallenge.data.mcp.MultiServerRepository
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class MultiServerOrchestrator(
     private val repository: MultiServerRepository
 ) : McpToolOrchestrator {
     private val TAG = "MultiServerOrchestrator"
+    private val json = Json { ignoreUnknownKeys = true }
     
     override suspend fun detectAndExecuteTool(userInput: String): ToolExecutionResult {
         Log.d(TAG, "🔍 Detecting tools for user input...")
@@ -40,8 +46,9 @@ class MultiServerOrchestrator(
         return try {
             val results = executeTools(completedToolCalls)
             val context = formatResultsForLLM(results)
+            val retrievalSummary = (results["answer_with_retrieval"] as? String)?.let(::parseRetrievalSummary)
             Log.d(TAG, "📝 Context to add to LLM (length=${context.length})")
-            ToolExecutionResult.Success(context)
+            ToolExecutionResult.Success(context, retrievalSummary)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to execute tools", e)
             ToolExecutionResult.Error(e.message ?: "Unknown error")
@@ -113,7 +120,7 @@ class MultiServerOrchestrator(
                 is McpToolData.NutritionMetrics -> mcpData.result
                 is McpToolData.MealGuidance -> mcpData.result
                 is McpToolData.TrainingGuidance -> mcpData.result
-                else -> throw Exception("Unknown tool data type")
+                is McpToolData.StringResult -> mcpData.message
             }
             
             results[call.tool] = result
@@ -158,6 +165,7 @@ class MultiServerOrchestrator(
             "calculate_nutrition_metrics" -> "nutrition-metrics-server-1"
             "generate_meal_guidance" -> "meal-guidance-server-1"
             "generate_training_guidance" -> "training-guidance-server-1"
+            "answer_with_retrieval" -> "document-index-server-1"
             else -> "unknown-server"
         }
     }
@@ -179,13 +187,21 @@ class MultiServerOrchestrator(
             "тренировк", "спорт", "фитнес", "упражнен", "зал",
             "workout", "training", "exercise", "fitness", "gym"
         ).any { lowerInput.contains(it) }
+
+        val needsKnowledgeRetrieval = listOf(
+            "документ", "readme", "архитектур", "как устроен", "как реализован",
+            "state machine", "retrieval", "rag", "индекс", "chunk", "embedding",
+            "mcp", "pipeline", "код", "модул", "server", "tool", "tools"
+        ).any { lowerInput.contains(it) }
         
         val extractedParams = extractParameters(userInput)
         
         return FitnessIntent(
             needsNutritionMetrics = needsNutritionMetrics || needsMealGuidance || needsTrainingGuidance,
-            needsMealGuidance = needsMealGuidance || needsNutritionMetrics,
-            needsTrainingGuidance = needsTrainingGuidance || needsNutritionMetrics,
+            needsMealGuidance = needsMealGuidance,
+            needsTrainingGuidance = needsTrainingGuidance,
+            needsKnowledgeRetrieval = needsKnowledgeRetrieval,
+            originalQuery = userInput,
             extractedParams = extractedParams
         )
     }
@@ -241,6 +257,23 @@ class MultiServerOrchestrator(
     private fun selectTools(intent: FitnessIntent): List<ToolCall> {
         val calls = mutableListOf<ToolCall>()
         val params = intent.extractedParams
+
+        if (intent.needsKnowledgeRetrieval) {
+            calls.add(
+                ToolCall(
+                    tool = "answer_with_retrieval",
+                    dependsOn = null,
+                    params = mapOf(
+                        "query" to intent.originalQuery,
+                        "source" to DocumentRetrievalConfig.defaultSource,
+                        "strategy" to DocumentRetrievalConfig.DEFAULT_STRATEGY,
+                        "topK" to DocumentRetrievalConfig.DEFAULT_TOP_K,
+                        "maxChars" to DocumentRetrievalConfig.DEFAULT_MAX_CHARS,
+                        "perDocumentLimit" to DocumentRetrievalConfig.DEFAULT_PER_DOCUMENT_LIMIT
+                    )
+                )
+            )
+        }
         
         if (intent.needsNutritionMetrics) {
             val nutritionParams = params.filterKeys {
@@ -280,6 +313,7 @@ class MultiServerOrchestrator(
     }
     
     private fun formatResultsForLLM(results: Map<String, Any>): String {
+        val retrievalPackage = (results["answer_with_retrieval"] as? String)?.let(::formatRetrievalPackage)
         val nutritionResult = results["calculate_nutrition_metrics"] as? com.example.aiadventchallenge.domain.model.mcp.NutritionMetricsResponse
         val mealResult = results["generate_meal_guidance"] as? com.example.aiadventchallenge.domain.model.mcp.MealGuidanceResponse
         val trainingResult = results["generate_training_guidance"] as? com.example.aiadventchallenge.domain.model.mcp.TrainingGuidanceResponse
@@ -289,6 +323,12 @@ class MultiServerOrchestrator(
             appendLine("🏋️ MULTI-SERVER FITNESS FLOW - РЕЗУЛЬТАТЫ ВЫПОЛНЕНИЯ")
             appendLine("================================================================================")
             appendLine()
+
+            if (retrievalPackage != null) {
+                appendLine("📚 DOCUMENT RETRIEVAL (Server: document-index-server-1):")
+                appendLine(retrievalPackage)
+                appendLine()
+            }
             
             if (nutritionResult != null) {
                 appendLine("🥗 NUTRITION METRICS (Server: nutrition-metrics-server-1):")
@@ -339,6 +379,61 @@ class MultiServerOrchestrator(
         
         return content
     }
+
+    private fun formatRetrievalPackage(raw: String): String {
+        return try {
+            val root = json.parseToJsonElement(raw).jsonObject
+            val data = root["data"]?.jsonObject
+            val retrieval = data?.get("retrieval")?.jsonObject
+            val applied = data?.get("retrievalApplied")?.jsonPrimitive?.content ?: "false"
+            val selectedCount = retrieval?.get("selectedCount")?.jsonPrimitive?.content ?: "0"
+            val contextEnvelope = retrieval?.get("contextEnvelope")?.jsonPrimitive?.content ?: raw
+
+            buildString {
+                appendLine("   retrievalApplied: $applied")
+                appendLine("   selectedChunks: $selectedCount")
+                appendLine()
+                append(contextEnvelope.prependIndent("   "))
+            }
+        } catch (_: Exception) {
+            raw
+        }
+    }
+
+    private fun parseRetrievalSummary(raw: String): RetrievalSummary? {
+        return try {
+            val root = json.parseToJsonElement(raw).jsonObject
+            val data = root["data"]?.jsonObject ?: return null
+            val query = data["query"]?.jsonPrimitive?.content ?: return null
+            val retrieval = data["retrieval"]?.jsonObject ?: return null
+            val source = retrieval["source"]?.jsonPrimitive?.content
+                ?: DocumentRetrievalConfig.defaultSource
+            val strategy = retrieval["strategy"]?.jsonPrimitive?.content
+                ?: DocumentRetrievalConfig.DEFAULT_STRATEGY
+            val selectedCount = retrieval["selectedCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+            val contextEnvelope = retrieval["contextEnvelope"]?.jsonPrimitive?.content.orEmpty()
+            val chunks = retrieval["chunks"]?.jsonArray?.map { chunkElement ->
+                val chunk = chunkElement.jsonObject
+                RetrievalSourceCard(
+                    title = chunk["title"]?.jsonPrimitive?.content.orEmpty(),
+                    relativePath = chunk["relativePath"]?.jsonPrimitive?.content.orEmpty(),
+                    section = chunk["section"]?.jsonPrimitive?.content.orEmpty(),
+                    score = chunk["score"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
+                )
+            }.orEmpty()
+
+            RetrievalSummary(
+                query = query,
+                source = source,
+                strategy = strategy,
+                selectedCount = selectedCount,
+                contextEnvelope = contextEnvelope,
+                chunks = chunks
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
     
     data class ParamRequirements(
         val required: List<String> = emptyList(),
@@ -352,6 +447,16 @@ class MultiServerOrchestrator(
                 optionalWithDefaults = mapOf(
                     "activityLevel" to "moderate",
                     "goal" to "maintenance"
+                )
+            )
+            "answer_with_retrieval" -> ParamRequirements(
+                required = listOf("query"),
+                optionalWithDefaults = mapOf(
+                    "source" to DocumentRetrievalConfig.defaultSource,
+                    "strategy" to DocumentRetrievalConfig.DEFAULT_STRATEGY,
+                    "topK" to DocumentRetrievalConfig.DEFAULT_TOP_K,
+                    "maxChars" to DocumentRetrievalConfig.DEFAULT_MAX_CHARS,
+                    "perDocumentLimit" to DocumentRetrievalConfig.DEFAULT_PER_DOCUMENT_LIMIT
                 )
             )
             else -> ParamRequirements()
