@@ -11,6 +11,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.xerial:sqlite-jdbc:3.45.1.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.apache.pdfbox:pdfbox:2.0.30")
+
+    testImplementation(kotlin("test"))
 }
 
 tasks.register("run", JavaExec::class) {
@@ -46,6 +49,13 @@ tasks.register("runTrainingServer", JavaExec::class) {
     description = "Run Training Guidance Server (port 8083)"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.example.mcp.server.servers.TrainingGuidanceServerKt")
+}
+
+tasks.register("runDocumentIndexServer", JavaExec::class) {
+    group = "application"
+    description = "Run Document Index Server (port 8084)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.example.mcp.server.servers.DocumentIndexServerMainKt")
 }
 
 tasks.register("runDemo", JavaExec::class) {

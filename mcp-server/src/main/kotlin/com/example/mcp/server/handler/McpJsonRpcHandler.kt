@@ -7,11 +7,13 @@ import com.example.mcp.server.model.meal.MealGuidanceRequest
 import com.example.mcp.server.model.meal.MealGuidanceResponse
 import com.example.mcp.server.model.training.TrainingGuidanceRequest
 import com.example.mcp.server.model.training.TrainingGuidanceResponse
+import com.example.mcp.server.service.document.DocumentIndexingService
 import com.example.mcp.server.service.nutrition.NutritionMetricsService
 import com.example.mcp.server.service.meal.MealGuidanceService
 import com.example.mcp.server.service.training.TrainingGuidanceService
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -30,6 +32,7 @@ abstract class AbstractMcpJsonRpcHandler {
     protected val nutritionMetricsService by lazy { NutritionMetricsService() }
     protected val mealGuidanceService by lazy { MealGuidanceService() }
     protected val trainingGuidanceService by lazy { TrainingGuidanceService() }
+    protected val documentIndexingService by lazy { DocumentIndexingService() }
 
     abstract val tools: List<Tool>
 
@@ -228,6 +231,232 @@ abstract class AbstractMcpJsonRpcHandler {
         }
     }
 
+    protected open fun handleIndexDocuments(request: JsonRpcRequest): String {
+        println("   Method: index_documents")
+
+        return try {
+            val params = request.params ?: throw Exception("Missing params")
+            val path = params["path"]?.jsonPrimitive?.content
+                ?: throw Exception("Missing path parameter")
+            val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
+            val outputDirectory = params["outputDirectory"]?.let {
+                if (it is JsonPrimitive && !it.isString && it.content == "null") null else it.jsonPrimitive.content
+            }
+            val strategies = (params["strategies"] as? JsonArray)
+                ?.map { it.jsonPrimitive.content }
+                ?: listOf("fixed_size", "structure_aware")
+
+            val result = documentIndexingService.indexDocuments(
+                path = path,
+                strategies = strategies,
+                source = source,
+                outputDirectory = outputDirectory
+            )
+
+            val resultJson = buildJsonObject {
+                put("message", "Indexed ${result.successfulDocuments} documents")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
+    protected open fun handleGetIndexStats(request: JsonRpcRequest): String {
+        println("   Method: get_index_stats")
+
+        return try {
+            val source = request.params?.get("source")?.jsonPrimitive?.content ?: "local_docs"
+            val result = documentIndexingService.getIndexStats(source)
+            val resultJson = buildJsonObject {
+                put("message", "Index stats for $source")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
+    protected open fun handleReindexDocuments(request: JsonRpcRequest): String {
+        println("   Method: reindex_documents")
+
+        return try {
+            val params = request.params ?: throw Exception("Missing params")
+            val path = params["path"]?.jsonPrimitive?.content
+                ?: throw Exception("Missing path parameter")
+            val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
+            val outputDirectory = params["outputDirectory"]?.let {
+                if (it is JsonPrimitive && !it.isString && it.content == "null") null else it.jsonPrimitive.content
+            }
+            val strategies = (params["strategies"] as? JsonArray)
+                ?.map { it.jsonPrimitive.content }
+                ?: listOf("fixed_size", "structure_aware")
+
+            val result = documentIndexingService.reindexDocuments(
+                path = path,
+                strategies = strategies,
+                source = source,
+                outputDirectory = outputDirectory
+            )
+
+            val resultJson = buildJsonObject {
+                put("message", "Reindexed ${result.successfulDocuments} documents")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
+    protected open fun handleCompareChunkingStrategies(request: JsonRpcRequest): String {
+        println("   Method: compare_chunking_strategies")
+
+        return try {
+            val source = request.params?.get("source")?.jsonPrimitive?.content ?: "local_docs"
+            val path = request.params?.get("path")?.let {
+                if (it is JsonPrimitive && !it.isString && it.content == "null") null else it.jsonPrimitive.content
+            }
+            val result = documentIndexingService.compareChunkingStrategies(source, path)
+            val resultJson = buildJsonObject {
+                put("message", "Chunking comparison for $source")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
+    protected open fun handleListIndexedDocuments(request: JsonRpcRequest): String {
+        println("   Method: list_indexed_documents")
+
+        return try {
+            val source = request.params?.get("source")?.jsonPrimitive?.content ?: "local_docs"
+            val result = documentIndexingService.listIndexedDocuments(source)
+            val resultJson = buildJsonObject {
+                put("message", "Indexed documents for $source")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
+    protected open fun handleSearchIndex(request: JsonRpcRequest): String {
+        println("   Method: search_index")
+
+        return try {
+            val params = request.params ?: throw Exception("Missing params")
+            val query = params["query"]?.jsonPrimitive?.content
+                ?: throw Exception("Missing query parameter")
+            val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
+            val strategy = params["strategy"]?.jsonPrimitive?.content
+            val topK = params["topK"]?.jsonPrimitive?.content?.toIntOrNull() ?: 5
+            val documentType = params["documentType"]?.jsonPrimitive?.content
+            val relativePathContains = params["relativePathContains"]?.jsonPrimitive?.content
+            val perDocumentLimit = params["perDocumentLimit"]?.jsonPrimitive?.content?.toIntOrNull() ?: 2
+
+            val result = documentIndexingService.searchIndex(
+                query = query,
+                source = source,
+                strategy = strategy,
+                topK = topK,
+                documentType = documentType,
+                relativePathContains = relativePathContains,
+                perDocumentLimit = perDocumentLimit
+            )
+            val resultJson = buildJsonObject {
+                put("message", "Search results for $source")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
+    protected open fun handleRetrieveRelevantChunks(request: JsonRpcRequest): String {
+        println("   Method: retrieve_relevant_chunks")
+
+        return try {
+            val params = request.params ?: throw Exception("Missing params")
+            val query = params["query"]?.jsonPrimitive?.content
+                ?: throw Exception("Missing query parameter")
+            val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
+            val strategy = params["strategy"]?.jsonPrimitive?.content ?: "structure_aware"
+            val topK = params["topK"]?.jsonPrimitive?.content?.toIntOrNull() ?: 5
+            val maxChars = params["maxChars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 4000
+            val documentType = params["documentType"]?.jsonPrimitive?.content
+            val relativePathContains = params["relativePathContains"]?.jsonPrimitive?.content
+            val perDocumentLimit = params["perDocumentLimit"]?.jsonPrimitive?.content?.toIntOrNull() ?: 2
+
+            val result = documentIndexingService.retrieveRelevantChunks(
+                query = query,
+                source = source,
+                strategy = strategy,
+                topK = topK,
+                maxChars = maxChars,
+                documentType = documentType,
+                relativePathContains = relativePathContains,
+                perDocumentLimit = perDocumentLimit
+            )
+            val resultJson = buildJsonObject {
+                put("message", "Retrieved relevant chunks for $source")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
+    protected open fun handleAnswerWithRetrieval(request: JsonRpcRequest): String {
+        println("   Method: answer_with_retrieval")
+
+        return try {
+            val params = request.params ?: throw Exception("Missing params")
+            val query = params["query"]?.jsonPrimitive?.content
+                ?: throw Exception("Missing query parameter")
+            val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
+            val strategy = params["strategy"]?.jsonPrimitive?.content ?: "structure_aware"
+            val topK = params["topK"]?.jsonPrimitive?.content?.toIntOrNull() ?: 5
+            val maxChars = params["maxChars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 4000
+            val documentType = params["documentType"]?.jsonPrimitive?.content
+            val relativePathContains = params["relativePathContains"]?.jsonPrimitive?.content
+            val perDocumentLimit = params["perDocumentLimit"]?.jsonPrimitive?.content?.toIntOrNull() ?: 2
+
+            val result = documentIndexingService.answerWithRetrieval(
+                query = query,
+                source = source,
+                strategy = strategy,
+                topK = topK,
+                maxChars = maxChars,
+                documentType = documentType,
+                relativePathContains = relativePathContains,
+                perDocumentLimit = perDocumentLimit
+            )
+            val resultJson = buildJsonObject {
+                put("message", "Prepared answer package with retrieval for $source")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
     protected open fun handleUnknownMethod(request: JsonRpcRequest): String {
         return """{"jsonrpc":"2.0","id":${request.id},"result":null,"error":{"code":-32601,"message":"Method not found: ${request.method}"}}"""
     }
@@ -252,6 +481,14 @@ abstract class AbstractMcpJsonRpcHandler {
                 "calculate_nutrition_metrics" -> handleCalculateNutritionMetrics(request)
                 "generate_meal_guidance" -> handleGenerateMealGuidance(request)
                 "generate_training_guidance" -> handleGenerateTrainingGuidance(request)
+                "index_documents" -> handleIndexDocuments(request)
+                "reindex_documents" -> handleReindexDocuments(request)
+                "get_index_stats" -> handleGetIndexStats(request)
+                "compare_chunking_strategies" -> handleCompareChunkingStrategies(request)
+                "list_indexed_documents" -> handleListIndexedDocuments(request)
+                "search_index" -> handleSearchIndex(request)
+                "retrieve_relevant_chunks" -> handleRetrieveRelevantChunks(request)
+                "answer_with_retrieval" -> handleAnswerWithRetrieval(request)
                 else -> handleUnknownMethod(request)
             }
         } catch (e: Exception) {
@@ -290,6 +527,38 @@ class McpJsonRpcHandler : AbstractMcpJsonRpcHandler() {
         Tool(
             name = "generate_training_guidance",
             description = "Generates training plan. Parameters: goal, trainingLevel (optional, default beginner), trainingDaysPerWeek (optional, default 3), sessionDurationMinutes (optional, default 60), availableEquipment (optional, default gym), restrictions (optional, default none). Returns trainingSplit, weeklyPlan, exercisePrinciples, recoveryNotes, notes."
+        ),
+        Tool(
+            name = "index_documents",
+            description = "Indexes local documents from a directory. Parameters: path, strategies (fixed_size, structure_aware), source (optional), outputDirectory (optional). Returns per-strategy chunking and embedding summary."
+        ),
+        Tool(
+            name = "get_index_stats",
+            description = "Returns index statistics for a source. Parameters: source (optional, default local_docs). Returns document count, chunk count, strategies, embedding provider and database size."
+        ),
+        Tool(
+            name = "reindex_documents",
+            description = "Rebuilds an existing logical document index for a source. Parameters: path, strategies (optional), source (optional), outputDirectory (optional)."
+        ),
+        Tool(
+            name = "compare_chunking_strategies",
+            description = "Compares chunking strategies already indexed for a source. Parameters: source (optional), path (optional). Returns summaries, retrieval notes and recommendation."
+        ),
+        Tool(
+            name = "list_indexed_documents",
+            description = "Lists indexed documents with document type, chunk count and strategies. Parameters: source (optional, default local_docs)."
+        ),
+        Tool(
+            name = "search_index",
+            description = "Performs hybrid semantic plus keyword search over indexed chunks. Parameters: query, source (optional), strategy (optional), topK (optional), documentType (optional), relativePathContains (optional), perDocumentLimit (optional). Returns ranked chunks with scores."
+        ),
+        Tool(
+            name = "retrieve_relevant_chunks",
+            description = "Returns prompt-ready retrieval context. Parameters: query, source (optional), strategy (optional, default structure_aware), topK (optional), maxChars (optional), documentType (optional), relativePathContains (optional), perDocumentLimit (optional)."
+        ),
+        Tool(
+            name = "answer_with_retrieval",
+            description = "Builds an LLM-ready prompt package from semantic retrieval. Parameters: query, source (optional), strategy (optional), topK (optional), maxChars (optional), documentType (optional), relativePathContains (optional), perDocumentLimit (optional)."
         )
     )
 
