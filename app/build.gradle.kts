@@ -7,6 +7,7 @@ if (localPropertiesFile.exists()) {
 }
 
 val aiApiKey = localProperties.getProperty("AI_API_KEY") ?: ""
+val documentRetrievalSource = localProperties.getProperty("DOCUMENT_RETRIEVAL_SOURCE") ?: "local_docs"
 
 plugins {
     alias(libs.plugins.android.application)
@@ -31,6 +32,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "AI_API_KEY", "\"$aiApiKey\"")
+        buildConfigField("String", "DOCUMENT_RETRIEVAL_SOURCE", "\"$documentRetrievalSource\"")
     }
 
     buildTypes {

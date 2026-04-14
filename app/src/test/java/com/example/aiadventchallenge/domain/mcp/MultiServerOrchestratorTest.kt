@@ -4,6 +4,7 @@ import com.example.aiadventchallenge.domain.mcp.McpToolData.*
 import com.example.aiadventchallenge.domain.model.mcp.*
 import com.example.aiadventchallenge.data.mcp.MultiServerRepository
 import io.mockk.*
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -26,18 +27,23 @@ class MultiServerOrchestratorTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        mockkStatic(Log::class)
+        every { Log.d(any(), any()) } returns 0
+        every { Log.e(any(), any()) } returns 0
+        every { Log.e(any(), any(), any()) } returns 0
         multiServerRepository = mockk(relaxed = true)
         orchestrator = MultiServerOrchestrator(multiServerRepository)
     }
 
     @After
     fun tearDown() {
+        unmockkStatic(Log::class)
         Dispatchers.resetMain()
     }
 
     @Test
     fun `detect and execute tools - nutrition to meal to training`() = runTest {
-        val userInput = "Рассчитай калории, составь план питания и тренировок для мужчины 30 лет, рост 175 см, вес 75 кг для похудения"
+        val userInput = "Рассчитай калории, составь план питания и план тренировки для мужчины 30 лет, рост 175 см, вес 75 кг для похудения"
 
         val nutritionResponse = NutritionMetricsResponse(
             bmr = 1720,
@@ -85,7 +91,7 @@ class MultiServerOrchestratorTest {
             multiServerRepository.callTool(eq("generate_training_guidance"), any())
         } returns TrainingGuidance(trainingResponse)
 
-        val result = orchestrator.detectAndExecuteTools(userInput)
+        val result = orchestrator.detectAndExecuteTool(userInput)
 
         assertTrue("Should be Success", result is ToolExecutionResult.Success)
         val successResult = result as ToolExecutionResult.Success
@@ -113,7 +119,7 @@ class MultiServerOrchestratorTest {
 
     @Test
     fun `error handling - server down should not break other servers`() = runTest {
-        val userInput = "Рассчитай калории для мужчины 30 лет"
+        val userInput = "Рассчитай калории и составь план питания для мужчины 30 лет рост 175 см вес 75 кг"
 
         coEvery {
             multiServerRepository.callTool(eq("calculate_nutrition_metrics"), any())
@@ -123,7 +129,7 @@ class MultiServerOrchestratorTest {
             multiServerRepository.callTool(eq("generate_meal_guidance"), any())
         } throws Exception("Server down")
 
-        val result = orchestrator.detectAndExecuteTools(userInput)
+        val result = orchestrator.detectAndExecuteTool(userInput)
 
         assertTrue("Should be Error", result is ToolExecutionResult.Error)
         val errorResult = result as ToolExecutionResult.Error
@@ -139,13 +145,13 @@ class MultiServerOrchestratorTest {
 
     @Test
     fun `correct tool selection - only nutrition requested`() = runTest {
-        val userInput = "Рассчитай мои калории"
+        val userInput = "Рассчитай мои калории для мужчины 30 лет рост 180 см вес 75 кг"
 
         coEvery {
             multiServerRepository.callTool(eq("calculate_nutrition_metrics"), any())
         } returns NutritionMetrics(NutritionMetricsResponse(1720, 2150, 2150, 160, 75, 250, "Maintenance"))
 
-        orchestrator.detectAndExecuteTools(userInput)
+        orchestrator.detectAndExecuteTool(userInput)
 
         coVerify(exactly = 1) {
             multiServerRepository.callTool(eq("calculate_nutrition_metrics"), any())
@@ -162,12 +168,66 @@ class MultiServerOrchestratorTest {
     fun `no fitness request - should return NoToolFound`() = runTest {
         val userInput = "Привет, как дела?"
 
-        val result = orchestrator.detectAndExecuteTools(userInput)
+        val result = orchestrator.detectAndExecuteTool(userInput)
 
         assertEquals(ToolExecutionResult.NoToolFound, result)
 
         coVerify(exactly = 0) {
             multiServerRepository.callTool(any(), any())
+        }
+    }
+
+    @Test
+    fun `knowledge request - should route to answer_with_retrieval`() = runTest {
+        val userInput = "Объясни по документации проекта как устроен task state machine и retrieval"
+        val retrievalPayload = """
+            {
+              "message": "Prepared answer package with retrieval for local_docs",
+              "data": {
+                "query": "Объясни по документации проекта как устроен task state machine и retrieval",
+                "retrievalApplied": true,
+                "retrieval": {
+                  "source": "local_docs",
+                  "strategy": "structure_aware",
+                  "selectedCount": 1,
+                  "contextEnvelope": "Use the following retrieved project knowledge when answering.\n\n[TASK_STATE_MACHINE.md | TaskContext | score=0.500]\n### TaskContext",
+                  "chunks": [
+                    {
+                      "title": "TASK_STATE_MACHINE.md",
+                      "relativePath": "docs/TASK_STATE_MACHINE.md",
+                      "section": "TaskContext",
+                      "score": 0.5
+                    }
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+
+        coEvery {
+            multiServerRepository.callTool(eq("answer_with_retrieval"), any())
+        } returns StringResult(retrievalPayload)
+
+        val result = orchestrator.detectAndExecuteTool(userInput)
+
+        assertTrue(result is ToolExecutionResult.Success)
+        val successResult = result as ToolExecutionResult.Success
+        assertTrue(successResult.context.contains("DOCUMENT RETRIEVAL"))
+        assertTrue(successResult.context.contains("retrievalApplied: true"))
+        assertTrue(successResult.context.contains("TASK_STATE_MACHINE.md"))
+        assertNotNull(successResult.retrievalSummary)
+        assertEquals("local_docs", successResult.retrievalSummary?.source)
+        assertEquals("TASK_STATE_MACHINE.md", successResult.retrievalSummary?.chunks?.firstOrNull()?.title)
+
+        coVerify(exactly = 1) {
+            multiServerRepository.callTool(
+                eq("answer_with_retrieval"),
+                match { params ->
+                    params["query"] == userInput &&
+                        params["source"] == com.example.aiadventchallenge.data.mcp.DocumentRetrievalConfig.defaultSource &&
+                        params["strategy"] == com.example.aiadventchallenge.data.mcp.DocumentRetrievalConfig.DEFAULT_STRATEGY
+                }
+            )
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.example.aiadventchallenge.ui.screens.chat
 
+import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 
 data class ChatUiState(
@@ -23,7 +24,8 @@ data class ChatUiState(
     val showBranchActionsForMessageId: String? = null,
     val branchesForMessage: List<BranchUiModel> = emptyList(),
 
-    val fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE
+    val fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE,
+    val latestRetrievalSummary: RetrievalSummary? = null
 ) {
     val hasMultipleBranches: Boolean
         get() = availableBranches.size > 1

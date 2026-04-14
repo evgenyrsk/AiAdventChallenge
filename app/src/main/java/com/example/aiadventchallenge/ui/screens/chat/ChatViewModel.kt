@@ -231,6 +231,9 @@ class ChatViewModel(
             
             when (mcpToolResult) {
                 is ToolExecutionResult.Success -> {
+                    _chatUiState.value = _chatUiState.value.copy(
+                        latestRetrievalSummary = mcpToolResult.retrievalSummary
+                    )
                     val result = chatMessageHandler.generateAiResponse(
                         userInput = userInput,
                         fitnessProfile = _chatUiState.value.fitnessProfile,
@@ -254,6 +257,9 @@ class ChatViewModel(
                     }
                 }
                 is ToolExecutionResult.NoToolFound -> {
+                    _chatUiState.value = _chatUiState.value.copy(
+                        latestRetrievalSummary = null
+                    )
                     val result = chatMessageHandler.generateAiResponse(
                         userInput = userInput,
                         fitnessProfile = _chatUiState.value.fitnessProfile,
@@ -277,11 +283,17 @@ class ChatViewModel(
                     }
                 }
                 is ToolExecutionResult.Error -> {
+                    _chatUiState.value = _chatUiState.value.copy(
+                        latestRetrievalSummary = null
+                    )
                     Log.e(TAG, "❌ MCP tool error: ${mcpToolResult.message}")
                     addSystemMessage("❌ Ошибка MCP: ${mcpToolResult.message}")
                     _isLoading.value = false
                 }
                 is ToolExecutionResult.MissingParameters -> {
+                    _chatUiState.value = _chatUiState.value.copy(
+                        latestRetrievalSummary = null
+                    )
                     val prompt = buildString {
                         appendLine("Пользователь хочет выполнить действие, но не указал необходимые параметры:")
                         appendLine(mcpToolResult.missingParams.joinToString("\n") {
@@ -345,7 +357,8 @@ class ChatViewModel(
             _chatUiState.value = _chatUiState.value.copy(
                 activeBranchId = null,
                 activeBranchName = null,
-                currentBranchCheckpointMessageId = null
+                currentBranchCheckpointMessageId = null,
+                latestRetrievalSummary = null
             )
         }
     }
@@ -361,7 +374,8 @@ class ChatViewModel(
                 activeBranchId = null,
                 activeBranchName = null,
                 currentBranchCheckpointMessageId = null,
-                availableBranches = emptyList()
+                availableBranches = emptyList(),
+                latestRetrievalSummary = null
             )
 
             branchRepository.clearAllBranches()

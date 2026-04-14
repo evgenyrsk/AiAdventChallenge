@@ -21,11 +21,30 @@ interface McpToolOrchestrator {
 }
 
 sealed class ToolExecutionResult {
-    data class Success(val context: String) : ToolExecutionResult()
+    data class Success(
+        val context: String,
+        val retrievalSummary: RetrievalSummary? = null
+    ) : ToolExecutionResult()
     object NoToolFound : ToolExecutionResult()
     data class Error(val message: String) : ToolExecutionResult()
     data class MissingParameters(val missingParams: List<ParameterInfo>) : ToolExecutionResult()
 }
+
+data class RetrievalSummary(
+    val query: String,
+    val source: String,
+    val strategy: String,
+    val selectedCount: Int,
+    val contextEnvelope: String,
+    val chunks: List<RetrievalSourceCard>
+)
+
+data class RetrievalSourceCard(
+    val title: String,
+    val relativePath: String,
+    val section: String,
+    val score: Double
+)
 
 sealed class ValidationResult {
     object Valid : ValidationResult()
@@ -57,5 +76,7 @@ data class FitnessIntent(
     val needsNutritionMetrics: Boolean,
     val needsMealGuidance: Boolean,
     val needsTrainingGuidance: Boolean,
+    val needsKnowledgeRetrieval: Boolean = false,
+    val originalQuery: String = "",
     val extractedParams: Map<String, Any?> = emptyMap()
 )
