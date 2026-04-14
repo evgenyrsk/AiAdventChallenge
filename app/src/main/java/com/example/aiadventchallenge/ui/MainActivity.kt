@@ -49,7 +49,8 @@ class MainActivity : ComponentActivity() {
             chatRepository = chatRepository,
             agent = AppDependencies.chatAgent,
             contextStrategyFactory = contextStrategyFactory,
-            chatSettingsRepository = chatSettingsRepository
+            chatSettingsRepository = chatSettingsRepository,
+            prepareRagRequestUseCase = AppDependencies.prepareRagRequestUseCase
         )
     }
     private val branchOrchestrator by lazy {

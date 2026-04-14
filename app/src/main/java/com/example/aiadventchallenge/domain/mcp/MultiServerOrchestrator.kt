@@ -14,11 +14,14 @@ class MultiServerOrchestrator(
     private val TAG = "MultiServerOrchestrator"
     private val json = Json { ignoreUnknownKeys = true }
     
-    override suspend fun detectAndExecuteTool(userInput: String): ToolExecutionResult {
+    override suspend fun detectAndExecuteTool(
+        userInput: String,
+        allowKnowledgeRetrieval: Boolean
+    ): ToolExecutionResult {
         Log.d(TAG, "🔍 Detecting tools for user input...")
         
         val intent = extractFitnessIntent(userInput)
-        val toolCalls = selectTools(intent)
+        val toolCalls = selectTools(intent, allowKnowledgeRetrieval)
         
         if (toolCalls.isEmpty()) {
             Log.d(TAG, "ℹ️ No tools needed")
@@ -172,21 +175,68 @@ class MultiServerOrchestrator(
     
     private fun extractFitnessIntent(userInput: String): FitnessIntent {
         val lowerInput = userInput.lowercase()
-        
-        val needsNutritionMetrics = listOf(
-            "калори", "bmr", "tdee", "питани", "раcсчит", "расчет",
-            "calories", "nutrition", "macros", "protein", "fat", "carbs"
+        val extractedParams = extractParameters(userInput)
+
+        val explicitNutritionMetricsRequest = listOf(
+            "рассчитай калории",
+            "посчитай калории",
+            "рассчитай мои калории",
+            "посчитай мои калории",
+            "рассчитай bmr",
+            "посчитай bmr",
+            "рассчитай tdee",
+            "посчитай tdee",
+            "calculate calories",
+            "calculate bmr",
+            "calculate tdee",
+            "my calories",
+            "мои калории"
         ).any { lowerInput.contains(it) }
-        
-        val needsMealGuidance = listOf(
-            "питани", "ед", "рецепт", "прием пищ", "еда",
-            "meal", "food", "diet", "eating", "nutrition plan"
+
+        val explicitMealGuidanceRequest = listOf(
+            "составь план питания",
+            "составь рацион",
+            "подбери рацион",
+            "подбери план питания",
+            "meal plan",
+            "nutrition plan",
+            "diet plan"
         ).any { lowerInput.contains(it) }
-        
-        val needsTrainingGuidance = listOf(
-            "тренировк", "спорт", "фитнес", "упражнен", "зал",
-            "workout", "training", "exercise", "fitness", "gym"
+
+        val explicitTrainingGuidanceRequest = listOf(
+            "составь план тренировки",
+            "составь план тренировок",
+            "составь программу тренировок",
+            "план тренировки",
+            "план тренировок",
+            "подбери тренировку",
+            "подбери программу тренировок",
+            "training plan",
+            "workout plan",
+            "program of workouts"
         ).any { lowerInput.contains(it) }
+
+        val hasPersonalMetrics = listOf("age", "sex", "heightCm", "weightKg")
+            .any { extractedKey -> extractedParams.containsKey(extractedKey) }
+
+        val requestsPersonalizedFitnessFlow = listOf(
+            "для мужчины",
+            "для женщины",
+            "для меня",
+            "мой рацион",
+            "моя программа",
+            "my plan",
+            "for male",
+            "for female"
+        ).any { lowerInput.contains(it) }
+
+        val needsNutritionMetrics = explicitNutritionMetricsRequest ||
+            ((explicitMealGuidanceRequest || explicitTrainingGuidanceRequest) &&
+                (hasPersonalMetrics || requestsPersonalizedFitnessFlow))
+
+        val needsMealGuidance = explicitMealGuidanceRequest
+
+        val needsTrainingGuidance = explicitTrainingGuidanceRequest
 
         val needsKnowledgeRetrieval = listOf(
             "документ", "readme", "архитектур", "как устроен", "как реализован",
@@ -194,10 +244,8 @@ class MultiServerOrchestrator(
             "mcp", "pipeline", "код", "модул", "server", "tool", "tools"
         ).any { lowerInput.contains(it) }
         
-        val extractedParams = extractParameters(userInput)
-        
         return FitnessIntent(
-            needsNutritionMetrics = needsNutritionMetrics || needsMealGuidance || needsTrainingGuidance,
+            needsNutritionMetrics = needsNutritionMetrics,
             needsMealGuidance = needsMealGuidance,
             needsTrainingGuidance = needsTrainingGuidance,
             needsKnowledgeRetrieval = needsKnowledgeRetrieval,
@@ -254,11 +302,14 @@ class MultiServerOrchestrator(
         return params
     }
     
-    private fun selectTools(intent: FitnessIntent): List<ToolCall> {
+    private fun selectTools(
+        intent: FitnessIntent,
+        allowKnowledgeRetrieval: Boolean
+    ): List<ToolCall> {
         val calls = mutableListOf<ToolCall>()
         val params = intent.extractedParams
 
-        if (intent.needsKnowledgeRetrieval) {
+        if (allowKnowledgeRetrieval && intent.needsKnowledgeRetrieval) {
             calls.add(
                 ToolCall(
                     tool = "answer_with_retrieval",

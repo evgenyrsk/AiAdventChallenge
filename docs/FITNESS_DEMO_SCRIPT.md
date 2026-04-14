@@ -18,7 +18,7 @@
 ## 2. Проиндексировать fitness corpus
 
 ```bash
-bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus local_docs
+bash scripts/reindex-fitness-knowledge.sh
 ```
 
 Что это доказывает:
@@ -43,9 +43,9 @@ ls mcp-server/output/document-index/export
 Что показать:
 
 - `mcp-server/output/document-index/document_index.db`
-- `local_docs_fixed_size_index.json`
-- `local_docs_structure_aware_index.json`
-- `local_docs_indexing_report.json`
+- `fitness_knowledge_fixed_size_index.json`
+- `fitness_knowledge_structure_aware_index.json`
+- `fitness_knowledge_indexing_report.json`
 
 Что сказать:
 
@@ -86,7 +86,7 @@ sqlite3 mcp-server/output/document-index/document_index.db \
 ## 5. Показать metadata и embeddings через JSON export
 
 ```bash
-sed -n '1,120p' mcp-server/output/document-index/export/local_docs_structure_aware_index.json
+sed -n '1,120p' mcp-server/output/document-index/export/fitness_knowledge_structure_aware_index.json
 ```
 
 Что показать в chunk:
@@ -116,7 +116,7 @@ curl -s http://localhost:8084 \
     "id":10,
     "method":"compare_chunking_strategies",
     "params":{
-      "source":"local_docs",
+      "source":"fitness_knowledge",
       "path":"'"$(pwd)"'/demo/fitness-knowledge-corpus"
     }
   }'
@@ -158,32 +158,60 @@ adb shell run-as com.example.aiadventchallenge sqlite3 databases/app_database \
 - retrieval index живет отдельно в `mcp-server/output/document-index/document_index.db`
 - если нужен GUI, можно использовать Android Studio App Inspection для Room
 
-## 8. Показать retrieval через Android app
+## 8. Показать retrieval и сравнение режимов через Android app
 
 Запусти app на эмуляторе и открой чат.
 
-Задай 2–3 вопроса:
+Покажи:
 
-- `Сколько белка нужно при наборе массы?`
-- `Что такое дефицит калорий?`
-- `Что лучше для новичка: full body или upper lower?`
-- `Почему сон важен для восстановления?`
+- переключатель режима `Обычный / RAG`
+- один и тот же вопрос сначала в `Обычный`, потом в `RAG`
+- `Knowledge Base Context` card для режима `RAG`
+
+Рекомендуемые вопросы:
+
+- `Что важнее для похудения: дефицит калорий или время приёма пищи?`
+- `Сколько белка обычно рекомендуют человеку, который хочет сохранить мышцы при похудении?`
+- `Почему сон влияет на восстановление и контроль аппетита?`
+- `Почему жидкие калории могут мешать снижению веса?`
 
 Что показать:
 
-- ответ модели
+- ответ модели без RAG
+- ответ модели с RAG
 - `Knowledge Base Context` card
 - source / strategy / найденные chunks
+- title / section / score
 
 Что сказать:
 
-- индекс уже используется приложением
-- retrieval идет через MCP server поверх локального индекса
+- `PLAIN_LLM` отправляет вопрос в LLM без retrieval
+- `RAG` делает поиск релевантных чанков, собирает augmented prompt и только потом вызывает LLM
+- retrieval идет через MCP server поверх локального индекса source `fitness_knowledge`
 
-## 9. Важно про legacy docs
+## 9. Показать evaluation runner
+
+```bash
+AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
+```
+
+Что показать:
+
+- runner читает `demo/fitness-knowledge-corpus/fixtures/rag_questions.json`
+- для каждого вопроса делает `PLAIN_LLM` и `RAG`
+- сохраняет результаты в:
+  - `output/fitness-rag-evaluation/results.json`
+  - `output/fitness-rag-evaluation/report.md`
+
+Что сказать:
+
+- это отдельный reproducible способ сравнения качества
+- runner полезен и для demo, и для полуавтоматической проверки
+
+## 10. Важно про legacy docs
 
 Если в других markdown встречается `./fitness_data.db`, это legacy-описание старого fitness summary flow. Для текущего demo из этого файла актуальная БД: `mcp-server/output/document-index/document_index.db`.
 
-## 10. Финальная фраза
+## 11. Финальная фраза
 
 > Система локально индексирует fitness-документы, строит embeddings, сохраняет metadata, поддерживает две стратегии chunking и позволяет использовать этот индекс в retrieval-сценарии приложения.

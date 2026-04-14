@@ -12,16 +12,20 @@ import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
+import com.example.aiadventchallenge.domain.model.AnswerMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import com.example.aiadventchallenge.domain.usecase.PrepareRagRequestUseCase
+import com.example.aiadventchallenge.data.model.Message
 
 class ChatMessageHandlerImpl(
     private val chatRepository: ChatRepository,
     private val agent: ChatAgent,
     private val contextStrategyFactory: ContextStrategyFactory,
-    private val chatSettingsRepository: ChatSettingsRepository
+    private val chatSettingsRepository: ChatSettingsRepository,
+    private val prepareRagRequestUseCase: PrepareRagRequestUseCase
 ) : ChatMessageHandler {
 
     private val TAG = "ChatMessageHandler"
@@ -34,7 +38,8 @@ class ChatMessageHandlerImpl(
         fitnessProfile: FitnessProfileType,
         activeBranchId: String,
         parentMessageId: String?,
-        mcpContext: String?
+        mcpContext: String?,
+        answerMode: AnswerMode
     ): ChatMessageResult {
         logLlmRequest(userInput)
         
@@ -136,21 +141,42 @@ class ChatMessageHandlerImpl(
         fitnessProfile: FitnessProfileType,
         activeBranchId: String,
         parentMessageId: String?,
-        mcpContext: String?
+        mcpContext: String?,
+        answerMode: AnswerMode
     ): ChatMessageResult {
         val activeMessages = chatRepository.getMessagesByBranch(activeBranchId)
-        
+
         var config = agent.buildRequestConfigWithProfile(fitnessProfile)
-        
+
         if (mcpContext != null) {
             Log.d(TAG, "🔧 Adding MCP context to system prompt (length=${mcpContext.length})")
             config = config.copy(systemPrompt = config.systemPrompt + mcpContext)
         } else {
             Log.d(TAG, "ℹ️ No MCP context to add")
         }
-        
+
         val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())
-        val apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
+        var apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
+        var retrievalSummary: com.example.aiadventchallenge.domain.mcp.RetrievalSummary? = null
+
+        if (answerMode == AnswerMode.RAG) {
+            runCatching {
+                prepareRagRequestUseCase(userInput)
+            }.onSuccess { preparedRagRequest ->
+                retrievalSummary = preparedRagRequest.retrievalSummary
+                config = config.copy(
+                    systemPrompt = config.systemPrompt + "\n\n" + preparedRagRequest.systemPromptSuffix
+                )
+                apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
+                apiMessages = replaceLastUserMessage(apiMessages, preparedRagRequest.userPrompt)
+            }.onFailure { error ->
+                Log.e(TAG, "❌ RAG retrieval failed, falling back to base prompt", error)
+                config = config.copy(
+                    systemPrompt = config.systemPrompt + "\n\nRAG MODE\nЕсли контекста недостаточно или retrieval недоступен, прямо скажи об этом и не выдумывай факты."
+                )
+                apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
+            }
+        }
 
         return when (val result = agent.processRequestWithContextAndUsage(
             messages = apiMessages,
@@ -179,12 +205,32 @@ class ChatMessageHandlerImpl(
                 
                 chatRepository.insertMessage(aiMessage, activeBranchId, aiMessage.parentMessageId)
                 
-                ChatMessageResult.Success(null, aiMessage, aiResponseText)
+                ChatMessageResult.Success(
+                    userMessage = null,
+                    aiMessage = aiMessage,
+                    aiResponse = aiResponseText,
+                    retrievalSummary = retrievalSummary
+                )
             }
             is ChatResult.Error -> {
                 Log.e(TAG, "❌ AI response error: ${result.message}")
                 ChatMessageResult.Error(result.message, null)
             }
+        }
+    }
+
+    private fun replaceLastUserMessage(
+        messages: List<Message>,
+        augmentedPrompt: String
+    ): List<Message> {
+        val lastUserIndex = messages.indexOfLast { it.role == com.example.aiadventchallenge.data.model.MessageRole.USER.value }
+        if (lastUserIndex == -1) return messages
+
+        return messages.toMutableList().apply {
+            this[lastUserIndex] = Message(
+                role = com.example.aiadventchallenge.data.model.MessageRole.USER,
+                content = augmentedPrompt
+            )
         }
     }
     

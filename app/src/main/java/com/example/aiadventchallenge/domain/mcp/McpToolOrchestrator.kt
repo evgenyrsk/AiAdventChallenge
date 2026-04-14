@@ -17,7 +17,10 @@ interface McpToolOrchestrator {
      * @param userInput Ввод пользователя
      * @return Result с дополнительным контекстом или null если tool не применим
      */
-    suspend fun detectAndExecuteTool(userInput: String): ToolExecutionResult
+    suspend fun detectAndExecuteTool(
+        userInput: String,
+        allowKnowledgeRetrieval: Boolean = true
+    ): ToolExecutionResult
 }
 
 sealed class ToolExecutionResult {

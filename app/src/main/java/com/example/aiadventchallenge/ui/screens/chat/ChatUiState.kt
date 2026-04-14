@@ -1,6 +1,7 @@
 package com.example.aiadventchallenge.ui.screens.chat
 
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
+import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 
 data class ChatUiState(
@@ -25,6 +26,7 @@ data class ChatUiState(
     val branchesForMessage: List<BranchUiModel> = emptyList(),
 
     val fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE,
+    val answerMode: AnswerMode = AnswerMode.PLAIN_LLM,
     val latestRetrievalSummary: RetrievalSummary? = null
 ) {
     val hasMultipleBranches: Boolean

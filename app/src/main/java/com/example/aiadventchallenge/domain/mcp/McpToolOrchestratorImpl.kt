@@ -11,7 +11,10 @@ class McpToolOrchestratorImpl(
     
     private val TAG = "McpToolOrchestrator"
     
-    override suspend fun detectAndExecuteTool(userInput: String): ToolExecutionResult {
+    override suspend fun detectAndExecuteTool(
+        userInput: String,
+        allowKnowledgeRetrieval: Boolean
+    ): ToolExecutionResult {
         Log.d(TAG, "🔍 Checking for MCP tool in user input...")
 
         val intent = extractFitnessIntent(userInput)

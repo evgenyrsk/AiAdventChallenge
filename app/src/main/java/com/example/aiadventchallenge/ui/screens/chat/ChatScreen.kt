@@ -31,6 +31,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -62,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel as viewModelCompose
 import com.example.aiadventchallenge.domain.mcp.RetrievalSourceCard
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
+import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestLog
@@ -291,6 +294,13 @@ fun ChatScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    AnswerModeToggle(
+                        answerMode = chatUiState.answerMode,
+                        enabled = !isLoading,
+                        onModeSelected = viewModel::setAnswerMode,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     chatUiState.latestRetrievalSummary?.let { retrievalSummary ->
                         RetrievalSummaryCard(
                             summary = retrievalSummary,
@@ -516,6 +526,42 @@ fun MessageBubble(
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun AnswerModeToggle(
+    answerMode: AnswerMode,
+    enabled: Boolean,
+    onModeSelected: (AnswerMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = answerMode == AnswerMode.PLAIN_LLM,
+            onClick = { onModeSelected(AnswerMode.PLAIN_LLM) },
+            label = { Text("Обычный") },
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        )
+        FilterChip(
+            selected = answerMode == AnswerMode.RAG,
+            onClick = { onModeSelected(AnswerMode.RAG) },
+            label = { Text("RAG") },
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+        )
     }
 }
 

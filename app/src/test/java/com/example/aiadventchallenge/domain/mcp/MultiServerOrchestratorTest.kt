@@ -165,6 +165,32 @@ class MultiServerOrchestratorTest {
     }
 
     @Test
+    fun `general weight loss question should not trigger nutrition metrics`() = runTest {
+        val userInput = "Что важнее для похудения: дефицит калорий или время приёма пищи?"
+
+        val result = orchestrator.detectAndExecuteTool(userInput)
+
+        assertEquals(ToolExecutionResult.NoToolFound, result)
+
+        coVerify(exactly = 0) {
+            multiServerRepository.callTool(any(), any())
+        }
+    }
+
+    @Test
+    fun `general protein question should not trigger nutrition metrics`() = runTest {
+        val userInput = "Сколько белка обычно рекомендуют человеку, который хочет сохранить мышцы при похудении?"
+
+        val result = orchestrator.detectAndExecuteTool(userInput)
+
+        assertEquals(ToolExecutionResult.NoToolFound, result)
+
+        coVerify(exactly = 0) {
+            multiServerRepository.callTool(any(), any())
+        }
+    }
+
+    @Test
     fun `no fitness request - should return NoToolFound`() = runTest {
         val userInput = "Привет, как дела?"
 
@@ -228,6 +254,22 @@ class MultiServerOrchestratorTest {
                         params["strategy"] == com.example.aiadventchallenge.data.mcp.DocumentRetrievalConfig.DEFAULT_STRATEGY
                 }
             )
+        }
+    }
+
+    @Test
+    fun `knowledge retrieval can be disabled for explicit rag mode`() = runTest {
+        val userInput = "Объясни по документации проекта как устроен retrieval"
+
+        val result = orchestrator.detectAndExecuteTool(
+            userInput = userInput,
+            allowKnowledgeRetrieval = false
+        )
+
+        assertEquals(ToolExecutionResult.NoToolFound, result)
+
+        coVerify(exactly = 0) {
+            multiServerRepository.callTool(eq("answer_with_retrieval"), any())
         }
     }
 }
