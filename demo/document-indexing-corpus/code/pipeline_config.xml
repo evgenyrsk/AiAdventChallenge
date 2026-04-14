@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<documentIndexing>
+    <source id="demo_corpus" path="demo/document-indexing-corpus" />
+    <chunking defaultStrategy="structure_aware">
+        <fixedSize chunkSize="900" overlap="150" />
+        <structureAware maxChunkSize="1400" minChunkSize="180" />
+    </chunking>
+    <embeddings provider="local_hashing_v1" dimensions="256" />
+    <storage type="sqlite" />
+    <exports json="true" />
+</documentIndexing>
