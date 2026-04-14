@@ -190,6 +190,8 @@ private val scheduler = BackgroundSummaryScheduler(
 
 SQLite база: `./fitness_data.db` (в рабочей директории сервера)
 
+> Legacy note: это описание относится к старому fitness summary flow. Для актуального document indexing demo используется другая БД: `mcp-server/output/document-index/document_index.db`.
+
 **Таблицы:**
 
 ### fitness_logs

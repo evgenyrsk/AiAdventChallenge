@@ -19,6 +19,8 @@
    - 2 таблицы: `fitness_logs`, `scheduled_summaries`
    - Персистентность между перезапусками
 
+> Legacy note: этот summary описывает старую fitness summary реализацию. Он не относится к текущему document indexing demo, где primary storage находится в `mcp-server/output/document-index/document_index.db`.
+
 4. **Агрегация и аналитика:**
    - Средний вес, шаги, сон, белок
    - Количество тренировок

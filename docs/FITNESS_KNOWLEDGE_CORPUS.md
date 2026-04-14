@@ -19,6 +19,9 @@
 bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus local_docs
 ```
 
+Скрипт сам приводит путь корпуса к абсолютному, поэтому пример работает независимо от того,
+из какого подпроекта был запущен document index server.
+
 ## Подходящие demo-вопросы
 
 - `Сколько белка нужно при наборе массы?`

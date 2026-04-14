@@ -52,6 +52,8 @@
 - [x] Индексы по дате и времени создания
 - [x] Персистентность между перезапусками
 
+> Legacy note: этот checklist относится к старому fitness summary flow. Для document indexing demo используется `mcp-server/output/document-index/document_index.db`.
+
 ### Aggregation Logic
 - [x] Средний вес
 - [x] Количество тренировок

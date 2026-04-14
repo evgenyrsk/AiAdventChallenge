@@ -6,7 +6,18 @@ import com.example.mcp.server.documentindex.model.StrategyIndexingSummary
 class ChunkingComparisonService {
 
     fun compare(path: String, summaries: List<StrategyIndexingSummary>): ChunkingComparisonResult {
-        require(summaries.isNotEmpty()) { "No strategy summaries available for comparison" }
+        if (summaries.isEmpty()) {
+            return ChunkingComparisonResult(
+                path = path,
+                comparedStrategies = emptyList(),
+                strategySummaries = emptyList(),
+                retrievalReadinessNotes = listOf(
+                    "No indexed strategy summaries are available for this source yet.",
+                    "Run index_documents for the target corpus before comparing chunking strategies."
+                ),
+                recommendation = "Index the corpus first, then rerun compare_chunking_strategies for this source."
+            )
+        }
 
         val notes = buildList {
             summaries.forEach { summary ->

@@ -7,12 +7,12 @@ import java.security.MessageDigest
 
 class DocumentLoader(
     private val supportedExtensions: Set<String> = DEFAULT_EXTENSIONS,
-    private val ignoredDirectories: Set<String> = DEFAULT_IGNORED_DIRECTORIES
+    private val ignoredDirectories: Set<String> = DEFAULT_IGNORED_DIRECTORIES,
+    private val pathResolver: DocumentPathResolver = DocumentPathResolver()
 ) {
 
     fun load(path: String, source: String): List<RawDocument> {
-        val root = File(path)
-        require(root.exists()) { "Path does not exist: $path" }
+        val root = pathResolver.resolve(path)
 
         val files = if (root.isFile) listOf(root) else root.walkTopDown()
             .onEnter { file -> file.name !in ignoredDirectories }

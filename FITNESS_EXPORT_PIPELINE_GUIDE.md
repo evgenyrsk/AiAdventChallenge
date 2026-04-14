@@ -751,6 +751,8 @@ rm /tmp/fitness-summary-*.txt
 rm /Users/evgenyrsk/AndroidStudioProjects/AiAdventChallenge/fitness_data.db
 ```
 
+> Legacy note: этот pipeline guide относится к старому fitness export flow. Он не описывает storage для document indexing demo.
+
 ---
 
 ## Архитектурные проверки
@@ -809,6 +811,8 @@ tail -f mcp-server.log
 sqlite3 /Users/evgenyrsk/AndroidStudioProjects/AiAdventChallenge/fitness_data.db \
   "SELECT date, weight, workout_completed FROM fitness_logs ORDER BY date DESC LIMIT 10;"
 ```
+
+> Legacy note: для актуального document indexing demo смотреть нужно `mcp-server/output/document-index/document_index.db`, а не `fitness_data.db`.
 
 ---
 
