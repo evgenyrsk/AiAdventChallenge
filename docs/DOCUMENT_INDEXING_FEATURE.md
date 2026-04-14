@@ -1,20 +1,20 @@
-# Document Indexing Feature
+# Функциональность document indexing
 
-This feature provides a local document indexing foundation for retrieval and
-future RAG-style workflows.
+Эта функциональность создаёт локальную основу для индексации документов, retrieval
+и будущих workflow в стиле RAG.
 
-## What is implemented
+## Что реализовано
 
-- mixed document loading for markdown, text, code and PDF
-- two chunking strategies:
+- загрузка смешанных документов: markdown, text, code и PDF
+- две стратегии chunking:
   - fixed size
   - structure aware
-- pluggable embeddings provider abstraction
-- local SQLite storage for chunks, embeddings and metadata
-- JSON export for inspection and debugging
-- MCP tools for indexing, stats, comparison and retrieval
+- расширяемая абстракция embeddings provider
+- локальное хранение чанков, embeddings и metadata в SQLite
+- экспорт в JSON для проверки и отладки
+- MCP tools для индексации, статистики, сравнения и retrieval
 
-## Main MCP tools
+## Основные MCP tools
 
 - `index_documents`
 - `reindex_documents`
@@ -25,37 +25,37 @@ future RAG-style workflows.
 - `retrieve_relevant_chunks`
 - `answer_with_retrieval`
 
-## Recommended local demo
+## Рекомендуемое локальное демо
 
-1. Start the server:
+1. Запустите сервер:
 
 ```bash
 ./gradlew :mcp-server:runDocumentIndexServer
 ```
 
-2. Run the smoke flow:
+2. Выполните smoke-сценарий:
 
 ```bash
 bash scripts/document-indexing-smoke.sh
 ```
 
-3. Inspect artifacts:
+3. Проверьте артефакты:
 
 - `mcp-server/output/document-index/document_index.db`
 - `mcp-server/output/document-index/export/`
 
-## Acceptance evidence
+## Подтверждение готовности
 
-The feature is considered complete for the assignment when one local run shows:
+Функциональность считается завершённой для задания, если один локальный запуск показывает:
 
-- indexed mixed corpus
-- generated embeddings
-- stored metadata per chunk
-- separate results for `fixed_size` and `structure_aware`
-- comparison output
-- local index persisted in SQLite
+- индексацию смешанного корпуса
+- сгенерированные embeddings
+- сохранённые metadata для каждого чанка
+- раздельные результаты для `fixed_size` и `structure_aware`
+- результат сравнения стратегий
+- локальный индекс, сохранённый в SQLite
 
-See also:
+См. также:
 
 - `docs/DOCUMENT_INDEXING_CORPUS.md`
 - `docs/FITNESS_KNOWLEDGE_CORPUS.md`

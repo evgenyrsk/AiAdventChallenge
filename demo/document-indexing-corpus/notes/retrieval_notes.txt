@@ -1,19 +1,21 @@
-Local retrieval notes:
+Заметки по локальному retrieval:
 
-The pipeline should load documents from a directory, normalize them into a
-common parsed representation and then apply chunking independently from the
-embedding provider. This separation keeps the system maintainable.
+Пайплайн должен загружать документы из директории, нормализовать их в общее
+внутреннее представление и только потом применять chunking независимо от
+embedding provider. Такое разделение делает систему более поддерживаемой.
 
-Each chunk should preserve enough information to be useful on its own. Chunks
-must also remain traceable to the original document, section and source.
+Каждый чанк должен сохранять достаточно информации, чтобы быть полезным сам по
+себе. При этом чанки должны оставаться привязанными к исходному документу,
+секции и источнику.
 
-Retrieval quality is easier to improve later when storage is not tightly coupled
-to a specific embedding backend or a single chunking strategy.
+Качество retrieval проще улучшать позже, когда хранилище не жёстко связано с
+конкретным embedding backend или одной-единственной стратегией chunking.
 
-SQLite is a practical default local store because it is easy to ship, inspect
-and migrate. JSON is useful for debugging and exporting. FAISS can remain an
-extension point for vector-heavy scenarios.
+SQLite — практичный вариант локального хранилища по умолчанию, потому что его
+легко поставлять, проверять и мигрировать. JSON полезен для отладки и экспорта.
+FAISS может оставаться точкой расширения для сценариев с тяжёлой векторной
+нагрузкой.
 
-The first retrieval iteration should optimize for debuggability. It is better to
-return transparent results with source metadata than to pursue premature ranking
-complexity that is difficult to validate.
+Первая итерация retrieval должна оптимизироваться под отладку. Лучше возвращать
+прозрачные результаты с metadata источника, чем слишком рано усложнять
+ранжирование так, что его станет трудно проверять.

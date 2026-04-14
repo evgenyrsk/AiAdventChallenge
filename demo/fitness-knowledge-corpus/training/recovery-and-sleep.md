@@ -1,32 +1,34 @@
-# Recovery and Sleep
+# Восстановление и сон
 
-## Why recovery matters
+## Почему восстановление важно
 
-Training creates stress. Adaptation happens when the body gets enough recovery
-resources: sleep, calories, protein, hydration and manageable overall fatigue.
+Тренировки создают стресс для организма. Адаптация происходит тогда, когда
+организм получает достаточно ресурсов для восстановления: сон, калории, белок,
+гидратацию и управляемый общий уровень усталости.
 
-## Role of sleep
+## Роль сна
 
-Poor sleep can reduce training quality, motivation and appetite regulation. A
-person who sleeps badly often under-recovers even if the workout plan is well
-designed.
+Плохой сон может снижать качество тренировок, мотивацию и способность
+контролировать аппетит. Человек, который плохо спит, часто недовосстанавливается
+даже при хорошо составленном тренировочном плане.
 
-## Practical rules
+## Практические правила
 
-- keep a consistent sleep schedule
-- avoid extremely hard training blocks when sleep is poor
-- use rest days intentionally
-- watch for signs of accumulated fatigue
+- придерживайтесь стабильного графика сна
+- избегайте очень тяжёлых тренировочных блоков, если сон плохой
+- используйте дни отдыха осознанно
+- отслеживайте признаки накопленной усталости
 
-## Signs recovery is insufficient
+## Признаки недостаточного восстановления
 
-- persistent soreness
-- unusual irritability
-- performance regressions
-- low motivation to train
-- elevated fatigue throughout the day
+- постоянная мышечная боль
+- необычная раздражительность
+- откат в результатах
+- низкая мотивация к тренировкам
+- повышенная усталость в течение дня
 
-## Practical takeaway
+## Практический вывод
 
-Recovery is not separate from the program. It is part of the program. A good
-plan should match the person’s lifestyle, not only the desired intensity.
+Восстановление не отделено от программы. Оно и есть часть программы. Хороший
+план должен соответствовать образу жизни человека, а не только желаемой
+интенсивности.

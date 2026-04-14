@@ -1,4 +1,4 @@
-# 📱 Демонстрация Fitness MCP Tools в Android приложении
+# 📱 Демонстрация Fitness MCP Tools в Android-приложении
 
 ## 🎯 Цель
 Продемонстрировать работу fitness MCP tools через естественный диалог в чате Android приложения.
@@ -23,7 +23,7 @@ gradle run
 
 ---
 
-### Шаг 2: Сборка и запуск Android приложения
+### Шаг 2: Сборка и запуск Android-приложения
 
 #### Вариант A: Через Android Studio
 1. Откройте проект в Android Studio

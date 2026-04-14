@@ -1,25 +1,25 @@
-# Fitness Knowledge Corpus
+# Корпус знаний о фитнесе
 
-Recommended fitness-specific corpus for testing the document indexing feature.
+Рекомендуемый фитнес-ориентированный корпус для тестирования функциональности document indexing.
 
-## Location
+## Расположение
 
 `demo/fitness-knowledge-corpus/`
 
-## Why use it
+## Почему стоит использовать
 
-- aligned with the app domain: fitness, nutrition, recovery
-- easier to demonstrate retrieval value in the Android app
-- includes markdown, text and code
-- good fit for chunking comparison and metadata inspection
+- соответствует домену приложения: фитнес, питание, восстановление
+- помогает нагляднее показать ценность retrieval в Android app
+- включает markdown, text и code
+- хорошо подходит для сравнения chunking и проверки metadata
 
-## Recommended indexing command
+## Рекомендуемая команда индексации
 
 ```bash
 bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus local_docs
 ```
 
-## Good demo questions
+## Подходящие demo-вопросы
 
 - `Сколько белка нужно при наборе массы?`
 - `Что такое дефицит калорий?`
@@ -27,8 +27,8 @@ bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus local_docs
 - `Почему сон важен для восстановления?`
 - `Как формируется weekly training plan?`
 
-## Expected value
+## Ожидаемая ценность
 
-This corpus makes the retrieval demo feel product-relevant because the app can
-answer fitness-specific questions using indexed local documents instead of only
-technical project materials.
+Этот корпус делает retrieval-демо более продуктовым, потому что приложение
+может отвечать на фитнес-вопросы, опираясь на локально проиндексированные
+документы, а не только на технические материалы проекта.

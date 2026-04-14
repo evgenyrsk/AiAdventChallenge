@@ -1,4 +1,4 @@
-# Weekly Fitness Summary - MCP Tool Implementation
+# Weekly Fitness Summary - реализация MCP tools
 
 ## Обзор
 
@@ -22,12 +22,12 @@ mcp-server/src/main/kotlin/com/example/mcp/server/
 │       ├── ScheduledSummary.kt
 │       └── FitnessSummary.kt
 ├── data/
-│   └── fitness/                    # Storage layer
+│   └── fitness/                    # Слой хранения
 │       ├── FitnessDatabase.kt      # SQLite соединение
 │       ├── FitnessLogDao.kt        # DAO для логов
 │       └── ScheduledSummaryDao.kt  # DAO для сводок
 ├── service/
-│   └── fitness/                    # Business logic
+│   └── fitness/                    # Бизнес-логика
 │       └── FitnessSummaryService.kt # Агрегация данных
 └── scheduler/                      # Фоновые задачи
     └── BackgroundSummaryScheduler.kt # Планировщик

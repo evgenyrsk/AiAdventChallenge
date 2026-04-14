@@ -1,34 +1,36 @@
-# Protein Basics for Training Goals
+# Основы белка для тренировочных целей
 
-## Why protein matters
+## Почему белок важен
 
-Protein supports muscle repair, recovery and long-term adaptation to training.
-For active people, adequate protein intake helps preserve lean mass during fat
-loss and supports growth during a muscle gain phase.
+Белок поддерживает восстановление мышц, общую регенерацию и долгосрочную
+адаптацию к тренировкам. Для активных людей достаточное потребление белка
+помогает сохранять мышечную массу во время снижения жира и поддерживает рост
+во время набора.
 
-## Practical intake ranges
+## Практический диапазон потребления
 
-For general fitness, a practical starting range is around 1.4 to 2.2 grams of
-protein per kilogram of body weight per day. People in a calorie deficit often
-benefit from the upper part of the range because preserving muscle becomes more
-important when calories are reduced.
+Для общего фитнеса разумная стартовая вилка обычно составляет около 1.4-2.2
+грамма белка на килограмм массы тела в день. Людям в дефиците калорий часто
+полезнее верхняя часть диапазона, потому что при сниженных калориях сохранение
+мышц становится особенно важным.
 
-## How to distribute protein
+## Как распределять белок
 
-It is usually easier to hit the target when protein is spread across three to
-five meals. A simple strategy is to include a meaningful protein source at each
-meal: eggs, dairy, fish, lean meat, tofu, legumes or protein powder when
-convenient.
+Обычно легче выйти на целевое количество, если распределить белок между тремя
+и пятью приёмами пищи. Простая стратегия — включать заметный источник белка в
+каждый приём пищи: яйца, молочные продукты, рыбу, нежирное мясо, тофу,
+бобовые или протеин, если это удобно.
 
-## Common mistakes
+## Частые ошибки
 
-- too little protein at breakfast
-- relying only on one evening meal
-- focusing on supplements instead of total intake
-- ignoring protein when trying to lose weight
+- слишком мало белка на завтрак
+- опора только на один плотный вечерний приём пищи
+- фокус на добавках вместо общего суточного потребления
+- игнорирование белка при попытке похудеть
 
-## Practical conclusion
+## Практический вывод
 
-Daily consistency matters more than perfect timing. If a person trains
-regularly, gets enough total calories for the goal and hits a stable protein
-target, recovery and body composition outcomes are usually better.
+Ежедневная стабильность важнее идеального тайминга. Если человек регулярно
+тренируется, получает достаточно калорий под свою цель и стабильно добирает
+нужное количество белка, результаты по восстановлению и композиции тела обычно
+лучше.
