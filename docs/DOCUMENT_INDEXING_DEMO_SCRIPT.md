@@ -50,6 +50,9 @@ bash scripts/document-indexing-smoke.sh demo/document-indexing-corpus local_docs
 bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus local_docs
 ```
 
+Smoke-скрипт завершится сразу при первом JSON-RPC error и напечатает method, source и path,
+поэтому его можно использовать как детектор регрессий, а не только как demo-команду.
+
 Что должно произойти:
 
 - вызовится `index_documents`

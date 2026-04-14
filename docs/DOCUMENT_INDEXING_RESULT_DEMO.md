@@ -75,6 +75,26 @@ ls mcp-server/output/document-index/export
 
 ### 4. Показать embeddings и metadata
 
+Перед JSON-экспортом полезно показать, что данные реально лежат в SQLite:
+
+```bash
+sqlite3 mcp-server/output/document-index/document_index.db ".tables"
+sqlite3 mcp-server/output/document-index/document_index.db ".schema indexed_chunks"
+sqlite3 mcp-server/output/document-index/document_index.db \
+  "SELECT chunk_id, title, section, chunking_strategy, document_type FROM indexed_chunks ORDER BY title LIMIT 10;"
+sqlite3 mcp-server/output/document-index/document_index.db \
+  "SELECT chunk_id, substr(metadata_json, 1, 200), substr(embedding_json, 1, 200) FROM indexed_chunks LIMIT 3;"
+sqlite3 mcp-server/output/document-index/document_index.db \
+  "SELECT source, strategy, document_count, chunk_count, average_chunk_length FROM strategy_summaries ORDER BY strategy;"
+```
+
+Что проговорить:
+
+- `document_index.db` является primary storage
+- `indexed_chunks` хранит текст, metadata и embedding vector
+- `strategy_summaries` хранит агрегаты по стратегиям
+- JSON export ниже нужен для inspect/debug без SQL
+
 Открой экспорт одной стратегии:
 
 ```bash
@@ -159,6 +179,24 @@ curl -s http://localhost:8084 \
 
 - это доказывает, что индекс уже используется приложением
 - retrieval идет через MCP server поверх локального индекса
+
+### 7. Android app database нужно показывать отдельно
+
+Если в demo хотят посмотреть локальную БД приложения, это другая база:
+
+```bash
+adb shell run-as com.example.aiadventchallenge ls databases
+adb shell run-as com.example.aiadventchallenge sqlite3 databases/app_database ".tables"
+```
+
+Что проговорить:
+
+- `app_database` хранит чат и локальные сущности Room
+- document retrieval index хранится не в приложении, а на MCP server side в `document_index.db`
+
+## Важно про legacy docs
+
+Упоминания `./fitness_data.db` в старых markdown относятся к legacy fitness summary flow и не являются актуальным storage для document indexing demo.
 
 ## Короткая формула результата
 

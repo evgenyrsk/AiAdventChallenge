@@ -1,6 +1,7 @@
 package com.example.mcp.server.documentindex
 
 import com.example.mcp.server.documentindex.document.DocumentLoader
+import com.example.mcp.server.documentindex.document.DocumentPathResolver
 import com.example.mcp.server.documentindex.document.DocumentParser
 import com.example.mcp.server.documentindex.retrieval.DocumentRetrievalService
 import com.example.mcp.server.documentindex.retrieval.RetrievalOrchestrationService
@@ -134,6 +135,10 @@ class DocumentIndexingPipelineTest {
             assertEquals(2, comparison.strategySummaries.size)
             assertTrue(comparison.recommendation.isNotBlank())
 
+            val emptyComparison = pipeline.compareStrategies("missing_docs", tempDir.toString())
+            assertTrue(emptyComparison.strategySummaries.isEmpty())
+            assertTrue(emptyComparison.recommendation.contains("Index the corpus first"))
+
             val retrievalService = DocumentRetrievalService()
             val searchResult = retrievalService.searchIndex(
                 SearchIndexRequest(
@@ -200,6 +205,53 @@ class DocumentIndexingPipelineTest {
             assertTrue(reindexed.successfulDocuments >= 4)
             assertTrue(reindexed.strategySummaries.any { it.strategy == "fixed_size" })
         } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    @OptIn(ExperimentalPathApi::class)
+    fun `path resolver finds repo relative path when server runs from module directory`() {
+        val tempDir = createTempDirectory("document-path-resolver")
+        val originalUserDir = System.getProperty("user.dir")
+        try {
+            tempDir.resolve("settings.gradle.kts").writeText("rootProject.name = \"test\"")
+            tempDir.resolve("gradlew").writeText("#!/bin/sh")
+            val moduleDir = tempDir.resolve("mcp-server")
+            moduleDir.toFile().mkdirs()
+            moduleDir.resolve("build.gradle.kts").writeText("plugins {}")
+
+            val corpusDir = tempDir.resolve("demo/fitness-knowledge-corpus")
+            corpusDir.toFile().mkdirs()
+            corpusDir.resolve("README.md").writeText("# Demo corpus")
+
+            System.setProperty("user.dir", moduleDir.toString())
+
+            val resolved = DocumentPathResolver().resolve("demo/fitness-knowledge-corpus")
+            assertEquals(corpusDir.toFile().canonicalPath, resolved.canonicalPath)
+        } finally {
+            System.setProperty("user.dir", originalUserDir)
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    @OptIn(ExperimentalPathApi::class)
+    fun `path resolver error includes working directory context`() {
+        val tempDir = createTempDirectory("document-path-missing")
+        val originalUserDir = System.getProperty("user.dir")
+        try {
+            System.setProperty("user.dir", tempDir.toString())
+
+            val error = kotlin.runCatching {
+                DocumentPathResolver().resolve("demo/missing-corpus")
+            }.exceptionOrNull()
+
+            assertNotNull(error)
+            assertTrue(error.message!!.contains("resolved from cwd="))
+            assertTrue(error.message!!.contains("demo/missing-corpus"))
+        } finally {
+            System.setProperty("user.dir", originalUserDir)
             tempDir.deleteRecursively()
         }
     }

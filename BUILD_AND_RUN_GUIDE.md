@@ -135,6 +135,8 @@ sdk install gradle 8.5
 
 **Решение:** Проверьте права на запись в текущей директории. База данных создаётся в файле `./fitness_data.db`
 
+> Legacy note: это относится к старому fitness summary server flow. Для document indexing demo база создаётся в `mcp-server/output/document-index/document_index.db`.
+
 ## Проверка структуры проекта
 
 ```bash
