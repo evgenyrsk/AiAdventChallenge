@@ -1,30 +1,31 @@
-# Training Split Overview
+# Обзор тренировочных сплитов
 
 ## Full Body
 
-A full body program trains the major movement patterns several times per week.
-It often works well for beginners because it provides frequent practice and
-reasonable weekly volume with fewer training days.
+Программа full body тренирует основные двигательные паттерны несколько раз в
+неделю. Она часто хорошо подходит новичкам, потому что даёт частую практику и
+разумный недельный объём при меньшем количестве тренировочных дней.
 
 ## Upper Lower
 
-An upper lower split separates upper body and lower body sessions. It is useful
-when a person wants slightly more volume per session without moving to a highly
-specialized bodybuilding split.
+Сплит upper lower разделяет тренировки на верх тела и низ тела. Он полезен,
+когда человек хочет немного увеличить объём на тренировку, но ещё не переходить
+к узкоспециализированному бодибилдерскому сплиту.
 
 ## Push Pull Legs
 
-Push pull legs is popular when training frequency and total gym time are higher.
-It can work well, but for many beginners it is more complex than necessary and
-can be harder to recover from if sleep and nutrition are inconsistent.
+Push pull legs популярен, когда выше частота тренировок и больше общего времени
+в зале. Он может работать хорошо, но для многих новичков это более сложная,
+чем нужно, схема, из которой труднее восстанавливаться, если сон и питание
+нестабильны.
 
-## Which is best for a beginner
+## Что лучше для новичка
 
-A beginner often does best with a simple full body or upper lower split. The
-main goal is consistent execution, progressive overload and learning movement
-quality.
+Новичку чаще всего лучше подходит простой full body или upper lower. Главная
+цель — стабильное выполнение плана, progressive overload и освоение качественной
+техники движений.
 
-## Practical takeaway
+## Практический вывод
 
-The best split is the one a person can recover from and repeat consistently over
-months, not the one that looks most advanced on paper.
+Лучший сплит — тот, из которого человек способен восстановиться и который может
+повторять месяцами, а не тот, который выглядит самым продвинутым на бумаге.

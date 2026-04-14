@@ -1,23 +1,23 @@
-# Document Indexing Demo
+# Демо document indexing
 
-Recommended demo corpus:
+Рекомендуемый demo corpus:
 
-- `demo/document-indexing-corpus/` for a stable repo-local smoke corpus
-- repository root `README.md` + `docs/` + `mcp-server/src/main/kotlin/` for a larger project-scale corpus
-- one local PDF dropped into either corpus if you want to validate PDF indexing manually
+- `demo/document-indexing-corpus/` как стабильный smoke corpus внутри репозитория
+- корневой `README.md` + `docs/` + `mcp-server/src/main/kotlin/` как более крупный корпус масштаба проекта
+- один локальный PDF, добавленный в любой из этих корпусов, если нужно вручную проверить PDF indexing
 
-The smoke corpus is deterministic and easy to inspect. The larger project corpus
-already gives enough markdown, architecture notes and source code to exceed the
-MVP volume target. The indexing pipeline skips `.git`, `.gradle`, `.idea`,
-`build`, `.kotlin` and `output`.
+Smoke corpus детерминирован и его легко проверять вручную. Более крупный корпус
+проекта уже содержит достаточно markdown, архитектурных заметок и исходного кода,
+чтобы превысить целевой MVP-объём. Пайплайн индексации пропускает `.git`,
+`.gradle`, `.idea`, `build`, `.kotlin` и `output`.
 
-Run the dedicated MCP server:
+Запустите выделенный MCP server:
 
 ```bash
 ./gradlew :mcp-server:runDocumentIndexServer
 ```
 
-Example tool calls:
+Примеры вызовов инструментов:
 
 ```json
 {
@@ -32,7 +32,7 @@ Example tool calls:
 }
 ```
 
-Or run the ready-made smoke flow:
+Или запустите готовый smoke-сценарий:
 
 ```bash
 bash scripts/document-indexing-smoke.sh
@@ -61,16 +61,16 @@ bash scripts/document-indexing-smoke.sh
 }
 ```
 
-Artifacts:
+Артефакты:
 
-- SQLite index: `mcp-server/output/document-index/document_index.db`
-- JSON exports: `mcp-server/output/document-index/export/`
-- Acceptance report: `mcp-server/output/document-index/export/local_docs_indexing_report.json`
+- SQLite-индекс: `mcp-server/output/document-index/document_index.db`
+- JSON-экспорты: `mcp-server/output/document-index/export/`
+- Отчёт о приёмке: `mcp-server/output/document-index/export/local_docs_indexing_report.json`
 
-What to verify in the `index_documents` response:
+Что проверять в ответе `index_documents`:
 
 - `corpusStats.documentCount`
 - `corpusStats.totalCharacters`
 - `corpusStats.totalWords`
-- two `strategySummaries`
-- distinct chunk counts or average chunk sizes between strategies
+- две `strategySummaries`
+- различие в количестве чанков или среднем размере чанков между стратегиями

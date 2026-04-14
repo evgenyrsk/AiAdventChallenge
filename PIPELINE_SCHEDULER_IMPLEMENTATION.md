@@ -1,25 +1,25 @@
-# Pipeline & Scheduler Implementation
+# Реализация pipeline и scheduler
 
 ## Что реализовано
 
-### ✅ Фаза 1: Storage & Repository Layer
+### ✅ Фаза 1: слой хранения и репозиториев
 - **ReminderDatabase** - единая база данных для фитнес-логов, scheduled summaries, reminders и reminder events
 - **ReminderDao** - CRUD операции для reminders
 - **ReminderEventDao** - CRUD операции для reminder events
 - **ReminderRepository** - бизнес-логика для reminders
 - **FitnessReminderRepository** - агрегированный репозиторий для фитнес-данных и reminders
 
-### ✅ Фаза 2: Service Layer
+### ✅ Фаза 2: сервисный слой
 - **ReminderService** - создание напоминаний, проверка триггеров, построение контекста
 - **ReminderAnalysisService** - анализ контекста, персонализация сообщений, принятие решений о триггерах
 
-### ✅ Фаза 3: Pipeline Infrastructure
+### ✅ Фаза 3: инфраструктура pipeline
 - **PipelineStep** - интерфейс шага пайплайна
 - **PipelineContext** - контекст выполнения с данными между шагами
 - **PipelineResult** - типизированный результат выполнения (Success/Failure)
 - **PipelineExecutor** - оркестратор для выполнения цепочек шагов
 
-### ✅ Фаза 4: Pipeline Steps
+### ✅ Фаза 4: шаги pipeline
 - **LoadLogsStep** - загрузка фитнес-логов за период
 - **CalculateSummaryStep** - расчет метрик и генерация summary
 - **SaveSummaryStep** - сохранение summary в базу данных
@@ -27,16 +27,16 @@
 - **AnalyzeReminderStep** - анализ контекста для персонализации
 - **CreateEventStep** - создание reminder event
 
-### ✅ Фаза 5: Use Cases
+### ✅ Фаза 5: use cases
 - **WeeklySummaryPipeline** - pipeline для еженедельного отчета
 - **DailyReminderPipeline** - pipeline для ежедневных напоминаний
 
-### ✅ Фаза 6: Scheduler
+### ✅ Фаза 6: scheduler
 - **DailyReminderScheduler** - ежедневные проверки reminders
 - **SchedulerOrchestrator** - управление всеми планировщиками
 - **BackgroundSummaryScheduler** - рефакторинг для использования pipeline
 
-### ✅ Фаза 7: MCP Tools
+### ✅ Фаза 7: MCP tools
 - **create_reminder** - создание нового напоминания
 - **check_due_reminders** - проверка due reminders
 - **get_active_reminders** - список активных напоминаний
@@ -44,7 +44,7 @@
 - **run_job_now** - запуск задачи вручную
 - **get_job_status** - статус задачи
 
-### ✅ Фаза 8: Testing
+### ✅ Фаза 8: тестирование
 - **DemoScenario** - полный демонстрационный сценарий
 - Проверка автоматического выполнения pipelines
 - Проверка передачи данных между шагами
@@ -54,7 +54,7 @@
 
 ## Архитектурные особенности
 
-### Pipeline-Ready Design
+### Архитектура, готовая к pipeline
 ```
 PipelineStep<I, O>
   ↓ execute(input, context)
@@ -74,7 +74,7 @@ data class ToolResponse<T>(
 )
 ```
 
-### Типизированные DTO для pipeline steps
+### Типизированные DTO для шагов pipeline
 ```kotlin
 // Входы/выходы для каждого шага
 LoadLogsInput → LoadLogsOutput
@@ -104,7 +104,7 @@ val result = pipeline.executeDailyReminders(
 )
 ```
 
-### 3. Управление через Scheduler Orchestrator
+### 3. Управление через `SchedulerOrchestrator`
 ```kotlin
 val orchestrator = SchedulerOrchestrator(
     repository,

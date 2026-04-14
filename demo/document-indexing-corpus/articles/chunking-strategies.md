@@ -1,46 +1,51 @@
-# Chunking Strategies for Local RAG
+# Стратегии chunking для локального RAG
 
-## Why chunking exists
+## Зачем нужен chunking
 
-A local retrieval system does not search full documents directly in most
-practical setups. It searches smaller pieces of text that can be embedded,
-stored and ranked efficiently. The quality of chunking affects recall,
-precision, source attribution and the ability to assemble useful context for a
-language model.
+В большинстве практических сценариев локальная retrieval-система не ищет сразу
+по целым документам. Она ищет по более мелким фрагментам текста, которые можно
+эффективно векторизовать, хранить и ранжировать. Качество chunking влияет на
+полноту поиска, точность, атрибуцию источника и возможность собрать полезный
+контекст для языковой модели.
 
-When chunks are too small, important ideas are fragmented and queries may match
-isolated words without enough semantic context. When chunks are too large, the
-embedding can blur several topics together and retrieval quality becomes less
-predictable. Large chunks also reduce the number of distinct retrieval units and
-make it harder to attribute the answer to a specific section.
+Когда чанки слишком маленькие, важные идеи распадаются на части, и запросы
+могут совпадать только по отдельным словам без достаточного семантического
+контекста. Когда чанки слишком большие, embeddings начинают смешивать несколько
+тем сразу, и качество retrieval становится менее предсказуемым. Большие чанки
+также уменьшают число отдельных единиц поиска и затрудняют привязку ответа к
+конкретной секции.
 
 ## Fixed-size chunking
 
-Fixed-size chunking creates predictable chunk lengths. This is useful when the
-system needs stable embedding cost, consistent storage behavior and a simple
-baseline for experiments. Overlap is often added so that boundary sentences do
-not disappear when a concept happens to be split between two adjacent chunks.
+Fixed-size chunking создаёт чанки предсказуемой длины. Это полезно, когда
+системе нужна стабильная стоимость embeddings, единообразное поведение
+хранилища и простая базовая линия для экспериментов. Часто добавляют overlap,
+чтобы предложения на границе не терялись, если важная мысль оказывается
+разделена между соседними чанками.
 
-The main weakness of fixed-size chunking is that document structure is ignored.
-A heading may be separated from the section body. A function declaration may end
-up in one chunk and the implementation in another. The chunk is valid as text
-but weaker as an explanation unit.
+Главная слабость fixed-size chunking в том, что он игнорирует структуру
+документа. Заголовок может отделиться от текста секции. Объявление функции
+может оказаться в одном чанке, а реализация — в другом. Формально такой чанк
+корректен как текст, но хуже работает как единица объяснения.
 
 ## Structure-aware chunking
 
-Structure-aware chunking keeps headings, paragraphs, file boundaries and other
-logical separators. This helps preserve meaning and produces better metadata for
-future retrieval, citations and debugging. In markdown documents, section
-headings often become natural retrieval anchors. In source code, file-level or
-block-level boundaries can preserve cohesive logic.
+Structure-aware chunking сохраняет заголовки, абзацы, границы файлов и другие
+логические разделители. Это помогает лучше сохранять смысл и даёт более
+качественные metadata для будущего retrieval, цитирования и отладки. В
+markdown-документах заголовки секций часто становятся естественными якорями для
+retrieval. В исходном коде границы файлов или блоков помогают сохранить цельную
+логику.
 
-The tradeoff is that chunk sizes become less uniform. Some sections may be short
-and some may be long, so a structure-aware strategy often needs fallback rules
-for oversized sections and minimum size thresholds for tiny fragments.
+Компромисс в том, что размеры чанков становятся менее равномерными. Некоторые
+секции могут быть короткими, а некоторые длинными, поэтому structure-aware
+стратегии обычно нужны fallback-правила для слишком больших секций и минимальные
+пороги размера для очень маленьких фрагментов.
 
-## Recommendation
+## Рекомендация
 
-For a practical local document index, fixed-size chunking is a good baseline and
-structure-aware chunking is usually the better default retrieval representation.
-Both should be measured on the same corpus because indexing architecture should
-support comparison rather than forcing one irreversible policy too early.
+Для практического локального индекса документов fixed-size chunking — хорошая
+базовая линия, а structure-aware chunking обычно лучше подходит как
+представление по умолчанию для retrieval. Обе стратегии стоит измерять на одном
+и том же корпусе, потому что архитектура индексации должна поддерживать
+сравнение, а не слишком рано навязывать одну необратимую политику.

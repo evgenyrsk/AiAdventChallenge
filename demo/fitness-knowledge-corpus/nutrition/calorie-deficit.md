@@ -1,31 +1,33 @@
-# Calorie Deficit and Weight Loss
+# Дефицит калорий и снижение веса
 
-## Definition
+## Определение
 
-A calorie deficit means consuming less energy than the body spends over time.
-When maintained consistently, this creates conditions for body weight reduction.
+Дефицит калорий означает, что человек в среднем потребляет меньше энергии, чем
+тратит организм. Если поддерживать это состояние достаточно долго, создаются
+условия для снижения массы тела.
 
-## What matters most
+## Что важнее всего
 
-The size of the deficit should be practical and sustainable. An aggressive
-deficit may speed up weight loss in the short term, but it can reduce training
-performance, increase hunger and make adherence worse.
+Размер дефицита должен быть практичным и устойчивым. Слишком агрессивный
+дефицит может ускорить снижение веса в краткосрочной перспективе, но при этом
+ухудшить качество тренировок, усилить голод и снизить способность соблюдать план.
 
-## Reasonable approach
+## Разумный подход
 
-Many people do well with a moderate deficit that still leaves enough energy for
-steps, workouts, recovery and sleep. Protein intake should remain high enough to
-help preserve muscle mass.
+Многим хорошо подходит умеренный дефицит, при котором остаётся достаточно
+энергии на шаги, тренировки, восстановление и сон. Потребление белка должно
+оставаться достаточно высоким, чтобы помогать сохранять мышечную массу.
 
-## Warning signs
+## Тревожные признаки
 
-- energy drops sharply
-- workouts become much worse
-- sleep quality decreases
-- hunger becomes difficult to manage
-- adherence collapses on weekends
+- энергия резко падает
+- тренировки становятся заметно хуже
+- ухудшается качество сна
+- голод становится трудно контролировать
+- соблюдение плана разваливается по выходным
 
-## Practical recommendation
+## Практическая рекомендация
 
-Use a moderate calorie deficit, track trend changes rather than daily noise, and
-combine nutrition with resistance training and good recovery habits.
+Используйте умеренный дефицит калорий, отслеживайте тренд изменений, а не шум
+по дням, и сочетайте питание с силовыми тренировками и хорошими привычками
+восстановления.

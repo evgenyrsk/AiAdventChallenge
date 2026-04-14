@@ -8,7 +8,7 @@ Android-приложение — AI-помощник по фитнесу, пит
 
 - **Два экрана** — "Чат" и "Сравнение" с переключением через навигацию
 - **Два режима ответов** — "Без ограничений" и "С ограничениями"
-- **Четыре режима промптов** — "Прямой ответ", "Пошагово", "Meta-prompt", "Эксперты"
+- **Четыре режима промптов** — "Прямой ответ", "Пошагово", "Мета-промпт", "Эксперты"
 - **Персонализация** — учёт возраста, веса, роста, цели и уровня активности
 - **Тематический фокус** — вежливый отказ на вопросы не по теме ЗОЖ
 - **Дружелюбный тон** — тёплые и поддерживающие ответы
@@ -43,7 +43,7 @@ Android-приложение — AI-помощник по фитнесу, пит
 - Детальное объяснение каждого этапа
 - Позволяет отследить ход рассуждений
 
-### Meta-prompt
+### Мета-промпт
 - AI сначала составляет оптимальный промпт
 - Затем использует его для ответа
 - Максимальная точность через саморефлексию
@@ -71,7 +71,7 @@ Android-приложение — AI-помощник по фитнесу, пит
 
 ## Навигация
 
-Приложение использует NavigationBar для переключения между двумя экранами:
+Приложение использует `NavigationBar` для переключения между двумя экранами:
 
 | Экран | Описание |
 |-------|----------|
@@ -84,7 +84,7 @@ Android-приложение — AI-помощник по фитнесу, пит
 
 ## Архитектура
 
-Clean Architecture с разделением на слои:
+`Clean Architecture` с разделением на слои:
 
 ```
 data → domain → ui
@@ -116,25 +116,25 @@ app/src/main/java/com/example/aiadventchallenge/
 
 ---
 
-## Document Indexing
+## Индексация документов
 
-В проекте есть локальный document indexing / retrieval feature для MCP server:
+В проекте есть локальная функциональность document indexing / retrieval для MCP server:
 
 - локальная индексация markdown, text, code и PDF
 - две стратегии chunking: `fixed_size` и `structure_aware`
 - локальный SQLite index + JSON export
 - MCP tools для index/stats/compare/search/retrieve
 
-Документация по feature:
+Документация по функциональности:
 
-- [Feature Overview](docs/DOCUMENT_INDEXING_FEATURE.md)
-- [Demo Corpus](demo/document-indexing-corpus/README.md)
-- [Fitness Demo Corpus](demo/fitness-knowledge-corpus/README.md)
-- [Fitness Demo Script](docs/FITNESS_DEMO_SCRIPT.md)
-- [Fitness Video Demo](docs/FITNESS_VIDEO_DEMO.md)
-- [Demo Flow](docs/DOCUMENT_INDEXING_DEMO.md)
-- [Result Demo](docs/DOCUMENT_INDEXING_RESULT_DEMO.md)
-- [Acceptance](docs/DOCUMENT_INDEXING_ACCEPTANCE.md)
+- [Обзор функциональности](docs/DOCUMENT_INDEXING_FEATURE.md)
+- [Demo corpus](demo/document-indexing-corpus/README.md)
+- [Фитнес demo corpus](demo/fitness-knowledge-corpus/README.md)
+- [Сценарий fitness-демо](docs/FITNESS_DEMO_SCRIPT.md)
+- [Видео fitness-демо](docs/FITNESS_VIDEO_DEMO.md)
+- [Сценарий demo flow](docs/DOCUMENT_INDEXING_DEMO.md)
+- [Итоговое демо результата](docs/DOCUMENT_INDEXING_RESULT_DEMO.md)
+- [Критерии приёмки](docs/DOCUMENT_INDEXING_ACCEPTANCE.md)
 
 ---
 
@@ -249,7 +249,7 @@ AI_API_KEY=your_openrouter_api_key
 }
 ```
 
-#### Meta-prompt
+#### Мета-промпт
 
 ```json
 {

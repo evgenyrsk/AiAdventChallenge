@@ -1,4 +1,4 @@
-# Weekly Fitness Summary - Инструкция по сборке и запуску
+# Weekly Fitness Summary - руководство по сборке и запуску
 
 ## Требования
 
@@ -65,7 +65,7 @@ kotlinc \
 kotlin -cp "build/classes:kotlinx-serialization-json-1.7.3.jar:kotlinx-coroutines-core-1.7.3.jar:sqlite-jdbc-3.45.1.0.jar" com.example.mcp.server.MainKt
 ```
 
-## Быстрый старт (если Gradle доступен)
+## Быстрый старт, если Gradle доступен
 
 ```bash
 # 1. Переход в директорию mcp-server

@@ -1,52 +1,52 @@
-# Document Indexing Acceptance
+# Критерии приёмки для document indexing
 
-The assignment is considered complete when the following can be shown on one local run.
+Задача считается выполненной, если всё ниже можно показать за один локальный запуск.
 
-## Required proof
+## Обязательные подтверждения
 
-1. `index_documents` completes on the demo corpus.
-2. `corpusStats` is present in the response and reports non-zero:
-   - document count
-   - total characters
-   - total words
-3. Two strategies are executed:
+1. `index_documents` успешно выполняется на demo corpus.
+2. В ответе присутствует `corpusStats`, и его значения больше нуля:
+   - количество документов
+   - общее число символов
+   - общее число слов
+3. Выполняются две стратегии:
    - `fixed_size`
    - `structure_aware`
-4. Strategy summaries differ by chunk distribution.
-5. Chunks contain required metadata:
+4. Сводки по стратегиям отличаются по распределению чанков.
+5. Чанки содержат обязательные metadata:
    - `chunk_id`
    - `source`
    - `title`
    - `section`
    - `chunking_strategy`
-6. SQLite index exists.
-7. JSON exports exist, including:
-   - per-strategy chunk export
-   - indexing report export
+6. Создаётся SQLite-индекс.
+7. Создаются JSON-экспорты, включая:
+   - экспорт чанков по каждой стратегии
+   - экспорт отчёта об индексации
 
-## Suggested verification flow
+## Рекомендуемый порядок проверки
 
-1. Start the document index MCP server.
-2. Call `index_documents`.
-3. Call `get_index_stats`.
-4. Call `compare_chunking_strategies`.
-5. Optionally call `list_indexed_documents`.
+1. Запустить MCP server для индекса документов.
+2. Вызвать `index_documents`.
+3. Вызвать `get_index_stats`.
+4. Вызвать `compare_chunking_strategies`.
+5. При необходимости вызвать `list_indexed_documents`.
 
-## Expected artifacts
+## Ожидаемые артефакты
 
 - SQLite DB: `mcp-server/output/document-index/document_index.db`
-- Chunk exports:
+- Экспорты чанков:
   - `local_docs_fixed_size_index.json`
   - `local_docs_structure_aware_index.json`
-- Acceptance report:
+- Отчёт о приёмке:
   - `local_docs_indexing_report.json`
 
-## Automated verification
+## Автоматическая проверка
 
-Use:
+Используйте:
 
 ```bash
 ./gradlew :mcp-server:test
 ```
 
-The integration test verifies mixed-document indexing, PDF parsing, metadata presence, strategy comparison, report generation and retrieval-readiness.
+Интеграционный тест проверяет индексацию смешанного корпуса, разбор PDF, наличие metadata, сравнение стратегий, генерацию отчёта и готовность к retrieval.

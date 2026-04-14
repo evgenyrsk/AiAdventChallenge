@@ -1,36 +1,36 @@
-# Metadata and Retrieval Quality
+# Metadata и качество retrieval
 
-## Why metadata matters
+## Почему metadata важны
 
-Embeddings alone are not enough for a practical retrieval system. A chunk should
-carry metadata that explains where it came from and how it fits into the source
-document. This is useful for ranking, filtering, debugging, result display and
-future answer citations.
+Одних embeddings недостаточно для практической retrieval-системы. Чанк должен
+содержать metadata, которые объясняют, откуда он взялся и как связан с исходным
+документом. Это полезно для ранжирования, фильтрации, отладки, отображения
+результатов и будущего цитирования ответов.
 
-At minimum, each chunk should have:
+Как минимум у каждого чанка должны быть:
 
-- a stable chunk identifier
-- a source identifier
-- a title or file name
-- a section label
-- the chunking strategy that produced it
+- стабильный идентификатор чанка
+- идентификатор источника
+- заголовок или имя файла
+- метка секции
+- стратегия chunking, которая его создала
 
-## Useful additional metadata
+## Полезные дополнительные metadata
 
-File path, document type, document identifier and text positions are valuable
-even if the first MVP does not use them directly. These fields become important
-when the retrieval layer adds filters, reindexing, source cards or context
-assembly limits.
+Путь к файлу, тип документа, идентификатор документа и текстовые позиции ценны
+даже в том случае, если первый MVP напрямую их не использует. Эти поля
+становятся важными, когда слой retrieval добавляет фильтры, переиндексацию,
+карточки источников или ограничения на сборку контекста.
 
-PDF page numbers are especially useful because users often ask questions about
-where information was found. If page metadata exists, the system can later show
-clear citations without redesigning the storage model.
+Номера страниц PDF особенно полезны, потому что пользователи часто спрашивают,
+где именно была найдена информация. Если метаданные страниц уже есть, система
+сможет позже показывать понятные цитаты без переработки модели хранения.
 
-## Metadata and trust
+## Metadata и доверие
 
-When a retrieval system surfaces a chunk with clear metadata, developers can
-reason about errors faster. If the result comes from the wrong file, the problem
-might be ranking or chunking. If the correct file is found but the wrong
-section is returned, the issue might be chunk granularity or section parsing.
+Когда retrieval-система показывает чанк с понятными metadata, разработчикам
+проще разбираться в ошибках. Если результат пришёл из неверного файла, проблема
+может быть в ранжировании или chunking. Если найден правильный файл, но вернулась
+не та секция, проблема может быть в размере чанков или разборе секций.
 
-Metadata therefore improves both product behavior and engineering velocity.
+Поэтому metadata улучшают и поведение продукта, и скорость инженерной работы.

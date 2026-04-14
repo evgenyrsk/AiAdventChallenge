@@ -1,22 +1,22 @@
-# Fitness Knowledge Demo Corpus
+# Demo corpus знаний о фитнесе
 
-Stable fitness-specific corpus for document indexing and retrieval demos.
+Стабильный фитнес-ориентированный корпус для document indexing и retrieval-демо.
 
-This corpus is designed for:
+Этот корпус предназначен для:
 
-- local indexing
-- chunking comparison
-- metadata inspection
-- retrieval demos in the Android chat app
+- локальной индексации
+- сравнения chunking
+- проверки metadata
+- retrieval-демо в Android chat app
 
-## Included materials
+## Что входит в корпус
 
-- nutrition guides
-- workout and recovery notes
-- short FAQ-style markdown
-- source-like Kotlin file with domain terminology
+- гайды по питанию
+- заметки о тренировках и восстановлении
+- короткие markdown-файлы в формате FAQ
+- Kotlin-файл, похожий на исходный код, с доменной терминологией
 
-## Recommended demo queries
+## Рекомендуемые demo-запросы
 
 - `Сколько белка нужно при наборе массы?`
 - `Что такое дефицит калорий?`
@@ -24,7 +24,7 @@ This corpus is designed for:
 - `Почему сон важен для восстановления?`
 - `Как формируется weekly training plan?`
 
-## Recommended smoke run
+## Рекомендуемый smoke-запуск
 
 ```bash
 bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus local_docs

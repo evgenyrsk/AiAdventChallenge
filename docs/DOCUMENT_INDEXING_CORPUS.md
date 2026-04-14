@@ -1,24 +1,24 @@
-# Document Indexing Corpus
+# Корпус для document indexing
 
-Stable demo corpus for the document-indexing assignment:
+Стабильный demo corpus для задачи по document indexing:
 
-- repository root `README.md`
-- all files under `docs/`
-- Kotlin sources under `mcp-server/src/main/kotlin/`
-- `demo/document-indexing-corpus/` for technical retrieval demos
-- `demo/fitness-knowledge-corpus/` for domain-specific fitness retrieval demos
+- корневой `README.md` репозитория
+- все файлы в `docs/`
+- исходники Kotlin в `mcp-server/src/main/kotlin/`
+- `demo/document-indexing-corpus/` для технических retrieval-демо
+- `demo/fitness-knowledge-corpus/` для retrieval-демо в фитнес-домене
 
-Optional corpus extension:
+Дополнительное расширение корпуса:
 
-- one PDF dropped into `docs/` before running indexing
+- один PDF-файл, добавленный в `docs/` перед запуском индексации
 
-Why this corpus:
+Почему выбран именно этот корпус:
 
-- mixes markdown, architecture notes and source code
-- is stable and reproducible inside the repository
-- already exceeds the assignment minimum when indexed from repo root
+- сочетает markdown, архитектурные заметки и исходный код
+- остаётся стабильным и воспроизводимым внутри репозитория
+- уже превышает минимальные требования задания при индексации из корня репозитория
 
-Recommended MCP call:
+Рекомендуемый MCP-вызов:
 
 ```json
 {
@@ -28,7 +28,7 @@ Recommended MCP call:
 }
 ```
 
-Evidence to capture after indexing:
+Что стоит зафиксировать после индексации:
 
 - `successfulDocuments`
 - `corpusStats.documentCount`
@@ -36,11 +36,11 @@ Evidence to capture after indexing:
 - `corpusStats.totalWords`
 - `strategySummaries`
 - `mcp-server/output/document-index/document_index.db`
-- JSON exports under `mcp-server/output/document-index/export/`
+- JSON-экспорты в `mcp-server/output/document-index/export/`
 
-Recommended corpus by scenario:
+Рекомендуемый корпус по сценариям:
 
-- technical/architecture demo:
+- техническое/архитектурное демо:
   - `demo/document-indexing-corpus/`
-- product/fitness demo:
+- продуктовое/фитнес-демо:
   - `demo/fitness-knowledge-corpus/`

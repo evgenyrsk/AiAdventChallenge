@@ -1,13 +1,13 @@
-# ✅ Интеграция Fitness MCP Tools в Android Чат — Резюме
+# ✅ Интеграция Fitness MCP Tools в Android-чат — резюме
 
 ## 🎯 Реализовано
 
-### Новые файлы Android (3):
+### Новые Android-файлы (3):
 1. `domain/detector/FitnessRequestDetector.kt` — интерфейс детектора
 2. `domain/detector/FitnessRequestDetectorImpl.kt` — реализация с regex
 3. `data/mcp/model/McpJsonRpcModels.kt` — обновлён с fitness result types
 
-### Обновлённые файлы Android (2):
+### Обновлённые Android-файлы (2):
 1. `domain/mcp/McpToolOrchestratorImpl.kt` — добавлена fitness логика
 2. `di/AppDependencies.kt` — добавлен fitness detector в DI
 
@@ -87,13 +87,13 @@ AI использует результат в ответе
 
 ### Быстрый старт (2 терминала):
 
-#### Терминал 1: MCP Server
+#### Терминал 1: MCP server
 ```bash
 cd /Users/evgenyrsk/AndroidStudioProjects/AiAdventChallenge/mcp-server
 gradle run
 ```
 
-#### Терминал 2: Android App
+#### Терминал 2: Android app
 В Android Studio: нажмите ▶️ (Run)
 
 #### В чате Android:

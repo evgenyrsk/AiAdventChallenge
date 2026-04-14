@@ -1,4 +1,4 @@
-# Weekly Fitness Summary MCP Tool - Резюме реализации
+# Weekly Fitness Summary MCP Tool - резюме реализации
 
 ## ✅ Что реализовано
 
@@ -10,7 +10,7 @@
    - `get_latest_scheduled_summary` - последняя автоматическая сводка
 
 2. **Фоновая задача (scheduler):**
-   - Автоматический запуск каждые 1 минуту (Demo mode)
+   - Автоматический запуск каждые 1 минуту (demo mode)
    - Агрегация данных за последние 7 дней
    - Сохранение результатов в SQLite
 
@@ -29,9 +29,9 @@
 
 **Слои:**
 - **model/**: DTO модели (FitnessLog, ScheduledSummary, FitnessSummary)
-- **data/fitness/**: Storage layer (Database, DAO, Repository)
-- **service/fitness/**: Business logic (FitnessSummaryService)
-- **scheduler/**: Background tasks (BackgroundSummaryScheduler)
+- **data/fitness/**: слой хранения (`Database`, `DAO`, `Repository`)
+- **service/fitness/**: бизнес-логика (`FitnessSummaryService`)
+- **scheduler/**: фоновые задачи (`BackgroundSummaryScheduler`)
 - **handler/**: MCP JSON-RPC handlers
 
 **Чистая архитектура:**
@@ -71,7 +71,7 @@ mcp-server/src/main/kotlin/com/example/mcp/server/
 **Документация:**
 - `FITNESS_MCP_IMPLEMENTATION.md` - полная документация
 - `BUILD_AND_RUN_GUIDE.md` - инструкция по сборке и запуску
-- `test_fitness_mcp.sh` - тестовый сценарий (исполняемый)
+- `test_fitness_mcp.sh` - исполняемый тестовый сценарий
 
 ## 🔧 Технические детали
 

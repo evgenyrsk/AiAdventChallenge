@@ -1,32 +1,32 @@
-# Local Retrieval Demo Corpus
+# Локальный demo corpus для retrieval
 
-This directory is a stable corpus for the document indexing feature.
+Эта директория содержит стабильный корпус для функциональности document indexing.
 
-It is intentionally small enough to inspect manually and large enough to produce
-meaningful chunking, embeddings and metadata.
+Он специально сделан достаточно компактным для ручной проверки и достаточно
+богатым, чтобы давать осмысленные результаты по chunking, embeddings и metadata.
 
-## Included materials
+## Что входит в корпус
 
-- markdown guides
-- plain text notes
-- source-like files
-- XML configuration sample
+- markdown-гайды
+- текстовые заметки
+- файлы, похожие на исходный код
+- пример XML-конфигурации
 
-## Goals
+## Цели
 
-The corpus is designed to validate:
+Корпус предназначен для проверки:
 
 - fixed-size chunking
 - structure-aware chunking
-- embedding generation
-- SQLite index persistence
-- metadata quality for future citations
+- генерации embeddings
+- сохранения индекса в SQLite
+- качества metadata для будущих цитат
 
-## Retrieval expectations
+## Ожидания от retrieval
 
-Questions about indexing, chunking, metadata, architecture, pipelines and
-retrieval should find relevant chunks in this corpus.
+Вопросы про indexing, chunking, metadata, архитектуру, pipelines и retrieval
+должны находить в этом корпусе релевантные чанки.
 
-The structure-aware strategy should preserve headings and section boundaries
-better than fixed-size chunking, while fixed-size should provide more uniform
-chunk lengths and easier baseline comparisons.
+Стратегия structure-aware должна лучше сохранять заголовки и границы секций,
+чем fixed-size chunking, а fixed-size должен давать более равномерную длину
+чанков и более удобную базовую точку для сравнения.

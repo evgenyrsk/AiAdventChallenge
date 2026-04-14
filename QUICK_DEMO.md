@@ -7,7 +7,7 @@
 
 ## 📋 Порядок действий
 
-### 1. Запуск MCP Server (Терминал 1)
+### 1. Запуск MCP server (Терминал 1)
 ```bash
 cd /Users/evgenyrsk/AndroidStudioProjects/AiAdventChallenge/mcp-server
 gradle run
@@ -16,7 +16,7 @@ gradle run
 
 ---
 
-### 2. Запуск Android приложения
+### 2. Запуск Android-приложения
 В Android Studio: нажмите ▶️ (Run)
 Или через эмулятор: откройте приложение
 
@@ -61,7 +61,7 @@ gradle run
 adb logcat | grep -E "McpToolOrchestrator|FitnessRequestDetector"
 ```
 
-### В MCP Server (Терминал 1):
+### В MCP server (Терминал 1):
 Видите автоматически генерируемые сводки каждую минуту
 
 ---

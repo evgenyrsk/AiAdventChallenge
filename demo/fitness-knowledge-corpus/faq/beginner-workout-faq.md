@@ -1,26 +1,26 @@
-# Beginner Workout FAQ
+# FAQ по тренировкам для новичков
 
-## How many days per week should a beginner train
+## Сколько раз в неделю новичку стоит тренироваться
 
-Three well-structured sessions per week are often enough to make excellent
-progress. More is not automatically better when technique, recovery and habit
-consistency are still developing.
+Трёх хорошо выстроенных тренировок в неделю часто достаточно, чтобы получить
+отличный прогресс. Большее количество занятий не означает лучший результат,
+пока техника, восстановление и стабильность привычек ещё только формируются.
 
-## Should cardio replace strength work
+## Должно ли кардио заменять силовые тренировки
 
-Cardio is useful for health and work capacity, but it does not replace
-resistance training if the goal includes muscle retention, strength or body
-composition improvements.
+Кардио полезно для здоровья и общей работоспособности, но оно не заменяет
+силовую нагрузку, если цель включает сохранение мышц, развитие силы или
+улучшение композиции тела.
 
-## Is soreness required
+## Обязательна ли мышечная боль
 
-No. Soreness can happen, especially when a person starts training, but it is not
-a reliable indicator of an effective session.
+Нет. Боль в мышцах может появляться, особенно когда человек только начинает
+тренироваться, но она не является надёжным признаком эффективной тренировки.
 
-## What should a beginner prioritize
+## На чём новичку стоит сосредоточиться
 
-- correct technique
+- правильная техника
 - progressive overload
-- realistic training volume
-- sleep and food consistency
-- long-term adherence
+- реалистичный тренировочный объём
+- стабильный сон и питание
+- долгосрочная регулярность

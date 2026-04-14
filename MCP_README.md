@@ -1,10 +1,10 @@
-# MCP Integration - Инструкция по запуску
+# Интеграция MCP - инструкция по запуску
 
 ## Что реализовано
 
-Минимальная интеграция MCP (Model Context Protocol) в Android приложение:
+Минимальная интеграция MCP (`Model Context Protocol`) в Android-приложение:
 
-### MCP Server (локальный JVM)
+### MCP server (локальный JVM)
 - Путь: `mcp-server/`
 - Простой HTTP сервер на встроенном `com.sun.net.httpserver`
 - JSON-RPC 2.0 для MCP протокола
@@ -12,7 +12,7 @@
   - `ping` - возвращает "pong"
   - `get_app_info` - возвращает информацию о приложении
 
-### Android MCP Client
+### Android MCP client
 - Путь: `app/src/main/java/com/example/aiadventchallenge/...`
 - **Слои:**
   - `data/mcp/` - `McpRepository`, `McpJsonRpcClient`, модели
@@ -21,8 +21,8 @@
   - `ui/screens/mcp/` - `McpDebugViewModel`, `McpDebugSheet`
 
 ### UI для проверки
-- Кнопка **🔧 MCP** в Toolbar экрана чата (рядом с Info)
-- BottomSheet с результатами:
+- Кнопка **🔧 MCP** в toolbar экрана чата (рядом с Info)
+- `BottomSheet` с результатами:
   - Статус подключения
   - Список полученных инструментов
   - Ошибки (если есть)
@@ -30,7 +30,7 @@
 
 ---
 
-## Запуск MCP Server
+## Запуск MCP server
 
 ### Шаг 1: Запуск сервера
 
@@ -54,7 +54,7 @@ cd /Users/evgenyrsk/AndroidStudioProjects/AiAdventChallenge
 
 ---
 
-## Запуск Android приложения
+## Запуск Android-приложения
 
 ### Шаг 2: Запуск приложения
 
@@ -169,7 +169,7 @@ app/src/main/java/com/example/aiadventchallenge/
 
 ---
 
-## Troubleshooting
+## Устранение проблем
 
 ### ❌ Connection refused
 
