@@ -1,5 +1,6 @@
 package com.example.mcp.server.evaluation
 
+import com.example.mcp.server.documentindex.document.DocumentPathResolver
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -23,6 +24,7 @@ suspend fun main() {
 class FitnessRagEvaluationRunner(
     private val config: EvaluationConfig = EvaluationConfig.fromEnvironment(),
     private val json: Json = Json { ignoreUnknownKeys = true; prettyPrint = true },
+    private val pathResolver: DocumentPathResolver = DocumentPathResolver(),
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(180, TimeUnit.SECONDS)
@@ -129,7 +131,7 @@ class FitnessRagEvaluationRunner(
     }
 
     private fun loadQuestions(): List<EvaluationQuestion> {
-        val file = resolvePath(config.questionsPath)
+        val file = resolveQuestionsPath(config.questionsPath)
         return json.decodeFromString(file.readText())
     }
 
@@ -286,10 +288,10 @@ Answer the user's question clearly and practically.
 If you are unsure, state the uncertainty instead of inventing facts.
 """.trimIndent()
 
-    private fun resolvePath(path: String): File {
+    private fun resolveQuestionsPath(path: String): File {
         val direct = File(path)
         if (direct.exists()) return direct
-        return File(System.getProperty("user.dir"), path).canonicalFile
+        return pathResolver.resolve(path)
     }
 
     private fun resolveOutputPath(path: String): File {

@@ -1,5 +1,6 @@
 package com.example.mcp.server.evaluation
 
+import com.example.mcp.server.documentindex.document.DocumentPathResolver
 import kotlinx.serialization.json.Json
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createTempDirectory
@@ -10,6 +11,83 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class FitnessRagEvaluationRunnerTest {
+
+    @Test
+    fun `questions path resolves from repo root when runner starts in module directory`() {
+        val moduleDir = java.io.File(System.getProperty("user.dir"), "mcp-server").canonicalFile
+        val runner = FitnessRagEvaluationRunner(
+            config = EvaluationConfig(
+                aiBaseUrl = "http://example.com",
+                aiModel = "model",
+                apiKey = "key",
+                documentIndexServerUrl = "http://localhost:8084",
+                ragSource = "fitness_knowledge",
+                ragStrategy = "structure_aware",
+                topK = 4,
+                maxChars = 2500,
+                perDocumentLimit = 1,
+                temperature = 0.2,
+                maxTokens = 400,
+                questionsPath = "demo/fitness-knowledge-corpus/fixtures/rag_questions.json",
+                outputJsonPath = "output/results.json",
+                outputMarkdownPath = "output/report.md"
+            ),
+            pathResolver = DocumentPathResolver(moduleDir)
+        )
+
+        val method = FitnessRagEvaluationRunner::class.java.getDeclaredMethod(
+            "resolveQuestionsPath",
+            String::class.java
+        )
+        method.isAccessible = true
+        val resolved = method.invoke(
+            runner,
+            "demo/fitness-knowledge-corpus/fixtures/rag_questions.json"
+        ) as java.io.File
+
+        assertTrue(resolved.exists())
+        assertTrue(resolved.path.endsWith("demo/fitness-knowledge-corpus/fixtures/rag_questions.json"))
+    }
+
+    @Test
+    @OptIn(ExperimentalPathApi::class)
+    fun `absolute questions path remains supported`() {
+        val tempDir = createTempDirectory("fitness-rag-questions")
+        try {
+            val questionsPath = tempDir.resolve("questions.json")
+            questionsPath.writeText("[]")
+
+            val runner = FitnessRagEvaluationRunner(
+                config = EvaluationConfig(
+                    aiBaseUrl = "http://example.com",
+                    aiModel = "model",
+                    apiKey = "key",
+                    documentIndexServerUrl = "http://localhost:8084",
+                    ragSource = "fitness_knowledge",
+                    ragStrategy = "structure_aware",
+                    topK = 4,
+                    maxChars = 2500,
+                    perDocumentLimit = 1,
+                    temperature = 0.2,
+                    maxTokens = 400,
+                    questionsPath = questionsPath.toString(),
+                    outputJsonPath = tempDir.resolve("results.json").toString(),
+                    outputMarkdownPath = tempDir.resolve("report.md").toString()
+                )
+            )
+
+            val method = FitnessRagEvaluationRunner::class.java.getDeclaredMethod(
+                "resolveQuestionsPath",
+                String::class.java
+            )
+            method.isAccessible = true
+            val resolved = method.invoke(runner, questionsPath.toString()) as java.io.File
+
+            assertEquals(questionsPath.toFile().canonicalPath, resolved.canonicalPath)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 
     @Test
     @OptIn(ExperimentalPathApi::class)
