@@ -5,6 +5,7 @@ import com.example.aiadventchallenge.data.agent.ChatAgent
 import com.example.aiadventchallenge.data.api.ApiConfig
 import com.example.aiadventchallenge.data.api.HttpClient
 import com.example.aiadventchallenge.data.parser.ResponseParser
+import com.example.aiadventchallenge.data.rag.McpRagRetriever
 import com.example.aiadventchallenge.data.repository.AiRepositoryImpl
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
 import com.example.aiadventchallenge.data.repository.InvariantRepositoryImpl
@@ -18,6 +19,7 @@ import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
 import com.example.aiadventchallenge.domain.usecase.AskModelUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareTemperatureResultsUseCase
+import com.example.aiadventchallenge.domain.usecase.PrepareRagRequestUseCase
 import com.example.aiadventchallenge.domain.usecase.TemperatureUseCase
 import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
 
@@ -25,6 +27,7 @@ import com.example.aiadventchallenge.domain.validation.InvariantValidator
 import com.example.aiadventchallenge.domain.validation.InvariantValidatorImpl
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.MultiServerOrchestrator
+import com.example.aiadventchallenge.domain.rag.RagPromptBuilder
 import android.content.Context
 
 @SuppressLint("StaticFieldLeak")
@@ -112,6 +115,21 @@ object AppDependencies {
 
     val multiServerRepository: MultiServerRepository by lazy {
         MultiServerRepository(McpServerConfig.getAllServers())
+    }
+
+    val ragPromptBuilder: RagPromptBuilder by lazy {
+        RagPromptBuilder()
+    }
+
+    val ragRetriever: McpRagRetriever by lazy {
+        McpRagRetriever(multiServerRepository)
+    }
+
+    val prepareRagRequestUseCase: PrepareRagRequestUseCase by lazy {
+        PrepareRagRequestUseCase(
+            ragRetriever = ragRetriever,
+            ragPromptBuilder = ragPromptBuilder
+        )
     }
 
     val multiServerOrchestrator: MultiServerOrchestrator by lazy {

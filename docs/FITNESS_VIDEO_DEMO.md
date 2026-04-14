@@ -27,7 +27,7 @@
 Во втором терминале выполни:
 
 ```bash
-bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus local_docs
+bash scripts/reindex-fitness-knowledge.sh
 ```
 
 В кадре должно быть видно:
@@ -55,16 +55,16 @@ ls mcp-server/output/document-index/export
 В кадре должно быть видно:
 
 - `document_index.db`
-- `local_docs_fixed_size_index.json`
-- `local_docs_structure_aware_index.json`
-- `local_docs_indexing_report.json`
+- `fitness_knowledge_fixed_size_index.json`
+- `fitness_knowledge_structure_aware_index.json`
+- `fitness_knowledge_indexing_report.json`
 
 ## 4. Показать metadata и embeddings
 
 Открой JSON export:
 
 ```bash
-sed -n '1,120p' mcp-server/output/document-index/export/local_docs_structure_aware_index.json
+sed -n '1,120p' mcp-server/output/document-index/export/fitness_knowledge_structure_aware_index.json
 ```
 
 В кадре нужно показать поля:
@@ -97,7 +97,7 @@ curl -s http://localhost:8084 \
     "id":10,
     "method":"compare_chunking_strategies",
     "params":{
-      "source":"local_docs",
+      "source":"fitness_knowledge",
       "path":"'"$(pwd)"'/demo/fitness-knowledge-corpus"
     }
   }'
@@ -116,27 +116,45 @@ curl -s http://localhost:8084 \
 - результат у них различается
 - сравнение формируется автоматически
 
-## 6. Показать Android retrieval
+## 6. Показать Android сравнение `Обычный` vs `RAG`
 
 Запусти Android app на эмуляторе и открой чат.
 
-Задай 2 вопроса:
+Задай один и тот же вопрос в двух режимах:
 
-- `Сколько белка нужно при наборе массы?`
-- `Что лучше для новичка: full body или upper lower?`
+- `Что важнее для похудения: дефицит калорий или время приёма пищи?`
+- `Сколько белка обычно рекомендуют человеку, который хочет сохранить мышцы при похудении?`
 
 В кадре должно быть видно:
 
-- ответ модели
+- переключатель режима ответа
+- ответ без RAG
+- ответ с RAG
 - `Knowledge Base Context`
 - найденные source chunks
+- score / section
 
 Это показывает, что:
 
 - индекс не просто создан
-- он уже используется в приложении
+- приложение умеет работать в двух режимах
+- режим `RAG` реально использует retrieval по corpus `fitness_knowledge`
 
-## 7. Оптимальная длина видео
+## 7. Показать evaluation runner
+
+В третьем терминале выполни:
+
+```bash
+AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
+```
+
+В кадре должно быть видно:
+
+- последовательный прогон 10 вопросов
+- генерация `results.json`
+- генерация `report.md`
+
+## 8. Оптимальная длина видео
 
 Рекомендуемый формат:
 
@@ -144,7 +162,7 @@ curl -s http://localhost:8084 \
 - один непрерывный прогон
 - без долгих объяснений
 
-## 8. Минимальный результат, который должен попасть в видео
+## 9. Минимальный результат, который должен попасть в видео
 
 Если совсем коротко, на видео обязательно должны быть:
 
@@ -152,4 +170,5 @@ curl -s http://localhost:8084 \
 2. SQLite index / JSON exports
 3. chunk с metadata и embedding
 4. comparison двух стратегий
-5. один retrieval-кейс в Android app
+5. один сравнительный кейс `Обычный` vs `RAG` в Android app
+6. один запуск evaluation runner

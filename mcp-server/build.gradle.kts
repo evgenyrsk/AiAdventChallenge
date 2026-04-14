@@ -93,3 +93,10 @@ tasks.register("runFitnessFlowDebug", JavaExec::class) {
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.example.mcp.server.debug.FitnessFlowDebugKt")
 }
+
+tasks.register("runFitnessRagEvaluation", JavaExec::class) {
+    group = "application"
+    description = "Run plain LLM vs RAG evaluation for the fitness knowledge base"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.example.mcp.server.evaluation.FitnessRagEvaluationRunnerKt")
+}

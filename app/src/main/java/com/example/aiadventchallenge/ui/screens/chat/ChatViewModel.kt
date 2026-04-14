@@ -13,6 +13,7 @@ import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.RequestLog
+import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.repository.BranchRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
@@ -227,23 +228,28 @@ class ChatViewModel(
                 parentMessageId = parentMessageId
             )
 
-            val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(userInput)
+            val answerMode = _chatUiState.value.answerMode
+            val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(
+                userInput = userInput,
+                allowKnowledgeRetrieval = answerMode != AnswerMode.RAG
+            )
             
             when (mcpToolResult) {
                 is ToolExecutionResult.Success -> {
-                    _chatUiState.value = _chatUiState.value.copy(
-                        latestRetrievalSummary = mcpToolResult.retrievalSummary
-                    )
                     val result = chatMessageHandler.generateAiResponse(
                         userInput = userInput,
                         fitnessProfile = _chatUiState.value.fitnessProfile,
                         activeBranchId = activeBranchId,
                         parentMessageId = userMessage.id,
-                        mcpContext = mcpToolResult.context
+                        mcpContext = mcpToolResult.context,
+                        answerMode = answerMode
                     )
                     
                     when (result) {
                         is ChatMessageResult.Success -> {
+                            _chatUiState.value = _chatUiState.value.copy(
+                                latestRetrievalSummary = result.retrievalSummary ?: mcpToolResult.retrievalSummary
+                            )
                             _isLoading.value = false
                         }
                         is ChatMessageResult.Error -> {
@@ -265,11 +271,15 @@ class ChatViewModel(
                         fitnessProfile = _chatUiState.value.fitnessProfile,
                         activeBranchId = activeBranchId,
                         parentMessageId = userMessage.id,
-                        mcpContext = null
+                        mcpContext = null,
+                        answerMode = answerMode
                     )
                     
                     when (result) {
                         is ChatMessageResult.Success -> {
+                            _chatUiState.value = _chatUiState.value.copy(
+                                latestRetrievalSummary = result.retrievalSummary
+                            )
                             _isLoading.value = false
                         }
                         is ChatMessageResult.Error -> {
@@ -361,6 +371,13 @@ class ChatViewModel(
                 latestRetrievalSummary = null
             )
         }
+    }
+
+    fun setAnswerMode(answerMode: AnswerMode) {
+        _chatUiState.value = _chatUiState.value.copy(
+            answerMode = answerMode,
+            latestRetrievalSummary = null
+        )
     }
 
     fun setStrategyType(type: ContextStrategyType) {
