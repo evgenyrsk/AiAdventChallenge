@@ -2,7 +2,7 @@
 
 Инструкция для ручного тестирования и демонстрации задачи:
 
-> query rewrite + filtering/reranking + сравнение `PLAIN_LLM` / `RAG Basic` / `RAG Enhanced` в Android приложении
+> query rewrite + self-hosted model rerank + fallback + сравнение `PLAIN_LLM` / `RAG Basic` / `RAG Enhanced` в Android приложении
 
 ## Что проверяем
 
@@ -19,10 +19,11 @@
   - `rewrittenQuery`
   - top-K до и после фильтрации
   - режим post-processing
+  - provider/model reranker
   - финальные чанки
   - отброшенные чанки и причины отсечения
 - один и тот же вопрос можно сравнить между режимами
-- evaluation runner формирует отчёт по трём режимам
+- evaluation runner формирует отчёт для retrieval-only, heuristic rerank, model rerank и threshold+model rerank
 
 ## Prerequisites
 
@@ -33,6 +34,7 @@
 - `adb`
 - локальный проект в актуальном состоянии
 - corpus `demo/fitness-knowledge-corpus`
+- Python 3.10+
 
 ## Быстрый сценарий
 
@@ -45,10 +47,17 @@
 Во втором терминале:
 
 ```bash
-bash scripts/reindex-fitness-knowledge.sh
+cd tools/reranker-service
+./run.sh
 ```
 
 В третьем терминале:
+
+```bash
+bash scripts/reindex-fitness-knowledge.sh
+```
+
+В четвёртом терминале:
 
 ```bash
 ./gradlew :app:installDebug
@@ -59,7 +68,7 @@ bash scripts/reindex-fitness-knowledge.sh
 1. Открыть приложение на эмуляторе
 2. Перейти в экран чата
 3. Задать один и тот же вопрос в режимах `Обычный`, `RAG Basic`, `RAG Enhanced`
-4. Убедиться, что в `RAG Enhanced` появился расширенный `Knowledge Base Context`
+4. Убедиться, что в `RAG Enhanced` появился `Knowledge Base Context` с деталями rerank
 
 ## Полный сценарий
 
@@ -100,7 +109,32 @@ curl -s http://localhost:8084 \
 - `retrieve_relevant_chunks`
 - `answer_with_retrieval`
 
-## Шаг 2. Пересобрать индекс fitness knowledge base
+## Шаг 2. Поднять self-hosted reranker
+
+В отдельном терминале:
+
+```bash
+cd tools/reranker-service
+./run.sh
+```
+
+Что проверить:
+
+- service слушает `localhost:8091`
+- `mcp-server` сможет ходить в него по `RERANKER_URL`, если URL был переопределён
+
+Smoke-check:
+
+```bash
+curl -s http://localhost:8091/health
+```
+
+Ожидаемо:
+
+- `status = ok`
+- `model = BAAI/bge-reranker-base` или ваш override через env
+
+## Шаг 3. Пересобрать индекс fitness knowledge base
 
 Во втором терминале:
 
@@ -121,7 +155,7 @@ bash scripts/reindex-fitness-knowledge.sh
 - source называется `fitness_knowledge`
 - создаются artefacts в `mcp-server/output/document-index`
 
-## Шаг 3. Проверить, что индекс действительно создан
+## Шаг 4. Проверить, что индекс действительно создан
 
 ```bash
 ls mcp-server/output/document-index
@@ -143,7 +177,7 @@ sqlite3 mcp-server/output/document-index/document_index.db \
   "SELECT chunking_strategy, COUNT(*) FROM indexed_chunks GROUP BY chunking_strategy ORDER BY chunking_strategy;"
 ```
 
-## Шаг 4. Установить и запустить Android приложение
+## Шаг 5. Установить и запустить Android приложение
 
 Если эмулятор уже запущен:
 
@@ -173,7 +207,7 @@ adb devices
   - `RAG Basic`
   - `RAG Enhanced`
 
-## Шаг 5. Канонические вопросы для сравнения
+## Шаг 6. Канонические вопросы для сравнения
 
 Использовать один и тот же вопрос последовательно во всех трёх режимах.
 
@@ -196,7 +230,7 @@ adb devices
 - отбор релевантных fitness chunks
 - уменьшение шума в финальном контексте
 
-## Шаг 6. Проверить режим `Обычный`
+## Шаг 7. Проверить режим `Обычный`
 
 1. Выбрать `Обычный`
 2. Отправить канонический вопрос
@@ -207,7 +241,7 @@ adb devices
 - блока `Knowledge Base Context` нет
 - ответ может быть полезным, но не grounded на локальном corpus
 
-## Шаг 7. Проверить режим `RAG Basic`
+## Шаг 8. Проверить режим `RAG Basic`
 
 1. Выбрать `RAG Basic`
 2. Повторно отправить тот же вопрос
@@ -226,7 +260,7 @@ adb devices
 - top-K до и после фильтрации фактически одинаковый
 - источники выглядят релевантными, но могут содержать шум
 
-## Шаг 8. Проверить режим `RAG Enhanced`
+## Шаг 9. Проверить режим `RAG Enhanced`
 
 1. Выбрать `RAG Enhanced`
 2. Повторно отправить тот же вопрос
@@ -245,10 +279,12 @@ adb devices
 
 - rewrite действительно не “магический”, а читаемый и понятный
 - retrieval query отличается от исходного вопроса только в нужную сторону
-- после filtering/reranking финальный контекст чище, чем в `RAG Basic`
+- после model rerank финальный контекст чище, чем в `RAG Basic`
+- в details видно `rerankProvider`, `rerankModel`, `rerankInputCount`, `rerankOutputCount`
+- при выключенном sidecar или ошибке виден rerank fallback
 - ответ модели опирается на более релевантные источники
 
-## Шаг 9. Что сравнивать между `RAG Basic` и `RAG Enhanced`
+## Шаг 10. Что сравнивать между `RAG Basic` и `RAG Enhanced`
 
 Для одного и того же вопроса зафиксировать:
 
@@ -258,6 +294,30 @@ adb devices
 - количество кандидатов после фильтрации
 - какие источники попали в финальный prompt
 - какие кандидаты были отброшены
+- применился ли model rerank или fallback
+
+## Шаг 11. Запустить evaluation runner
+
+После поднятия `Document Index Server` и `tools/reranker-service`:
+
+```bash
+AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
+```
+
+Полезные env-параметры:
+
+- `DOCUMENT_INDEX_SERVER_URL`
+- `RERANKER_URL`
+- `RAG_TOP_K`
+- `RAG_ENHANCED_TOP_K_BEFORE`
+- `RAG_ENHANCED_TOP_K_AFTER`
+- `RAG_ENHANCED_THRESHOLD`
+- `RAG_RERANK_TIMEOUT_MS`
+
+Результаты:
+
+- `mcp-server/output/fitness-rag-evaluation/results.json`
+- `mcp-server/output/fitness-rag-evaluation/report.md`
 - причина отсечения
 - итоговый ответ модели
 

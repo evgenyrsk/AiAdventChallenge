@@ -2,7 +2,7 @@
 
 Короткий сценарий демонстрации, что задача выполнена:
 
-> локальный индекс документов с эмбеддингами + метаданные + сравнение 2 стратегий chunking
+> локальный индекс документов с эмбеддингами + retrieval -> self-hosted rerank -> final context в Android приложении
 
 ## 1. Поднять MCP серверы
 
@@ -15,7 +15,26 @@
 - document index server доступен на `localhost:8084`
 - Android эмулятор сможет ходить к нему через `10.0.2.2:8084`
 
-## 2. Проиндексировать fitness corpus
+## 2. Поднять self-hosted reranker
+
+```bash
+cd tools/reranker-service
+./run.sh
+```
+
+Проверка:
+
+```bash
+curl -s http://localhost:8091/health
+```
+
+Что сказать:
+
+- rerank-модель работает как отдельный локальный sidecar
+- Android приложение напрямую в неё не ходит
+- вызов идёт через `mcp-server` внутри retrieval pipeline
+
+## 3. Проиндексировать fitness corpus
 
 ```bash
 bash scripts/reindex-fitness-knowledge.sh
@@ -33,7 +52,7 @@ bash scripts/reindex-fitness-knowledge.sh
   - embedding generation
   - index persistence
 
-## 3. Показать, что индекс реально создан
+## 4. Показать, что индекс реально создан
 
 ```bash
 ls mcp-server/output/document-index
@@ -52,7 +71,7 @@ ls mcp-server/output/document-index/export
 - индекс хранится локально в SQLite
 - JSON используется для inspect/debug
 
-## 4. Показать содержимое SQLite index
+## 5. Показать содержимое SQLite index
 
 Основная БД этого demo:
 
@@ -83,7 +102,7 @@ sqlite3 mcp-server/output/document-index/document_index.db \
 - JSON рядом нужен как удобный export/debug view
 - inspect можно делать либо через SQL, либо через export-файлы
 
-## 5. Показать metadata и embeddings через JSON export
+## 6. Показать metadata и embeddings через JSON export
 
 ```bash
 sed -n '1,120p' mcp-server/output/document-index/export/fitness_knowledge_structure_aware_index.json
@@ -106,7 +125,7 @@ sed -n '1,120p' mcp-server/output/document-index/export/fitness_knowledge_struct
 - chunk сохраняется не только как текст
 - вместе с ним сохраняются metadata и embedding vector
 
-## 6. Показать сравнение двух стратегий
+## 7. Показать сравнение двух стратегий
 
 ```bash
 curl -s http://localhost:8084 \
@@ -134,7 +153,7 @@ curl -s http://localhost:8084 \
 - `fixed_size` дает более равномерные chunks
 - `structure_aware` лучше сохраняет смысловые границы
 
-## 7. Показать локальную БД Android app отдельно
+## 8. Показать локальную БД Android app отдельно
 
 Локальная Room БД приложения называется `app_database`. Это не document index, а хранилище чата и связанных сущностей.
 
@@ -158,7 +177,7 @@ adb shell run-as com.example.aiadventchallenge sqlite3 databases/app_database \
 - retrieval index живет отдельно в `mcp-server/output/document-index/document_index.db`
 - если нужен GUI, можно использовать Android Studio App Inspection для Room
 
-## 8. Показать retrieval и сравнение режимов через Android app
+## 9. Показать retrieval, rerank и сравнение режимов через Android app
 
 Запусти app на эмуляторе и открой чат.
 
@@ -172,6 +191,10 @@ adb shell run-as com.example.aiadventchallenge sqlite3 databases/app_database \
   - `rewrittenQuery`
   - `topK before -> after`
   - `postProcessingMode`
+  - `rerankProvider`
+  - `rerankModel`
+  - `rerank candidates`
+  - `rerank fallback`, если sidecar недоступен
   - отброшенные чанки и причины
 
 Рекомендуемые вопросы:
@@ -187,16 +210,17 @@ adb shell run-as com.example.aiadventchallenge sqlite3 databases/app_database \
 - ответ модели с RAG
 - `Knowledge Base Context` card
 - source / strategy / найденные chunks
-- title / section / score
+- title / section / score / rerank score / final rank
 
 Что сказать:
 
 - `PLAIN_LLM` отправляет вопрос в LLM без retrieval
 - `RAG Basic` делает базовый retrieval без rewrite/post-processing
-- `RAG Enhanced` делает rewrite, затем retrieval, затем filtering/reranking и только после этого собирает prompt
+- `RAG Enhanced` делает rewrite, затем retrieval, затем self-hosted model rerank, затем threshold/fallback и только после этого собирает prompt
 - retrieval идет через MCP server поверх локального индекса source `fitness_knowledge`
+- model rerank живёт отдельно от Android UI и вызывается только на серверной стороне
 
-## 9. Показать evaluation runner
+## 10. Показать evaluation runner
 
 ```bash
 AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
@@ -205,7 +229,12 @@ AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
 Что показать:
 
 - runner читает `demo/fitness-knowledge-corpus/fixtures/rag_questions.json`
-- для каждого вопроса делает `PLAIN_LLM` и `RAG`
+- для каждого вопроса делает:
+  - `PLAIN_LLM`
+  - retrieval only
+  - heuristic rerank
+  - model rerank
+  - threshold + model rerank
 - сохраняет результаты в:
   - `output/fitness-rag-evaluation/results.json`
   - `output/fitness-rag-evaluation/report.md`
@@ -215,10 +244,10 @@ AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
 - это отдельный reproducible способ сравнения качества
 - runner полезен и для demo, и для полуавтоматической проверки
 
-## 10. Важно про legacy docs
+## 11. Важно про legacy docs
 
 Если в других markdown встречается `./fitness_data.db`, это legacy-описание старого fitness summary flow. Для текущего demo из этого файла актуальная БД: `mcp-server/output/document-index/document_index.db`.
 
-## 11. Финальная фраза
+## 12. Финальная фраза
 
-> Система локально индексирует fitness-документы, строит embeddings, сохраняет metadata, поддерживает две стратегии chunking и позволяет использовать этот индекс в retrieval-сценарии приложения.
+> Система локально индексирует fitness-документы, строит embeddings, выполняет retrieval, затем self-hosted rerank как второй этап и отдаёт в Android приложение уже очищенный финальный контекст для ответа LLM.

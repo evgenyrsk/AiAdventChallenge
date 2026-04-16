@@ -27,6 +27,7 @@ class FitnessRagEvaluationRunnerTest {
                 enhancedTopKBeforeFilter = 6,
                 enhancedTopKAfterFilter = 4,
                 enhancedSimilarityThreshold = 0.2,
+                rerankTimeoutMs = 3500,
                 maxChars = 2500,
                 perDocumentLimit = 1,
                 temperature = 0.2,
@@ -72,6 +73,7 @@ class FitnessRagEvaluationRunnerTest {
                     enhancedTopKBeforeFilter = 6,
                     enhancedTopKAfterFilter = 4,
                     enhancedSimilarityThreshold = 0.2,
+                    rerankTimeoutMs = 3500,
                     maxChars = 2500,
                     perDocumentLimit = 1,
                     temperature = 0.2,
@@ -126,6 +128,7 @@ class FitnessRagEvaluationRunnerTest {
                 enhancedTopKBeforeFilter = 6,
                 enhancedTopKAfterFilter = 4,
                 enhancedSimilarityThreshold = 0.2,
+                rerankTimeoutMs = 3500,
                 maxChars = 2500,
                 perDocumentLimit = 1,
                 temperature = 0.2,
@@ -174,8 +177,8 @@ class FitnessRagEvaluationRunnerTest {
                             ),
                             contextEnvelope = "Envelope"
                         ),
-                        ragEnhanced = RagAnswerRecord(
-                            answer = "Ответ с RAG enhanced",
+                        ragHeuristic = RagAnswerRecord(
+                            answer = "Ответ с heuristic rerank",
                             promptTokens = 4,
                             completionTokens = 5,
                             totalTokens = 9,
@@ -184,8 +187,8 @@ class FitnessRagEvaluationRunnerTest {
                             effectiveQuery = "дефицит калорий energy balance meal timing время приема пищи",
                             topKBeforeFilter = 6,
                             finalTopK = 4,
-                            similarityThreshold = 0.2,
-                            postProcessingMode = "THRESHOLD_PLUS_RERANK",
+                            similarityThreshold = null,
+                            postProcessingMode = "HEURISTIC_RERANK",
                             rewriteApplied = true,
                             detectedIntent = "FAT_LOSS_PRIORITY",
                             rewriteStrategy = "INTENT_EXPANSION",
@@ -198,7 +201,84 @@ class FitnessRagEvaluationRunnerTest {
                                     title = "calorie_balance.md",
                                     relativePath = "nutrition/calorie_balance.md",
                                     section = "What matters most for fat loss",
-                                    score = 0.95
+                                    score = 0.93,
+                                    rerankScore = 0.89,
+                                    finalRank = 1
+                                )
+                            ),
+                            contextEnvelope = "Envelope"
+                        ),
+                        ragModel = RagAnswerRecord(
+                            answer = "Ответ с model rerank",
+                            promptTokens = 4,
+                            completionTokens = 5,
+                            totalTokens = 9,
+                            originalQuery = "Что важнее для похудения?",
+                            rewrittenQuery = "дефицит калорий energy balance meal timing время приема пищи",
+                            effectiveQuery = "дефицит калорий energy balance meal timing время приема пищи",
+                            topKBeforeFilter = 6,
+                            finalTopK = 4,
+                            similarityThreshold = null,
+                            postProcessingMode = "MODEL_RERANK",
+                            rewriteApplied = true,
+                            detectedIntent = "FAT_LOSS_PRIORITY",
+                            rewriteStrategy = "INTENT_EXPANSION",
+                            addedTerms = listOf("energy balance", "meal timing"),
+                            removedPhrases = emptyList(),
+                            rerankProvider = "self_hosted_http",
+                            rerankModel = "BAAI/bge-reranker-base",
+                            rerankApplied = true,
+                            rerankInputCount = 6,
+                            rerankOutputCount = 4,
+                            rerankTimeoutMs = 3500,
+                            retrievalApplied = true,
+                            selectedCount = 1,
+                            sources = listOf(
+                                RetrievalSource(
+                                    title = "calorie_balance.md",
+                                    relativePath = "nutrition/calorie_balance.md",
+                                    section = "What matters most for fat loss",
+                                    score = 0.94,
+                                    rerankScore = 0.92,
+                                    finalRank = 1
+                                )
+                            ),
+                            contextEnvelope = "Envelope"
+                        ),
+                        ragEnhanced = RagAnswerRecord(
+                            answer = "Ответ с RAG enhanced",
+                            promptTokens = 4,
+                            completionTokens = 5,
+                            totalTokens = 9,
+                            originalQuery = "Что важнее для похудения?",
+                            rewrittenQuery = "дефицит калорий energy balance meal timing время приема пищи",
+                            effectiveQuery = "дефицит калорий energy balance meal timing время приема пищи",
+                            topKBeforeFilter = 6,
+                            finalTopK = 4,
+                            similarityThreshold = 0.2,
+                            postProcessingMode = "THRESHOLD_PLUS_MODEL_RERANK",
+                            rewriteApplied = true,
+                            detectedIntent = "FAT_LOSS_PRIORITY",
+                            rewriteStrategy = "INTENT_EXPANSION",
+                            addedTerms = listOf("energy balance", "meal timing"),
+                            removedPhrases = emptyList(),
+                            rerankProvider = "self_hosted_http",
+                            rerankModel = "BAAI/bge-reranker-base",
+                            rerankApplied = true,
+                            rerankInputCount = 6,
+                            rerankOutputCount = 4,
+                            rerankScoreThreshold = 0.2,
+                            rerankTimeoutMs = 3500,
+                            retrievalApplied = true,
+                            selectedCount = 1,
+                            sources = listOf(
+                                RetrievalSource(
+                                    title = "calorie_balance.md",
+                                    relativePath = "nutrition/calorie_balance.md",
+                                    section = "What matters most for fat loss",
+                                    score = 0.95,
+                                    rerankScore = 0.94,
+                                    finalRank = 1
                                 )
                             ),
                             contextEnvelope = "Envelope"
@@ -216,6 +296,8 @@ class FitnessRagEvaluationRunnerTest {
 
             assertTrue(markdown.contains("Ответ без RAG"))
             assertTrue(markdown.contains("Ответ с RAG basic"))
+            assertTrue(markdown.contains("Ответ с heuristic rerank"))
+            assertTrue(markdown.contains("Ответ с model rerank"))
             assertTrue(markdown.contains("Ответ с RAG enhanced"))
             assertTrue(markdown.contains("nutrition/calorie_balance.md"))
             assertTrue(markdown.contains("дефицит калорий energy balance meal timing время приема пищи"))

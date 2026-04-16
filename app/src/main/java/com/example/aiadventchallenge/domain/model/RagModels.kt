@@ -12,7 +12,14 @@ enum class RagPostProcessingMode {
     NONE,
     THRESHOLD_ONLY,
     HEURISTIC_RERANK,
-    THRESHOLD_PLUS_RERANK
+    THRESHOLD_PLUS_RERANK,
+    MODEL_RERANK,
+    THRESHOLD_PLUS_MODEL_RERANK
+}
+
+enum class RagRerankFallbackPolicy {
+    HEURISTIC_THEN_RETRIEVAL,
+    RETRIEVAL_ONLY
 }
 
 data class RagPipelineConfig(
@@ -26,7 +33,12 @@ data class RagPipelineConfig(
     val similarityThreshold: Double?,
     val maxChars: Int,
     val perDocumentLimit: Int,
-    val fallbackOnEmptyPostProcessing: Boolean
+    val fallbackOnEmptyPostProcessing: Boolean,
+    val rerankEnabled: Boolean = false,
+    val rerankScoreThreshold: Double? = null,
+    val rerankTimeoutMs: Long = 3500,
+    val rerankFallbackPolicy: RagRerankFallbackPolicy = RagRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL,
+    val queryContext: String? = null
 )
 
 data class RagContextChunk(
@@ -34,6 +46,7 @@ data class RagContextChunk(
     val title: String,
     val relativePath: String,
     val section: String,
+    val finalRank: Int? = null,
     val score: Double,
     val semanticScore: Double,
     val keywordScore: Double,
@@ -62,6 +75,15 @@ data class RagRetrievalDebug(
     val rewriteStrategy: String? = null,
     val addedTerms: List<String> = emptyList(),
     val removedPhrases: List<String> = emptyList(),
+    val rerankProvider: String? = null,
+    val rerankModel: String? = null,
+    val rerankApplied: Boolean = false,
+    val rerankInputCount: Int = 0,
+    val rerankOutputCount: Int = 0,
+    val rerankScoreThreshold: Double? = null,
+    val rerankTimeoutMs: Long? = null,
+    val rerankFallbackUsed: Boolean = false,
+    val rerankFallbackReason: String? = null,
     val fallbackApplied: Boolean,
     val fallbackReason: String? = null
 )

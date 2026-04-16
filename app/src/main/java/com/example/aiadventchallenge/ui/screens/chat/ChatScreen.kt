@@ -710,6 +710,19 @@ private fun RetrievalDetailsSheet(
             RetrievalDetailText("topK: ${summary.topKBeforeFilter} -> ${summary.finalTopK}")
             RetrievalDetailText("Mode: ${summary.postProcessingMode}")
             RetrievalDetailText("Threshold: ${summary.similarityThreshold?.let { "%.2f".format(it) } ?: "none"}")
+            if (summary.rerankApplied || summary.rerankFallbackUsed || summary.rerankProvider != null) {
+                RetrievalDetailText("Rerank applied: ${if (summary.rerankApplied) "yes" else "no"}")
+                summary.rerankProvider?.let { RetrievalDetailText("Rerank provider: $it") }
+                summary.rerankModel?.let { RetrievalDetailText("Rerank model: $it") }
+                RetrievalDetailText("Rerank candidates: ${summary.rerankInputCount} -> ${summary.rerankOutputCount}")
+                summary.rerankScoreThreshold?.let {
+                    RetrievalDetailText("Rerank threshold: ${"%.2f".format(it)}")
+                }
+                summary.rerankTimeoutMs?.let { RetrievalDetailText("Rerank timeout: ${it}ms") }
+                if (summary.rerankFallbackUsed) {
+                    RetrievalDetailText("Rerank fallback: ${summary.rerankFallbackReason ?: "used"}")
+                }
+            }
             if (summary.fallbackApplied) {
                 RetrievalDetailText("Fallback: ${summary.fallbackReason ?: "applied"}")
             }
@@ -805,6 +818,7 @@ private fun RetrievalSourceRow(
             )
             Text(
                 text = buildString {
+                    chunk.finalRank?.let { append("#$it • ") }
                     append("score=${"%.3f".format(chunk.score)}")
                     chunk.rerankScore?.let { append(" • rerank=${"%.3f".format(it)}") }
                     chunk.filterReason?.let { append(" • $it") }

@@ -3,6 +3,7 @@ package com.example.mcp.server.handler
 import com.example.mcp.server.model.*
 import com.example.mcp.server.documentindex.model.RetrievalPipelineConfig
 import com.example.mcp.server.documentindex.model.RetrievalPostProcessingMode
+import com.example.mcp.server.documentindex.model.RetrievalRerankFallbackPolicy
 import com.example.mcp.server.documentindex.model.RewriteDebugInfo
 import com.example.mcp.server.model.nutrition.NutritionMetricsRequest
 import com.example.mcp.server.model.nutrition.NutritionMetricsResponse
@@ -413,6 +414,16 @@ abstract class AbstractMcpJsonRpcHandler {
             val finalTopK = params["finalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
             val similarityThreshold = params["similarityThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
             val fallbackOnEmptyPostProcessing = params["fallbackOnEmptyPostProcessing"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
+            val rerankEnabled = params["rerankEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            val rerankScoreThreshold = params["rerankScoreThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
+            val rerankTimeoutMs = params["rerankTimeoutMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 3500L
+            val queryContext = params["queryContext"]?.jsonPrimitive?.content
+            val rerankFallbackPolicy = params["rerankFallbackPolicy"]?.jsonPrimitive?.content
+                ?.let { value ->
+                    runCatching { RetrievalRerankFallbackPolicy.valueOf(value.uppercase()) }
+                        .getOrDefault(RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL)
+                }
+                ?: RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL
             val postProcessingMode = params["postProcessingMode"]?.jsonPrimitive?.content
                 ?.let { value ->
                     runCatching { RetrievalPostProcessingMode.valueOf(value.uppercase()) }
@@ -449,7 +460,12 @@ abstract class AbstractMcpJsonRpcHandler {
                     topKBeforeFilter = topKBeforeFilter,
                     finalTopK = finalTopK,
                     similarityThreshold = similarityThreshold,
-                    fallbackOnEmptyPostProcessing = fallbackOnEmptyPostProcessing
+                    fallbackOnEmptyPostProcessing = fallbackOnEmptyPostProcessing,
+                    rerankEnabled = rerankEnabled,
+                    rerankScoreThreshold = rerankScoreThreshold,
+                    rerankTimeoutMs = rerankTimeoutMs,
+                    rerankFallbackPolicy = rerankFallbackPolicy,
+                    queryContext = queryContext
                 )
             )
             val resultJson = buildJsonObject {
@@ -486,6 +502,16 @@ abstract class AbstractMcpJsonRpcHandler {
             val finalTopK = params["finalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
             val similarityThreshold = params["similarityThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
             val fallbackOnEmptyPostProcessing = params["fallbackOnEmptyPostProcessing"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
+            val rerankEnabled = params["rerankEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            val rerankScoreThreshold = params["rerankScoreThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
+            val rerankTimeoutMs = params["rerankTimeoutMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 3500L
+            val queryContext = params["queryContext"]?.jsonPrimitive?.content
+            val rerankFallbackPolicy = params["rerankFallbackPolicy"]?.jsonPrimitive?.content
+                ?.let { value ->
+                    runCatching { RetrievalRerankFallbackPolicy.valueOf(value.uppercase()) }
+                        .getOrDefault(RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL)
+                }
+                ?: RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL
             val postProcessingMode = params["postProcessingMode"]?.jsonPrimitive?.content
                 ?.let { value ->
                     runCatching { RetrievalPostProcessingMode.valueOf(value.uppercase()) }
@@ -522,7 +548,12 @@ abstract class AbstractMcpJsonRpcHandler {
                     topKBeforeFilter = topKBeforeFilter,
                     finalTopK = finalTopK,
                     similarityThreshold = similarityThreshold,
-                    fallbackOnEmptyPostProcessing = fallbackOnEmptyPostProcessing
+                    fallbackOnEmptyPostProcessing = fallbackOnEmptyPostProcessing,
+                    rerankEnabled = rerankEnabled,
+                    rerankScoreThreshold = rerankScoreThreshold,
+                    rerankTimeoutMs = rerankTimeoutMs,
+                    rerankFallbackPolicy = rerankFallbackPolicy,
+                    queryContext = queryContext
                 )
             )
             val resultJson = buildJsonObject {

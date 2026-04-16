@@ -8,6 +8,9 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 /.idea/misc.xml
+/.idea/gradle.xml
+/.idea/deploymentTargetSelector.xml
+/.idea/deviceManager.xml
 .DS_Store
 /build
 **/build/
@@ -16,4 +19,6 @@
 .cxx
 local.properties
 **/output/document-index/
-/tools/reranker-service/.venv
+**/.venv/
+**/__pycache__/
+*.pyc

@@ -50,11 +50,11 @@ class DocumentIndexHandler : AbstractMcpJsonRpcHandler() {
         ),
         Tool(
             name = "retrieve_relevant_chunks",
-            description = "Returns prompt-ready retrieval context. Parameters: query, source (optional), strategy (optional, default structure_aware), topK (optional), maxChars (optional), documentType (optional), relativePathContains (optional), perDocumentLimit (optional)."
+            description = "Returns prompt-ready retrieval context. Parameters: query, source (optional), strategy (optional, default structure_aware), topK (optional), maxChars (optional), documentType (optional), relativePathContains (optional), perDocumentLimit (optional), topKBeforeFilter/finalTopK (optional), postProcessingMode (optional), rerankEnabled (optional), rerankScoreThreshold (optional), rerankTimeoutMs (optional)."
         ),
         Tool(
             name = "answer_with_retrieval",
-            description = "Builds an LLM-ready prompt package from semantic retrieval. Parameters: query, source (optional), strategy (optional), topK (optional), maxChars (optional), documentType (optional), relativePathContains (optional), perDocumentLimit (optional)."
+            description = "Builds an LLM-ready prompt package from semantic retrieval. Parameters: query, source (optional), strategy (optional), topK (optional), maxChars (optional), documentType (optional), relativePathContains (optional), perDocumentLimit (optional), topKBeforeFilter/finalTopK (optional), postProcessingMode (optional), rerankEnabled (optional), rerankScoreThreshold (optional), rerankTimeoutMs (optional)."
         )
     )
 

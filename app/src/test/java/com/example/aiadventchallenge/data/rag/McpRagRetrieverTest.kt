@@ -52,6 +52,14 @@ class McpRagRetrieverTest {
                     "rewriteStrategy": "INTENT_EXPANSION",
                     "addedTerms": ["energy balance", "meal timing"],
                     "removedPhrases": ["подскажи"],
+                    "rerankProvider": "self_hosted_http",
+                    "rerankModel": "BAAI/bge-reranker-base",
+                    "rerankApplied": true,
+                    "rerankInputCount": 6,
+                    "rerankOutputCount": 4,
+                    "rerankScoreThreshold": 0.2,
+                    "rerankTimeoutMs": 3500,
+                    "rerankFallbackUsed": false,
                     "fallbackApplied": false
                   },
                   "chunks": [
@@ -60,9 +68,11 @@ class McpRagRetrieverTest {
                     "title": "fitness_faq.md",
                     "relativePath": "faq/fitness_faq.md",
                     "section": "Что важнее",
+                    "finalRank": 1,
                     "score": 1.35,
                     "semanticScore": 0.81,
                     "keywordScore": 3.5,
+                    "rerankScore": 0.87,
                     "excerpt": "Для снижения веса важнее дефицит калорий."
                   }
                 ]
@@ -82,6 +92,10 @@ class McpRagRetrieverTest {
         assertEquals(6, result.debug.topKBeforeFilter)
         assertTrue(result.debug.rewriteApplied)
         assertEquals("FAT_LOSS_PRIORITY", result.debug.detectedIntent)
+        assertEquals("self_hosted_http", result.debug.rerankProvider)
+        assertEquals("BAAI/bge-reranker-base", result.debug.rerankModel)
+        assertTrue(result.debug.rerankApplied)
+        assertEquals(1, result.chunks.single().finalRank)
     }
 
     @Test

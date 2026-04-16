@@ -74,7 +74,8 @@ class FitnessRagEvaluationRunner(
                 topKBeforeFilter = config.topK,
                 finalTopK = config.topK,
                 similarityThreshold = null,
-                fallbackOnEmptyPostProcessing = true
+                fallbackOnEmptyPostProcessing = true,
+                rerankEnabled = false
             )
         )
         val ragBasicAnswer = askLlm(
@@ -82,16 +83,57 @@ class FitnessRagEvaluationRunner(
             userPrompt = ragBasicPackage.userPrompt
         )
 
+        val ragHeuristicPackage = fetchRagPackage(
+            question = question.question,
+            pipelineConfig = RetrievalPipelineConfig(
+                rewriteEnabled = true,
+                postProcessingEnabled = true,
+                postProcessingMode = RetrievalPostProcessingMode.HEURISTIC_RERANK,
+                topKBeforeFilter = config.enhancedTopKBeforeFilter,
+                finalTopK = config.enhancedTopKAfterFilter,
+                similarityThreshold = null,
+                fallbackOnEmptyPostProcessing = true,
+                rerankEnabled = false
+            )
+        )
+        val ragHeuristicAnswer = askLlm(
+            systemPrompt = ragHeuristicPackage.systemPrompt,
+            userPrompt = ragHeuristicPackage.userPrompt
+        )
+
+        val ragModelPackage = fetchRagPackage(
+            question = question.question,
+            pipelineConfig = RetrievalPipelineConfig(
+                rewriteEnabled = true,
+                postProcessingEnabled = true,
+                postProcessingMode = RetrievalPostProcessingMode.MODEL_RERANK,
+                topKBeforeFilter = config.enhancedTopKBeforeFilter,
+                finalTopK = config.enhancedTopKAfterFilter,
+                similarityThreshold = null,
+                fallbackOnEmptyPostProcessing = true,
+                rerankEnabled = true,
+                rerankScoreThreshold = null,
+                rerankTimeoutMs = config.rerankTimeoutMs
+            )
+        )
+        val ragModelAnswer = askLlm(
+            systemPrompt = ragModelPackage.systemPrompt,
+            userPrompt = ragModelPackage.userPrompt
+        )
+
         val ragEnhancedPackage = fetchRagPackage(
             question = question.question,
             pipelineConfig = RetrievalPipelineConfig(
                 rewriteEnabled = true,
                 postProcessingEnabled = true,
-                postProcessingMode = RetrievalPostProcessingMode.THRESHOLD_PLUS_RERANK,
+                postProcessingMode = RetrievalPostProcessingMode.THRESHOLD_PLUS_MODEL_RERANK,
                 topKBeforeFilter = config.enhancedTopKBeforeFilter,
                 finalTopK = config.enhancedTopKAfterFilter,
                 similarityThreshold = config.enhancedSimilarityThreshold,
-                fallbackOnEmptyPostProcessing = true
+                fallbackOnEmptyPostProcessing = true,
+                rerankEnabled = true,
+                rerankScoreThreshold = config.enhancedSimilarityThreshold,
+                rerankTimeoutMs = config.rerankTimeoutMs
             )
         )
         val ragEnhancedAnswer = askLlm(
@@ -115,6 +157,14 @@ class FitnessRagEvaluationRunner(
                 answer = ragBasicAnswer,
                 payload = ragBasicPackage
             ),
+            ragHeuristic = RagAnswerRecord.from(
+                answer = ragHeuristicAnswer,
+                payload = ragHeuristicPackage
+            ),
+            ragModel = RagAnswerRecord.from(
+                answer = ragModelAnswer,
+                payload = ragModelPackage
+            ),
             ragEnhanced = RagAnswerRecord.from(
                 answer = ragEnhancedAnswer,
                 payload = ragEnhancedPackage
@@ -124,6 +174,10 @@ class FitnessRagEvaluationRunner(
                 plainAnswer = plainAnswer.content,
                 ragBasicAnswer = ragBasicAnswer.content,
                 ragBasicPackage = ragBasicPackage,
+                ragHeuristicAnswer = ragHeuristicAnswer.content,
+                ragHeuristicPackage = ragHeuristicPackage,
+                ragModelAnswer = ragModelAnswer.content,
+                ragModelPackage = ragModelPackage,
                 ragEnhancedAnswer = ragEnhancedAnswer.content,
                 ragEnhancedPackage = ragEnhancedPackage
             )
@@ -135,11 +189,21 @@ class FitnessRagEvaluationRunner(
         plainAnswer: String,
         ragBasicAnswer: String,
         ragBasicPackage: AnswerWithRetrievalPayload,
+        ragHeuristicAnswer: String,
+        ragHeuristicPackage: AnswerWithRetrievalPayload,
+        ragModelAnswer: String,
+        ragModelPackage: AnswerWithRetrievalPayload,
         ragEnhancedAnswer: String,
         ragEnhancedPackage: AnswerWithRetrievalPayload
     ): String {
         val basicSourceHits = question.expectedSources.count { expected ->
             ragBasicPackage.retrieval.finalCandidates.any { chunk -> chunk.relativePath.endsWith(expected) || chunk.title == expected }
+        }
+        val heuristicSourceHits = question.expectedSources.count { expected ->
+            ragHeuristicPackage.retrieval.finalCandidates.any { chunk -> chunk.relativePath.endsWith(expected) || chunk.title == expected }
+        }
+        val modelSourceHits = question.expectedSources.count { expected ->
+            ragModelPackage.retrieval.finalCandidates.any { chunk -> chunk.relativePath.endsWith(expected) || chunk.title == expected }
         }
         val enhancedSourceHits = question.expectedSources.count { expected ->
             ragEnhancedPackage.retrieval.finalCandidates.any { chunk -> chunk.relativePath.endsWith(expected) || chunk.title == expected }
@@ -148,26 +212,44 @@ class FitnessRagEvaluationRunner(
             ragBasicPackage.retrieval.contextEnvelope.contains(fact, ignoreCase = true) ||
                 ragBasicAnswer.contains(fact.substringBefore(','), ignoreCase = true)
         }
+        val heuristicFactHits = question.expectedRetrievalFacts.count { fact ->
+            ragHeuristicPackage.retrieval.contextEnvelope.contains(fact, ignoreCase = true) ||
+                ragHeuristicAnswer.contains(fact.substringBefore(','), ignoreCase = true)
+        }
+        val modelFactHits = question.expectedRetrievalFacts.count { fact ->
+            ragModelPackage.retrieval.contextEnvelope.contains(fact, ignoreCase = true) ||
+                ragModelAnswer.contains(fact.substringBefore(','), ignoreCase = true)
+        }
         val enhancedFactHits = question.expectedRetrievalFacts.count { fact ->
             ragEnhancedPackage.retrieval.contextEnvelope.contains(fact, ignoreCase = true) ||
                 ragEnhancedAnswer.contains(fact.substringBefore(','), ignoreCase = true)
         }
+        val bestBasic = maxOf(basicFactHits + basicSourceHits, heuristicFactHits + heuristicSourceHits)
+        val bestModel = maxOf(modelFactHits + modelSourceHits, enhancedFactHits + enhancedSourceHits)
 
         return buildString {
             append("plainLen=${plainAnswer.length}; ")
             append("basicLen=${ragBasicAnswer.length}; ")
+            append("heuristicLen=${ragHeuristicAnswer.length}; ")
+            append("modelLen=${ragModelAnswer.length}; ")
             append("enhancedLen=${ragEnhancedAnswer.length}; ")
             append("basicSources=${ragBasicPackage.retrieval.finalCandidates.size}; ")
+            append("heuristicSources=${ragHeuristicPackage.retrieval.finalCandidates.size}; ")
+            append("modelSources=${ragModelPackage.retrieval.finalCandidates.size}; ")
             append("enhancedSources=${ragEnhancedPackage.retrieval.finalCandidates.size}; ")
             append("basicExpectedSourcesHit=$basicSourceHits/${question.expectedSources.size}; ")
+            append("heuristicExpectedSourcesHit=$heuristicSourceHits/${question.expectedSources.size}; ")
+            append("modelExpectedSourcesHit=$modelSourceHits/${question.expectedSources.size}; ")
             append("enhancedExpectedSourcesHit=$enhancedSourceHits/${question.expectedSources.size}; ")
             append("basicFactsHit=$basicFactHits/${question.expectedRetrievalFacts.size}; ")
+            append("heuristicFactsHit=$heuristicFactHits/${question.expectedRetrievalFacts.size}; ")
+            append("modelFactsHit=$modelFactHits/${question.expectedRetrievalFacts.size}; ")
             append("enhancedFactsHit=$enhancedFactHits/${question.expectedRetrievalFacts.size}; ")
             append(
                 when {
-                    enhancedFactHits > basicFactHits || enhancedSourceHits > basicSourceHits ->
+                    bestModel > bestBasic ->
                         "improved"
-                    enhancedFactHits == basicFactHits && enhancedSourceHits == basicSourceHits ->
+                    bestModel == bestBasic ->
                         "unchanged"
                     else -> "worse"
                 }
@@ -212,6 +294,11 @@ class FitnessRagEvaluationRunner(
                 put("finalTopK", pipelineConfig.finalTopK)
                 pipelineConfig.similarityThreshold?.let { put("similarityThreshold", it) }
                 put("fallbackOnEmptyPostProcessing", pipelineConfig.fallbackOnEmptyPostProcessing)
+                put("rerankEnabled", pipelineConfig.rerankEnabled)
+                pipelineConfig.rerankScoreThreshold?.let { put("rerankScoreThreshold", it) }
+                put("rerankTimeoutMs", pipelineConfig.rerankTimeoutMs)
+                put("rerankFallbackPolicy", pipelineConfig.rerankFallbackPolicy.name.lowercase())
+                pipelineConfig.queryContext?.let { put("queryContext", it) }
                 rewriteResult?.let { rewrite ->
                     put("rewriteDebug", buildJsonObject {
                         put("rewriteApplied", rewrite.applied)
@@ -342,46 +429,85 @@ class FitnessRagEvaluationRunner(
             appendLine(result.ragBasic.answer.ifBlank { "_empty_" })
             appendLine()
             appendLine("**RAG Basic Sources**")
-            if (result.ragBasic.sources.isEmpty()) {
-                appendLine("- none")
-            } else {
-                result.ragBasic.sources.forEach { source ->
-                    appendLine("- `${source.relativePath}` | ${source.section} | score=${"%.3f".format(source.score)}")
-                }
-            }
+            appendSources(result.ragBasic.sources)
             appendLine()
-            appendLine("**RAG Enhanced**")
+
+            appendLine("**RAG Heuristic Rerank**")
+            appendLine(result.ragHeuristic.answer.ifBlank { "_empty_" })
+            appendLine()
+            appendLine("**RAG Heuristic Retrieval**")
+            appendRagRetrieval(result.ragHeuristic)
+            appendLine()
+            appendLine("**RAG Heuristic Sources**")
+            appendSources(result.ragHeuristic.sources)
+            appendLine()
+
+            appendLine("**RAG Model Rerank**")
+            appendLine(result.ragModel.answer.ifBlank { "_empty_" })
+            appendLine()
+            appendLine("**RAG Model Retrieval**")
+            appendRagRetrieval(result.ragModel)
+            appendLine()
+            appendLine("**RAG Model Sources**")
+            appendSources(result.ragModel.sources)
+            appendLine()
+
+            appendLine("**RAG Enhanced (Threshold + Model)**")
             appendLine(result.ragEnhanced.answer.ifBlank { "_empty_" })
             appendLine()
             appendLine("**RAG Enhanced Retrieval**")
-            appendLine("- originalQuery: `${result.ragEnhanced.originalQuery}`")
-            result.ragEnhanced.rewrittenQuery?.let { appendLine("- rewrittenQuery: `$it`") }
-            appendLine("- effectiveQuery: `${result.ragEnhanced.effectiveQuery}`")
-            appendLine("- rewriteApplied: `${result.ragEnhanced.rewriteApplied}`")
-            result.ragEnhanced.detectedIntent?.let { appendLine("- detectedIntent: `$it`") }
-            result.ragEnhanced.rewriteStrategy?.let { appendLine("- rewriteStrategy: `$it`") }
-            if (result.ragEnhanced.addedTerms.isNotEmpty()) {
-                appendLine("- addedTerms: `${result.ragEnhanced.addedTerms.joinToString(", ")}`")
-            }
-            if (result.ragEnhanced.removedPhrases.isNotEmpty()) {
-                appendLine("- removedPhrases: `${result.ragEnhanced.removedPhrases.joinToString(", ")}`")
-            }
-            appendLine("- candidates: `${result.ragEnhanced.topKBeforeFilter}` -> `${result.ragEnhanced.finalTopK}`")
-            appendLine("- mode: `${result.ragEnhanced.postProcessingMode}`")
-            appendLine("- threshold: `${result.ragEnhanced.similarityThreshold?.toString() ?: "none"}`")
+            appendRagRetrieval(result.ragEnhanced)
             appendLine()
             appendLine("**RAG Enhanced Sources**")
-            if (result.ragEnhanced.sources.isEmpty()) {
-                appendLine("- none")
-            } else {
-                result.ragEnhanced.sources.forEach { source ->
-                    appendLine("- `${source.relativePath}` | ${source.section} | score=${"%.3f".format(source.score)}")
-                }
-            }
+            appendSources(result.ragEnhanced.sources)
             appendLine()
             appendLine("**Comparison Summary**")
             appendLine(result.comparisonSummary)
             appendLine()
+        }
+    }
+
+    private fun StringBuilder.appendSources(sources: List<RetrievalSource>) {
+        if (sources.isEmpty()) {
+            appendLine("- none")
+            return
+        }
+        sources.forEach { source ->
+            appendLine(
+                "- `${source.relativePath}` | ${source.section} | score=${"%.3f".format(source.score)}" +
+                    (source.rerankScore?.let { " | rerank=${"%.3f".format(it)}" } ?: "")
+            )
+        }
+    }
+
+    private fun StringBuilder.appendRagRetrieval(record: RagAnswerRecord) {
+        appendLine("- originalQuery: `${record.originalQuery}`")
+        record.rewrittenQuery?.let { appendLine("- rewrittenQuery: `$it`") }
+        appendLine("- effectiveQuery: `${record.effectiveQuery}`")
+        appendLine("- rewriteApplied: `${record.rewriteApplied}`")
+        record.detectedIntent?.let { appendLine("- detectedIntent: `$it`") }
+        record.rewriteStrategy?.let { appendLine("- rewriteStrategy: `$it`") }
+        if (record.addedTerms.isNotEmpty()) {
+            appendLine("- addedTerms: `${record.addedTerms.joinToString(", ")}`")
+        }
+        if (record.removedPhrases.isNotEmpty()) {
+            appendLine("- removedPhrases: `${record.removedPhrases.joinToString(", ")}`")
+        }
+        appendLine("- candidates: `${record.topKBeforeFilter}` -> `${record.finalTopK}`")
+        appendLine("- mode: `${record.postProcessingMode}`")
+        appendLine("- threshold: `${record.similarityThreshold?.toString() ?: "none"}`")
+        record.rerankProvider?.let { appendLine("- rerankProvider: `$it`") }
+        record.rerankModel?.let { appendLine("- rerankModel: `$it`") }
+        appendLine("- rerankApplied: `${record.rerankApplied}`")
+        appendLine("- rerankInputCount: `${record.rerankInputCount}`")
+        appendLine("- rerankOutputCount: `${record.rerankOutputCount}`")
+        appendLine("- rerankThreshold: `${record.rerankScoreThreshold?.toString() ?: "none"}`")
+        appendLine("- rerankTimeoutMs: `${record.rerankTimeoutMs?.toString() ?: "none"}`")
+        if (record.rerankFallbackUsed) {
+            appendLine("- rerankFallback: `${record.rerankFallbackReason ?: "used"}`")
+        }
+        if (record.fallbackApplied) {
+            appendLine("- retrievalFallback: `${record.fallbackReason ?: "applied"}`")
         }
     }
 
@@ -414,6 +540,7 @@ data class EvaluationConfig(
     val enhancedTopKBeforeFilter: Int,
     val enhancedTopKAfterFilter: Int,
     val enhancedSimilarityThreshold: Double,
+    val rerankTimeoutMs: Long,
     val maxChars: Int,
     val perDocumentLimit: Int,
     val temperature: Double,
@@ -434,6 +561,7 @@ data class EvaluationConfig(
             enhancedTopKBeforeFilter = System.getenv("RAG_ENHANCED_TOP_K_BEFORE")?.toIntOrNull() ?: 6,
             enhancedTopKAfterFilter = System.getenv("RAG_ENHANCED_TOP_K_AFTER")?.toIntOrNull() ?: 4,
             enhancedSimilarityThreshold = System.getenv("RAG_ENHANCED_THRESHOLD")?.toDoubleOrNull() ?: 0.2,
+            rerankTimeoutMs = System.getenv("RAG_RERANK_TIMEOUT_MS")?.toLongOrNull() ?: 3500L,
             maxChars = System.getenv("RAG_MAX_CHARS")?.toIntOrNull() ?: 2500,
             perDocumentLimit = System.getenv("RAG_PER_DOCUMENT_LIMIT")?.toIntOrNull() ?: 1,
             temperature = System.getenv("EVAL_TEMPERATURE")?.toDoubleOrNull() ?: 0.2,
@@ -469,6 +597,8 @@ data class EvaluatedQuestion(
     val expectedRetrievalFacts: List<String>,
     val plain: AnswerRecord,
     val ragBasic: RagAnswerRecord,
+    val ragHeuristic: RagAnswerRecord,
+    val ragModel: RagAnswerRecord,
     val ragEnhanced: RagAnswerRecord,
     val comparisonSummary: String
 )
@@ -499,6 +629,17 @@ data class RagAnswerRecord(
     val rewriteStrategy: String? = null,
     val addedTerms: List<String> = emptyList(),
     val removedPhrases: List<String> = emptyList(),
+    val rerankProvider: String? = null,
+    val rerankModel: String? = null,
+    val rerankApplied: Boolean = false,
+    val rerankInputCount: Int = 0,
+    val rerankOutputCount: Int = 0,
+    val rerankScoreThreshold: Double? = null,
+    val rerankTimeoutMs: Long? = null,
+    val rerankFallbackUsed: Boolean = false,
+    val rerankFallbackReason: String? = null,
+    val fallbackApplied: Boolean = false,
+    val fallbackReason: String? = null,
     val retrievalApplied: Boolean,
     val selectedCount: Int,
     val sources: List<RetrievalSource>,
@@ -526,6 +667,17 @@ data class RagAnswerRecord(
                 rewriteStrategy = payload.retrieval.debug.rewriteStrategy,
                 addedTerms = payload.retrieval.debug.addedTerms,
                 removedPhrases = payload.retrieval.debug.removedPhrases,
+                rerankProvider = payload.retrieval.debug.rerankProvider,
+                rerankModel = payload.retrieval.debug.rerankModel,
+                rerankApplied = payload.retrieval.debug.rerankApplied,
+                rerankInputCount = payload.retrieval.debug.rerankInputCount,
+                rerankOutputCount = payload.retrieval.debug.rerankOutputCount,
+                rerankScoreThreshold = payload.retrieval.debug.rerankScoreThreshold,
+                rerankTimeoutMs = payload.retrieval.debug.rerankTimeoutMs,
+                rerankFallbackUsed = payload.retrieval.debug.rerankFallbackUsed,
+                rerankFallbackReason = payload.retrieval.debug.rerankFallbackReason,
+                fallbackApplied = payload.retrieval.debug.fallbackApplied,
+                fallbackReason = payload.retrieval.debug.fallbackReason,
                 retrievalApplied = payload.retrievalApplied,
                 selectedCount = payload.retrieval.selectedCount,
                 sources = payload.retrieval.finalCandidates.map {
@@ -533,7 +685,9 @@ data class RagAnswerRecord(
                         title = it.title,
                         relativePath = it.relativePath,
                         section = it.section,
-                        score = it.score
+                        score = it.score,
+                        rerankScore = it.rerankScore,
+                        finalRank = it.finalRank
                     )
                 },
                 contextEnvelope = payload.retrieval.contextEnvelope
@@ -547,7 +701,9 @@ data class RetrievalSource(
     val title: String,
     val relativePath: String,
     val section: String,
-    val score: Double
+    val score: Double,
+    val rerankScore: Double? = null,
+    val finalRank: Int? = null
 )
 
 @Serializable
@@ -593,6 +749,15 @@ data class RetrievalDebugPayload(
     val rewriteStrategy: String? = null,
     val addedTerms: List<String> = emptyList(),
     val removedPhrases: List<String> = emptyList(),
+    val rerankProvider: String? = null,
+    val rerankModel: String? = null,
+    val rerankApplied: Boolean = false,
+    val rerankInputCount: Int = 0,
+    val rerankOutputCount: Int = 0,
+    val rerankScoreThreshold: Double? = null,
+    val rerankTimeoutMs: Long? = null,
+    val rerankFallbackUsed: Boolean = false,
+    val rerankFallbackReason: String? = null,
     val fallbackApplied: Boolean,
     val fallbackReason: String? = null
 )
@@ -603,6 +768,7 @@ data class RetrievedChunkPayload(
     val title: String,
     val relativePath: String,
     val section: String,
+    val finalRank: Int? = null,
     val score: Double,
     val semanticScore: Double,
     val keywordScore: Double,
