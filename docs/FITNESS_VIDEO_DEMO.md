@@ -8,6 +8,13 @@
 - показать embeddings и metadata
 - показать сравнение `fixed_size` и `structure_aware`
 - показать, что Android app использует этот индекс
+- показать разницу между `RAG Basic` и `RAG Enhanced`
+
+Что важно зафиксировать в кадре:
+
+- `RAG Basic` использует базовый retrieval без rewrite и reranking
+- `RAG Enhanced` показывает `rewrittenQuery`, filtering/reranking и более чистый финальный контекст
+- в debug card видны кандидаты до/после фильтрации и финальные источники
 
 ## 1. Поднять MCP серверы
 

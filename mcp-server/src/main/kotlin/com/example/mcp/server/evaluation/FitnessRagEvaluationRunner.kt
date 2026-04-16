@@ -1,6 +1,10 @@
 package com.example.mcp.server.evaluation
 
 import com.example.mcp.server.documentindex.document.DocumentPathResolver
+import com.example.mcp.server.documentindex.model.RetrievalPipelineConfig
+import com.example.mcp.server.documentindex.model.RetrievalPostProcessingMode
+import com.example.mcp.server.documentindex.model.RewriteDebugInfo
+import com.example.aiadventchallenge.rag.rewrite.FitnessQueryRewriteEngine
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -50,9 +54,9 @@ class FitnessRagEvaluationRunner(
         }
 
         writeOutputs(results)
-        val ragWithSources = results.count { it.rag.sources.isNotEmpty() }
+        val ragWithSources = results.count { it.ragEnhanced.sources.isNotEmpty() }
         println("Finished. Generated ${config.outputMarkdownPath} and ${config.outputJsonPath}")
-        println("RAG answers with sources: $ragWithSources/${results.size}")
+        println("Enhanced RAG answers with sources: $ragWithSources/${results.size}")
     }
 
     private suspend fun evaluateQuestion(question: EvaluationQuestion): EvaluatedQuestion {
@@ -61,10 +65,38 @@ class FitnessRagEvaluationRunner(
             userPrompt = question.question
         )
 
-        val ragPackage = fetchRagPackage(question.question)
-        val ragAnswer = askLlm(
-            systemPrompt = ragPackage.systemPrompt,
-            userPrompt = ragPackage.userPrompt
+        val ragBasicPackage = fetchRagPackage(
+            question = question.question,
+            pipelineConfig = RetrievalPipelineConfig(
+                rewriteEnabled = false,
+                postProcessingEnabled = false,
+                postProcessingMode = RetrievalPostProcessingMode.NONE,
+                topKBeforeFilter = config.topK,
+                finalTopK = config.topK,
+                similarityThreshold = null,
+                fallbackOnEmptyPostProcessing = true
+            )
+        )
+        val ragBasicAnswer = askLlm(
+            systemPrompt = ragBasicPackage.systemPrompt,
+            userPrompt = ragBasicPackage.userPrompt
+        )
+
+        val ragEnhancedPackage = fetchRagPackage(
+            question = question.question,
+            pipelineConfig = RetrievalPipelineConfig(
+                rewriteEnabled = true,
+                postProcessingEnabled = true,
+                postProcessingMode = RetrievalPostProcessingMode.THRESHOLD_PLUS_RERANK,
+                topKBeforeFilter = config.enhancedTopKBeforeFilter,
+                finalTopK = config.enhancedTopKAfterFilter,
+                similarityThreshold = config.enhancedSimilarityThreshold,
+                fallbackOnEmptyPostProcessing = true
+            )
+        )
+        val ragEnhancedAnswer = askLlm(
+            systemPrompt = ragEnhancedPackage.systemPrompt,
+            userPrompt = ragEnhancedPackage.userPrompt
         )
 
         return EvaluatedQuestion(
@@ -79,52 +111,65 @@ class FitnessRagEvaluationRunner(
                 completionTokens = plainAnswer.completionTokens,
                 totalTokens = plainAnswer.totalTokens
             ),
-            rag = RagAnswerRecord(
-                answer = ragAnswer.content,
-                promptTokens = ragAnswer.promptTokens,
-                completionTokens = ragAnswer.completionTokens,
-                totalTokens = ragAnswer.totalTokens,
-                retrievalApplied = ragPackage.retrievalApplied,
-                selectedCount = ragPackage.retrieval.selectedCount,
-                sources = ragPackage.retrieval.chunks.map {
-                    RetrievalSource(
-                        title = it.title,
-                        relativePath = it.relativePath,
-                        section = it.section,
-                        score = it.score
-                    )
-                },
-                contextEnvelope = ragPackage.retrieval.contextEnvelope
+            ragBasic = RagAnswerRecord.from(
+                answer = ragBasicAnswer,
+                payload = ragBasicPackage
             ),
-            comparisonSummary = buildComparisonSummary(question, plainAnswer.content, ragAnswer.content, ragPackage)
+            ragEnhanced = RagAnswerRecord.from(
+                answer = ragEnhancedAnswer,
+                payload = ragEnhancedPackage
+            ),
+            comparisonSummary = buildComparisonSummary(
+                question = question,
+                plainAnswer = plainAnswer.content,
+                ragBasicAnswer = ragBasicAnswer.content,
+                ragBasicPackage = ragBasicPackage,
+                ragEnhancedAnswer = ragEnhancedAnswer.content,
+                ragEnhancedPackage = ragEnhancedPackage
+            )
         )
     }
 
     private fun buildComparisonSummary(
         question: EvaluationQuestion,
         plainAnswer: String,
-        ragAnswer: String,
-        ragPackage: AnswerWithRetrievalPayload
+        ragBasicAnswer: String,
+        ragBasicPackage: AnswerWithRetrievalPayload,
+        ragEnhancedAnswer: String,
+        ragEnhancedPackage: AnswerWithRetrievalPayload
     ): String {
-        val expectedSourceHits = question.expectedSources.count { expected ->
-            ragPackage.retrieval.chunks.any { chunk -> chunk.relativePath.endsWith(expected) || chunk.title == expected }
+        val basicSourceHits = question.expectedSources.count { expected ->
+            ragBasicPackage.retrieval.finalCandidates.any { chunk -> chunk.relativePath.endsWith(expected) || chunk.title == expected }
         }
-        val expectedFactHits = question.expectedRetrievalFacts.count { fact ->
-            ragPackage.retrieval.contextEnvelope.contains(fact, ignoreCase = true) ||
-                ragAnswer.contains(fact.substringBefore(','), ignoreCase = true)
+        val enhancedSourceHits = question.expectedSources.count { expected ->
+            ragEnhancedPackage.retrieval.finalCandidates.any { chunk -> chunk.relativePath.endsWith(expected) || chunk.title == expected }
+        }
+        val basicFactHits = question.expectedRetrievalFacts.count { fact ->
+            ragBasicPackage.retrieval.contextEnvelope.contains(fact, ignoreCase = true) ||
+                ragBasicAnswer.contains(fact.substringBefore(','), ignoreCase = true)
+        }
+        val enhancedFactHits = question.expectedRetrievalFacts.count { fact ->
+            ragEnhancedPackage.retrieval.contextEnvelope.contains(fact, ignoreCase = true) ||
+                ragEnhancedAnswer.contains(fact.substringBefore(','), ignoreCase = true)
         }
 
         return buildString {
             append("plainLen=${plainAnswer.length}; ")
-            append("ragLen=${ragAnswer.length}; ")
-            append("ragSources=${ragPackage.retrieval.chunks.size}; ")
-            append("expectedSourcesHit=$expectedSourceHits/${question.expectedSources.size}; ")
-            append("expectedFactsHit=$expectedFactHits/${question.expectedRetrievalFacts.size}; ")
+            append("basicLen=${ragBasicAnswer.length}; ")
+            append("enhancedLen=${ragEnhancedAnswer.length}; ")
+            append("basicSources=${ragBasicPackage.retrieval.finalCandidates.size}; ")
+            append("enhancedSources=${ragEnhancedPackage.retrieval.finalCandidates.size}; ")
+            append("basicExpectedSourcesHit=$basicSourceHits/${question.expectedSources.size}; ")
+            append("enhancedExpectedSourcesHit=$enhancedSourceHits/${question.expectedSources.size}; ")
+            append("basicFactsHit=$basicFactHits/${question.expectedRetrievalFacts.size}; ")
+            append("enhancedFactsHit=$enhancedFactHits/${question.expectedRetrievalFacts.size}; ")
             append(
-                if (!ragPackage.retrievalApplied || ragPackage.retrieval.chunks.isEmpty()) {
-                    "RAG retrieval did not return sources"
-                } else {
-                    "RAG answer grounded in retrieved context"
+                when {
+                    enhancedFactHits > basicFactHits || enhancedSourceHits > basicSourceHits ->
+                        "improved"
+                    enhancedFactHits == basicFactHits && enhancedSourceHits == basicSourceHits ->
+                        "unchanged"
+                    else -> "worse"
                 }
             )
         }
@@ -135,18 +180,47 @@ class FitnessRagEvaluationRunner(
         return json.decodeFromString(file.readText())
     }
 
-    private suspend fun fetchRagPackage(question: String): AnswerWithRetrievalPayload {
+    private suspend fun fetchRagPackage(
+        question: String,
+        pipelineConfig: RetrievalPipelineConfig
+    ): AnswerWithRetrievalPayload {
+        val rewriteResult = question
+            .takeIf { pipelineConfig.rewriteEnabled }
+            ?.let(FitnessQueryRewriteEngine::analyze)
+        val rewrittenQuery = rewriteResult
+            ?.rewrittenQuery
+            ?.takeUnless { it.equals(question, ignoreCase = true) }
+        val effectiveQuery = rewrittenQuery ?: question
         val payload = buildJsonObject {
             put("jsonrpc", "2.0")
             put("id", 1)
             put("method", "answer_with_retrieval")
             put("params", buildJsonObject {
-                put("query", question)
+                put("query", effectiveQuery)
+                put("originalQuery", question)
+                rewrittenQuery?.let { put("rewrittenQuery", it) }
+                put("effectiveQuery", effectiveQuery)
                 put("source", config.ragSource)
                 put("strategy", config.ragStrategy)
-                put("topK", config.topK)
+                put("topK", pipelineConfig.finalTopK)
                 put("maxChars", config.maxChars)
                 put("perDocumentLimit", config.perDocumentLimit)
+                put("rewriteEnabled", pipelineConfig.rewriteEnabled)
+                put("postProcessingEnabled", pipelineConfig.postProcessingEnabled)
+                put("postProcessingMode", pipelineConfig.postProcessingMode.name.lowercase())
+                put("topKBeforeFilter", pipelineConfig.topKBeforeFilter)
+                put("finalTopK", pipelineConfig.finalTopK)
+                pipelineConfig.similarityThreshold?.let { put("similarityThreshold", it) }
+                put("fallbackOnEmptyPostProcessing", pipelineConfig.fallbackOnEmptyPostProcessing)
+                rewriteResult?.let { rewrite ->
+                    put("rewriteDebug", buildJsonObject {
+                        put("rewriteApplied", rewrite.applied)
+                        put("detectedIntent", rewrite.detectedIntent.name)
+                        put("rewriteStrategy", rewrite.strategy.name)
+                        put("addedTerms", kotlinx.serialization.json.JsonArray(rewrite.addedTerms.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+                        put("removedPhrases", kotlinx.serialization.json.JsonArray(rewrite.removedPhrases.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+                    })
+                }
             })
         }
 
@@ -243,11 +317,11 @@ class FitnessRagEvaluationRunner(
     private fun buildMarkdownReport(results: List<EvaluatedQuestion>): String = buildString {
         appendLine("# Fitness RAG Evaluation Report")
         appendLine()
-        appendLine("- Generated by `runFitnessRagEvaluation`")
-        appendLine("- Model: `${config.aiModel}`")
-        appendLine("- Document source: `${config.ragSource}`")
-        appendLine("- Question count: `${results.size}`")
-        appendLine()
+            appendLine("- Generated by `runFitnessRagEvaluation`")
+            appendLine("- Model: `${config.aiModel}`")
+            appendLine("- Document source: `${config.ragSource}`")
+            appendLine("- Question count: `${results.size}`")
+            appendLine()
 
         results.forEach { result ->
             appendLine("## ${result.id}")
@@ -264,14 +338,43 @@ class FitnessRagEvaluationRunner(
             appendLine("**Plain LLM**")
             appendLine(result.plain.answer.ifBlank { "_empty_" })
             appendLine()
-            appendLine("**RAG**")
-            appendLine(result.rag.answer.ifBlank { "_empty_" })
+            appendLine("**RAG Basic**")
+            appendLine(result.ragBasic.answer.ifBlank { "_empty_" })
             appendLine()
-            appendLine("**RAG Sources**")
-            if (result.rag.sources.isEmpty()) {
+            appendLine("**RAG Basic Sources**")
+            if (result.ragBasic.sources.isEmpty()) {
                 appendLine("- none")
             } else {
-                result.rag.sources.forEach { source ->
+                result.ragBasic.sources.forEach { source ->
+                    appendLine("- `${source.relativePath}` | ${source.section} | score=${"%.3f".format(source.score)}")
+                }
+            }
+            appendLine()
+            appendLine("**RAG Enhanced**")
+            appendLine(result.ragEnhanced.answer.ifBlank { "_empty_" })
+            appendLine()
+            appendLine("**RAG Enhanced Retrieval**")
+            appendLine("- originalQuery: `${result.ragEnhanced.originalQuery}`")
+            result.ragEnhanced.rewrittenQuery?.let { appendLine("- rewrittenQuery: `$it`") }
+            appendLine("- effectiveQuery: `${result.ragEnhanced.effectiveQuery}`")
+            appendLine("- rewriteApplied: `${result.ragEnhanced.rewriteApplied}`")
+            result.ragEnhanced.detectedIntent?.let { appendLine("- detectedIntent: `$it`") }
+            result.ragEnhanced.rewriteStrategy?.let { appendLine("- rewriteStrategy: `$it`") }
+            if (result.ragEnhanced.addedTerms.isNotEmpty()) {
+                appendLine("- addedTerms: `${result.ragEnhanced.addedTerms.joinToString(", ")}`")
+            }
+            if (result.ragEnhanced.removedPhrases.isNotEmpty()) {
+                appendLine("- removedPhrases: `${result.ragEnhanced.removedPhrases.joinToString(", ")}`")
+            }
+            appendLine("- candidates: `${result.ragEnhanced.topKBeforeFilter}` -> `${result.ragEnhanced.finalTopK}`")
+            appendLine("- mode: `${result.ragEnhanced.postProcessingMode}`")
+            appendLine("- threshold: `${result.ragEnhanced.similarityThreshold?.toString() ?: "none"}`")
+            appendLine()
+            appendLine("**RAG Enhanced Sources**")
+            if (result.ragEnhanced.sources.isEmpty()) {
+                appendLine("- none")
+            } else {
+                result.ragEnhanced.sources.forEach { source ->
                     appendLine("- `${source.relativePath}` | ${source.section} | score=${"%.3f".format(source.score)}")
                 }
             }
@@ -308,6 +411,9 @@ data class EvaluationConfig(
     val ragSource: String,
     val ragStrategy: String,
     val topK: Int,
+    val enhancedTopKBeforeFilter: Int,
+    val enhancedTopKAfterFilter: Int,
+    val enhancedSimilarityThreshold: Double,
     val maxChars: Int,
     val perDocumentLimit: Int,
     val temperature: Double,
@@ -325,6 +431,9 @@ data class EvaluationConfig(
             ragSource = System.getenv("RAG_SOURCE") ?: "fitness_knowledge",
             ragStrategy = System.getenv("RAG_STRATEGY") ?: "structure_aware",
             topK = System.getenv("RAG_TOP_K")?.toIntOrNull() ?: 4,
+            enhancedTopKBeforeFilter = System.getenv("RAG_ENHANCED_TOP_K_BEFORE")?.toIntOrNull() ?: 6,
+            enhancedTopKAfterFilter = System.getenv("RAG_ENHANCED_TOP_K_AFTER")?.toIntOrNull() ?: 4,
+            enhancedSimilarityThreshold = System.getenv("RAG_ENHANCED_THRESHOLD")?.toDoubleOrNull() ?: 0.2,
             maxChars = System.getenv("RAG_MAX_CHARS")?.toIntOrNull() ?: 2500,
             perDocumentLimit = System.getenv("RAG_PER_DOCUMENT_LIMIT")?.toIntOrNull() ?: 1,
             temperature = System.getenv("EVAL_TEMPERATURE")?.toDoubleOrNull() ?: 0.2,
@@ -359,7 +468,8 @@ data class EvaluatedQuestion(
     val expectedSources: List<String>,
     val expectedRetrievalFacts: List<String>,
     val plain: AnswerRecord,
-    val rag: RagAnswerRecord,
+    val ragBasic: RagAnswerRecord,
+    val ragEnhanced: RagAnswerRecord,
     val comparisonSummary: String
 )
 
@@ -377,11 +487,60 @@ data class RagAnswerRecord(
     val promptTokens: Int?,
     val completionTokens: Int?,
     val totalTokens: Int?,
+    val originalQuery: String,
+    val rewrittenQuery: String? = null,
+    val effectiveQuery: String,
+    val topKBeforeFilter: Int,
+    val finalTopK: Int,
+    val similarityThreshold: Double? = null,
+    val postProcessingMode: String,
+    val rewriteApplied: Boolean = false,
+    val detectedIntent: String? = null,
+    val rewriteStrategy: String? = null,
+    val addedTerms: List<String> = emptyList(),
+    val removedPhrases: List<String> = emptyList(),
     val retrievalApplied: Boolean,
     val selectedCount: Int,
     val sources: List<RetrievalSource>,
     val contextEnvelope: String
-)
+) {
+    companion object {
+        fun from(
+            answer: ParsedLlmResponse,
+            payload: AnswerWithRetrievalPayload
+        ): RagAnswerRecord {
+            return RagAnswerRecord(
+                answer = answer.content,
+                promptTokens = answer.promptTokens,
+                completionTokens = answer.completionTokens,
+                totalTokens = answer.totalTokens,
+                originalQuery = payload.retrieval.originalQuery,
+                rewrittenQuery = payload.retrieval.rewrittenQuery,
+                effectiveQuery = payload.retrieval.effectiveQuery,
+                topKBeforeFilter = payload.retrieval.debug.topKBeforeFilter,
+                finalTopK = payload.retrieval.debug.finalTopK,
+                similarityThreshold = payload.retrieval.debug.similarityThreshold,
+                postProcessingMode = payload.retrieval.debug.postProcessingMode,
+                rewriteApplied = payload.retrieval.debug.rewriteApplied,
+                detectedIntent = payload.retrieval.debug.detectedIntent,
+                rewriteStrategy = payload.retrieval.debug.rewriteStrategy,
+                addedTerms = payload.retrieval.debug.addedTerms,
+                removedPhrases = payload.retrieval.debug.removedPhrases,
+                retrievalApplied = payload.retrievalApplied,
+                selectedCount = payload.retrieval.selectedCount,
+                sources = payload.retrieval.finalCandidates.map {
+                    RetrievalSource(
+                        title = it.title,
+                        relativePath = it.relativePath,
+                        section = it.section,
+                        score = it.score
+                    )
+                },
+                contextEnvelope = payload.retrieval.contextEnvelope
+            )
+        }
+    }
+}
 
 @Serializable
 data class RetrievalSource(
@@ -403,13 +562,39 @@ data class AnswerWithRetrievalPayload(
 
 @Serializable
 data class RetrievalPayload(
+    val query: String,
+    val originalQuery: String,
+    val rewrittenQuery: String? = null,
+    val effectiveQuery: String,
     val source: String,
     val strategy: String,
     val selectedCount: Int,
     val totalChars: Int,
     val contextText: String,
     val chunks: List<RetrievedChunkPayload>,
+    val initialCandidates: List<RetrievedChunkPayload> = emptyList(),
+    val finalCandidates: List<RetrievedChunkPayload> = emptyList(),
+    val filteredCandidates: List<RetrievedChunkPayload> = emptyList(),
+    val debug: RetrievalDebugPayload,
     val contextEnvelope: String
+)
+
+@Serializable
+data class RetrievalDebugPayload(
+    val originalQuery: String,
+    val rewrittenQuery: String? = null,
+    val effectiveQuery: String,
+    val topKBeforeFilter: Int,
+    val finalTopK: Int,
+    val similarityThreshold: Double? = null,
+    val postProcessingMode: String,
+    val rewriteApplied: Boolean = false,
+    val detectedIntent: String? = null,
+    val rewriteStrategy: String? = null,
+    val addedTerms: List<String> = emptyList(),
+    val removedPhrases: List<String> = emptyList(),
+    val fallbackApplied: Boolean,
+    val fallbackReason: String? = null
 )
 
 @Serializable
@@ -421,7 +606,11 @@ data class RetrievedChunkPayload(
     val score: Double,
     val semanticScore: Double,
     val keywordScore: Double,
-    val excerpt: String
+    val rerankScore: Double? = null,
+    val excerpt: String,
+    val filteredOut: Boolean = false,
+    val filterReason: String? = null,
+    val explanation: String? = null
 )
 
 @Serializable

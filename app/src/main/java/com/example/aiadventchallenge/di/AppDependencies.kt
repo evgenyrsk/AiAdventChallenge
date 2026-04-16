@@ -27,8 +27,11 @@ import com.example.aiadventchallenge.domain.validation.InvariantValidator
 import com.example.aiadventchallenge.domain.validation.InvariantValidatorImpl
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.MultiServerOrchestrator
+import com.example.aiadventchallenge.domain.rag.DefaultQueryRewriter
 import com.example.aiadventchallenge.domain.rag.RagPromptBuilder
+import com.example.aiadventchallenge.domain.rag.QueryRewriter
 import android.content.Context
+import com.example.aiadventchallenge.domain.usecase.RewriteQueryUseCase
 
 @SuppressLint("StaticFieldLeak")
 object AppDependencies {
@@ -121,6 +124,14 @@ object AppDependencies {
         RagPromptBuilder()
     }
 
+    val queryRewriter: QueryRewriter by lazy {
+        DefaultQueryRewriter()
+    }
+
+    val rewriteQueryUseCase: RewriteQueryUseCase by lazy {
+        RewriteQueryUseCase(queryRewriter)
+    }
+
     val ragRetriever: McpRagRetriever by lazy {
         McpRagRetriever(multiServerRepository)
     }
@@ -128,7 +139,8 @@ object AppDependencies {
     val prepareRagRequestUseCase: PrepareRagRequestUseCase by lazy {
         PrepareRagRequestUseCase(
             ragRetriever = ragRetriever,
-            ragPromptBuilder = ragPromptBuilder
+            ragPromptBuilder = ragPromptBuilder,
+            rewriteQueryUseCase = rewriteQueryUseCase
         )
     }
 

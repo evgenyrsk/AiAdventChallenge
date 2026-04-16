@@ -241,15 +241,51 @@ data class SearchIndexResult(
 )
 
 @Serializable
+enum class RetrievalPostProcessingMode {
+    NONE,
+    THRESHOLD_ONLY,
+    HEURISTIC_RERANK,
+    THRESHOLD_PLUS_RERANK
+}
+
+@Serializable
+data class RetrievalPipelineConfig(
+    val rewriteEnabled: Boolean = false,
+    val postProcessingEnabled: Boolean = false,
+    val postProcessingMode: RetrievalPostProcessingMode = RetrievalPostProcessingMode.NONE,
+    val topKBeforeFilter: Int = 5,
+    val finalTopK: Int = 5,
+    val similarityThreshold: Double? = null,
+    val fallbackOnEmptyPostProcessing: Boolean = true
+)
+
+@Serializable
+data class RewriteDebugInfo(
+    val rewriteApplied: Boolean = false,
+    val detectedIntent: String? = null,
+    val rewriteStrategy: String? = null,
+    val addedTerms: List<String> = emptyList(),
+    val removedPhrases: List<String> = emptyList()
+)
+
+@Serializable
 data class RetrieveRelevantChunksRequest(
     val query: String,
+    val originalQuery: String = query,
+    val rewrittenQuery: String? = null,
+    val effectiveQuery: String = query,
     val source: String = "local_docs",
     val strategy: String = "structure_aware",
     val topK: Int = 5,
     val maxChars: Int = 4000,
     val documentType: String? = null,
     val relativePathContains: String? = null,
-    val perDocumentLimit: Int = 2
+    val perDocumentLimit: Int = 2,
+    val rewriteDebug: RewriteDebugInfo? = null,
+    val pipelineConfig: RetrievalPipelineConfig = RetrievalPipelineConfig(
+        topKBeforeFilter = topK,
+        finalTopK = topK
+    )
 )
 
 @Serializable
@@ -261,12 +297,37 @@ data class RetrievedContextChunk(
     val score: Double,
     val semanticScore: Double,
     val keywordScore: Double,
-    val excerpt: String
+    val rerankScore: Double? = null,
+    val excerpt: String,
+    val filteredOut: Boolean = false,
+    val filterReason: String? = null,
+    val explanation: String? = null
+)
+
+@Serializable
+data class RetrievalDebugInfo(
+    val originalQuery: String,
+    val rewrittenQuery: String? = null,
+    val effectiveQuery: String,
+    val topKBeforeFilter: Int,
+    val finalTopK: Int,
+    val similarityThreshold: Double? = null,
+    val postProcessingMode: RetrievalPostProcessingMode = RetrievalPostProcessingMode.NONE,
+    val rewriteApplied: Boolean = false,
+    val detectedIntent: String? = null,
+    val rewriteStrategy: String? = null,
+    val addedTerms: List<String> = emptyList(),
+    val removedPhrases: List<String> = emptyList(),
+    val fallbackApplied: Boolean = false,
+    val fallbackReason: String? = null
 )
 
 @Serializable
 data class RetrieveRelevantChunksResult(
     val query: String,
+    val originalQuery: String,
+    val rewrittenQuery: String? = null,
+    val effectiveQuery: String,
     val source: String,
     val strategy: String,
     val topK: Int,
@@ -274,19 +335,31 @@ data class RetrieveRelevantChunksResult(
     val totalChars: Int,
     val contextText: String,
     val chunks: List<RetrievedContextChunk>,
+    val initialCandidates: List<RetrievedContextChunk> = emptyList(),
+    val finalCandidates: List<RetrievedContextChunk> = emptyList(),
+    val filteredCandidates: List<RetrievedContextChunk> = emptyList(),
+    val debug: RetrievalDebugInfo,
     val contextEnvelope: String
 )
 
 @Serializable
 data class AnswerWithRetrievalRequest(
     val query: String,
+    val originalQuery: String = query,
+    val rewrittenQuery: String? = null,
+    val effectiveQuery: String = query,
     val source: String = "local_docs",
     val strategy: String = "structure_aware",
     val topK: Int = 5,
     val maxChars: Int = 4000,
     val documentType: String? = null,
     val relativePathContains: String? = null,
-    val perDocumentLimit: Int = 2
+    val perDocumentLimit: Int = 2,
+    val rewriteDebug: RewriteDebugInfo? = null,
+    val pipelineConfig: RetrievalPipelineConfig = RetrievalPipelineConfig(
+        topKBeforeFilter = topK,
+        finalTopK = topK
+    )
 )
 
 @Serializable

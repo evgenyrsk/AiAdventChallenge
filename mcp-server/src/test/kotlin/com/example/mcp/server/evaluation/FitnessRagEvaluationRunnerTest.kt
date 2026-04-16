@@ -24,6 +24,9 @@ class FitnessRagEvaluationRunnerTest {
                 ragSource = "fitness_knowledge",
                 ragStrategy = "structure_aware",
                 topK = 4,
+                enhancedTopKBeforeFilter = 6,
+                enhancedTopKAfterFilter = 4,
+                enhancedSimilarityThreshold = 0.2,
                 maxChars = 2500,
                 perDocumentLimit = 1,
                 temperature = 0.2,
@@ -66,6 +69,9 @@ class FitnessRagEvaluationRunnerTest {
                     ragSource = "fitness_knowledge",
                     ragStrategy = "structure_aware",
                     topK = 4,
+                    enhancedTopKBeforeFilter = 6,
+                    enhancedTopKAfterFilter = 4,
+                    enhancedSimilarityThreshold = 0.2,
                     maxChars = 2500,
                     perDocumentLimit = 1,
                     temperature = 0.2,
@@ -117,6 +123,9 @@ class FitnessRagEvaluationRunnerTest {
                 ragSource = "fitness_knowledge",
                 ragStrategy = "structure_aware",
                 topK = 4,
+                enhancedTopKBeforeFilter = 6,
+                enhancedTopKAfterFilter = 4,
+                enhancedSimilarityThreshold = 0.2,
                 maxChars = 2500,
                 perDocumentLimit = 1,
                 temperature = 0.2,
@@ -136,11 +145,23 @@ class FitnessRagEvaluationRunnerTest {
                         expectedSources = listOf("nutrition/calorie_balance.md"),
                         expectedRetrievalFacts = listOf("дефицит калорий"),
                         plain = AnswerRecord("Ответ без RAG", 1, 2, 3),
-                        rag = RagAnswerRecord(
-                            answer = "Ответ с RAG",
+                        ragBasic = RagAnswerRecord(
+                            answer = "Ответ с RAG basic",
                             promptTokens = 4,
                             completionTokens = 5,
                             totalTokens = 9,
+                            originalQuery = "Что важнее для похудения?",
+                            rewrittenQuery = null,
+                            effectiveQuery = "Что важнее для похудения?",
+                            topKBeforeFilter = 4,
+                            finalTopK = 4,
+                            similarityThreshold = null,
+                            postProcessingMode = "NONE",
+                            rewriteApplied = false,
+                            detectedIntent = null,
+                            rewriteStrategy = null,
+                            addedTerms = emptyList(),
+                            removedPhrases = emptyList(),
                             retrievalApplied = true,
                             selectedCount = 1,
                             sources = listOf(
@@ -149,6 +170,35 @@ class FitnessRagEvaluationRunnerTest {
                                     relativePath = "nutrition/calorie_balance.md",
                                     section = "What matters most for fat loss",
                                     score = 0.91
+                                )
+                            ),
+                            contextEnvelope = "Envelope"
+                        ),
+                        ragEnhanced = RagAnswerRecord(
+                            answer = "Ответ с RAG enhanced",
+                            promptTokens = 4,
+                            completionTokens = 5,
+                            totalTokens = 9,
+                            originalQuery = "Что важнее для похудения?",
+                            rewrittenQuery = "дефицит калорий energy balance meal timing время приема пищи",
+                            effectiveQuery = "дефицит калорий energy balance meal timing время приема пищи",
+                            topKBeforeFilter = 6,
+                            finalTopK = 4,
+                            similarityThreshold = 0.2,
+                            postProcessingMode = "THRESHOLD_PLUS_RERANK",
+                            rewriteApplied = true,
+                            detectedIntent = "FAT_LOSS_PRIORITY",
+                            rewriteStrategy = "INTENT_EXPANSION",
+                            addedTerms = listOf("energy balance", "meal timing"),
+                            removedPhrases = emptyList(),
+                            retrievalApplied = true,
+                            selectedCount = 1,
+                            sources = listOf(
+                                RetrievalSource(
+                                    title = "calorie_balance.md",
+                                    relativePath = "nutrition/calorie_balance.md",
+                                    section = "What matters most for fat loss",
+                                    score = 0.95
                                 )
                             ),
                             contextEnvelope = "Envelope"
@@ -165,9 +215,10 @@ class FitnessRagEvaluationRunnerTest {
             }
 
             assertTrue(markdown.contains("Ответ без RAG"))
-            assertTrue(markdown.contains("Ответ с RAG"))
+            assertTrue(markdown.contains("Ответ с RAG basic"))
+            assertTrue(markdown.contains("Ответ с RAG enhanced"))
             assertTrue(markdown.contains("nutrition/calorie_balance.md"))
-            assertTrue(markdown.contains("RAG answer grounded in retrieved context"))
+            assertTrue(markdown.contains("дефицит калорий energy balance meal timing время приема пищи"))
         } finally {
             tempDir.deleteRecursively()
         }

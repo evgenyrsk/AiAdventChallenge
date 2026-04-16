@@ -35,10 +35,15 @@ class RagPromptBuilder {
         val userPrompt = buildString {
             appendLine("Вопрос пользователя:")
             appendLine(question)
+            retrieval.rewrittenQuery?.let {
+                appendLine()
+                appendLine("Rewritten retrieval query:")
+                appendLine(it)
+            }
             appendLine()
             appendLine("Retrieved Context:")
             if (retrieval.contextText.isBlank()) {
-                appendLine("Контекст не найден.")
+                appendLine("Контекст не найден. Используй только то, что можно честно сказать без базы знаний, и явно обозначь нехватку релевантного контекста.")
             } else {
                 appendLine(retrieval.contextText)
             }
@@ -48,17 +53,68 @@ class RagPromptBuilder {
             systemPromptSuffix = systemPromptSuffix,
             userPrompt = userPrompt,
             retrievalSummary = RetrievalSummary(
-                query = retrieval.query.ifBlank { question },
+                query = retrieval.query.ifBlank { retrieval.effectiveQuery.ifBlank { question } },
+                originalQuery = retrieval.originalQuery.ifBlank { question },
+                rewrittenQuery = retrieval.rewrittenQuery,
+                effectiveQuery = retrieval.effectiveQuery.ifBlank { question },
                 source = retrieval.source,
                 strategy = retrieval.strategy,
                 selectedCount = retrieval.selectedCount,
+                topKBeforeFilter = retrieval.debug.topKBeforeFilter,
+                finalTopK = retrieval.debug.finalTopK,
+                similarityThreshold = retrieval.debug.similarityThreshold,
+                postProcessingMode = retrieval.debug.postProcessingMode.name,
+                rewriteApplied = retrieval.debug.rewriteApplied,
+                detectedIntent = retrieval.debug.detectedIntent,
+                rewriteStrategy = retrieval.debug.rewriteStrategy,
+                addedTerms = retrieval.debug.addedTerms,
+                removedPhrases = retrieval.debug.removedPhrases,
+                fallbackApplied = retrieval.debug.fallbackApplied,
+                fallbackReason = retrieval.debug.fallbackReason,
                 contextEnvelope = retrieval.contextEnvelope,
-                chunks = retrieval.chunks.map { chunk ->
+                chunks = retrieval.finalCandidates.map { chunk ->
                     RetrievalSourceCard(
+                        chunkId = chunk.chunkId,
                         title = chunk.title,
                         relativePath = chunk.relativePath,
                         section = chunk.section,
-                        score = chunk.score
+                        score = chunk.score,
+                        semanticScore = chunk.semanticScore,
+                        keywordScore = chunk.keywordScore,
+                        rerankScore = chunk.rerankScore,
+                        filteredOut = chunk.filteredOut,
+                        filterReason = chunk.filterReason,
+                        explanation = chunk.explanation
+                    )
+                },
+                initialCandidates = retrieval.initialCandidates.map { chunk ->
+                    RetrievalSourceCard(
+                        chunkId = chunk.chunkId,
+                        title = chunk.title,
+                        relativePath = chunk.relativePath,
+                        section = chunk.section,
+                        score = chunk.score,
+                        semanticScore = chunk.semanticScore,
+                        keywordScore = chunk.keywordScore,
+                        rerankScore = chunk.rerankScore,
+                        filteredOut = chunk.filteredOut,
+                        filterReason = chunk.filterReason,
+                        explanation = chunk.explanation
+                    )
+                },
+                filteredCandidates = retrieval.filteredCandidates.map { chunk ->
+                    RetrievalSourceCard(
+                        chunkId = chunk.chunkId,
+                        title = chunk.title,
+                        relativePath = chunk.relativePath,
+                        section = chunk.section,
+                        score = chunk.score,
+                        semanticScore = chunk.semanticScore,
+                        keywordScore = chunk.keywordScore,
+                        rerankScore = chunk.rerankScore,
+                        filteredOut = chunk.filteredOut,
+                        filterReason = chunk.filterReason,
+                        explanation = chunk.explanation
                     )
                 }
             )

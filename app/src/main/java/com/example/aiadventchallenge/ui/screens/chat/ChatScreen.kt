@@ -11,7 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -114,7 +115,14 @@ fun ChatScreen(
     var showDebugLog by remember { mutableStateOf(false) }
     var showStrategySettings by remember { mutableStateOf(false) }
     var showClearChatDialog by remember { mutableStateOf(false) }
+    var showRetrievalDetails by remember { mutableStateOf(false) }
     var pendingStrategyChange by remember { mutableStateOf<ContextStrategyType?>(null) }
+
+    LaunchedEffect(chatUiState.latestRetrievalSummary) {
+        if (chatUiState.latestRetrievalSummary == null) {
+            showRetrievalDetails = false
+        }
+    }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -304,6 +312,7 @@ fun ChatScreen(
                     chatUiState.latestRetrievalSummary?.let { retrievalSummary ->
                         RetrievalSummaryCard(
                             summary = retrievalSummary,
+                            onOpenDetails = { showRetrievalDetails = true },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -420,6 +429,21 @@ fun ChatScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+            }
+        }
+
+        if (showRetrievalDetails && chatUiState.latestRetrievalSummary != null) {
+            ModalBottomSheet(
+                onDismissRequest = { showRetrievalDetails = false },
+                sheetState = sheetState
+            ) {
+                RetrievalDetailsSheet(
+                    summary = chatUiState.latestRetrievalSummary!!,
+                    onClose = { showRetrievalDetails = false },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                )
             }
         }
 
@@ -552,9 +576,20 @@ private fun AnswerModeToggle(
             )
         )
         FilterChip(
-            selected = answerMode == AnswerMode.RAG,
-            onClick = { onModeSelected(AnswerMode.RAG) },
-            label = { Text("RAG") },
+            selected = answerMode == AnswerMode.RAG_BASIC,
+            onClick = { onModeSelected(AnswerMode.RAG_BASIC) },
+            label = { Text("RAG Basic") },
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        )
+        FilterChip(
+            selected = answerMode == AnswerMode.RAG_ENHANCED,
+            onClick = { onModeSelected(AnswerMode.RAG_ENHANCED) },
+            label = { Text("RAG Enhanced") },
             enabled = enabled,
             modifier = Modifier.weight(1f),
             colors = FilterChipDefaults.filterChipColors(
@@ -568,6 +603,7 @@ private fun AnswerModeToggle(
 @Composable
 private fun RetrievalSummaryCard(
     summary: RetrievalSummary,
+    onOpenDetails: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -576,37 +612,172 @@ private fun RetrievalSummaryCard(
             containerColor = MaterialTheme.colorScheme.tertiaryContainer
         )
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = buildRetrievalPreviewText(summary),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            TextButton(
+                onClick = onOpenDetails,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 8.dp,
+                    vertical = 0.dp
+                )
+            ) {
+                Text("Детали")
+            }
+        }
+    }
+}
+
+private fun buildRetrievalPreviewText(summary: RetrievalSummary): String {
+    val primarySource = summary.chunks.firstOrNull()?.title
+        ?.takeIf { it.isNotBlank() }
+        ?: summary.chunks.firstOrNull()?.relativePath
+        ?: "no-source"
+
+    return buildString {
+        append("KB:")
+        if (!summary.rewrittenQuery.isNullOrBlank()) {
+            append(" rewrite +")
+        }
+        append(" ${summary.finalTopK}/${summary.topKBeforeFilter} chunks")
+        append(" • ${summary.postProcessingMode}")
+        append(" • $primarySource")
+        if (summary.fallbackApplied) {
+            append(" • fallback")
+        }
+    }
+}
+
+@Composable
+private fun RetrievalDetailsSheet(
+    summary: RetrievalSummary,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "Knowledge Base Context",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
+                style = MaterialTheme.typography.titleMedium
             )
-            Text(
-                text = "Source: ${summary.source} • Strategy: ${summary.strategy} • Chunks: ${summary.selectedCount}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-            Text(
-                text = summary.query,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            IconButton(onClick = onClose) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Закрыть"
+                )
+            }
+        }
 
-            summary.chunks.take(3).forEach { chunk ->
-                RetrievalSourceRow(chunk = chunk)
+        RetrievalDetailsSection(title = "Query") {
+            RetrievalDetailText("Original: ${summary.originalQuery}")
+            summary.rewrittenQuery?.takeIf { it.isNotBlank() }?.let {
+                RetrievalDetailText("Rewritten: $it")
+            }
+            RetrievalDetailText("Effective: ${summary.effectiveQuery}")
+            RetrievalDetailText("Rewrite applied: ${if (summary.rewriteApplied) "yes" else "no"}")
+            summary.detectedIntent?.let { RetrievalDetailText("Detected intent: $it") }
+            summary.rewriteStrategy?.let { RetrievalDetailText("Rewrite strategy: $it") }
+            if (summary.addedTerms.isNotEmpty()) {
+                RetrievalDetailText("Added terms: ${summary.addedTerms.joinToString(", ")}")
+            }
+            if (summary.removedPhrases.isNotEmpty()) {
+                RetrievalDetailText("Removed phrases: ${summary.removedPhrases.joinToString(", ")}")
+            }
+        }
+
+        RetrievalDetailsSection(title = "Pipeline") {
+            RetrievalDetailText("Source: ${summary.source}")
+            RetrievalDetailText("Strategy: ${summary.strategy}")
+            RetrievalDetailText("topK: ${summary.topKBeforeFilter} -> ${summary.finalTopK}")
+            RetrievalDetailText("Mode: ${summary.postProcessingMode}")
+            RetrievalDetailText("Threshold: ${summary.similarityThreshold?.let { "%.2f".format(it) } ?: "none"}")
+            if (summary.fallbackApplied) {
+                RetrievalDetailText("Fallback: ${summary.fallbackReason ?: "applied"}")
+            }
+        }
+
+        RetrievalDetailsSection(title = "Final Context") {
+            if (summary.chunks.isEmpty()) {
+                RetrievalDetailText("Нет финальных чанков")
+            } else {
+                summary.chunks.forEach { chunk ->
+                    RetrievalSourceRow(chunk = chunk, detailed = true)
+                }
+            }
+        }
+
+        RetrievalDetailsSection(title = "Initial Candidates") {
+            if (summary.initialCandidates.isEmpty()) {
+                RetrievalDetailText("Нет данных")
+            } else {
+                summary.initialCandidates.forEach { chunk ->
+                    RetrievalSourceRow(chunk = chunk, detailed = true)
+                }
+            }
+        }
+
+        RetrievalDetailsSection(title = "Filtered Out") {
+            if (summary.filteredCandidates.isEmpty()) {
+                RetrievalDetailText("Ничего не отброшено")
+            } else {
+                summary.filteredCandidates.forEach { chunk ->
+                    RetrievalSourceRow(chunk = chunk, detailed = true)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun RetrievalSourceRow(chunk: RetrievalSourceCard) {
+private fun RetrievalDetailsSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        content()
+    }
+}
+
+@Composable
+private fun RetrievalDetailText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+}
+
+@Composable
+private fun RetrievalSourceRow(
+    chunk: RetrievalSourceCard,
+    detailed: Boolean
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.45f)
@@ -629,14 +800,29 @@ private fun RetrievalSourceRow(chunk: RetrievalSourceCard) {
                     .joinToString(" • "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
+                maxLines = if (detailed) 4 else 2,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "score=${"%.3f".format(chunk.score)}",
+                text = buildString {
+                    append("score=${"%.3f".format(chunk.score)}")
+                    chunk.rerankScore?.let { append(" • rerank=${"%.3f".format(it)}") }
+                    chunk.filterReason?.let { append(" • $it") }
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (detailed) {
+                chunk.explanation?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }
