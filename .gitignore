@@ -16,3 +16,4 @@
 .cxx
 local.properties
 **/output/document-index/
+/tools/reranker-service/.venv
