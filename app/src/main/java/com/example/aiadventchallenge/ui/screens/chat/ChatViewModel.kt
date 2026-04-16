@@ -231,7 +231,7 @@ class ChatViewModel(
             val answerMode = _chatUiState.value.answerMode
             val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(
                 userInput = userInput,
-                allowKnowledgeRetrieval = answerMode != AnswerMode.RAG
+                allowKnowledgeRetrieval = answerMode == AnswerMode.PLAIN_LLM
             )
             
             when (mcpToolResult) {
@@ -375,8 +375,7 @@ class ChatViewModel(
 
     fun setAnswerMode(answerMode: AnswerMode) {
         _chatUiState.value = _chatUiState.value.copy(
-            answerMode = answerMode,
-            latestRetrievalSummary = null
+            answerMode = answerMode
         )
     }
 

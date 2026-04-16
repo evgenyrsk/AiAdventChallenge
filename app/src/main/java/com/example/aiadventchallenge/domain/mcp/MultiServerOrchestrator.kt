@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.aiadventchallenge.data.mcp.DocumentRetrievalConfig
 import com.example.aiadventchallenge.data.mcp.MultiServerRepository
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -456,6 +457,9 @@ class MultiServerOrchestrator(
             val root = json.parseToJsonElement(raw).jsonObject
             val data = root["data"]?.jsonObject ?: return null
             val query = data["query"]?.jsonPrimitive?.content ?: return null
+            val originalQuery = data["originalQuery"]?.jsonPrimitive?.content ?: query
+            val rewrittenQuery = jsonContentOrNull(data["rewrittenQuery"])
+            val effectiveQuery = data["effectiveQuery"]?.jsonPrimitive?.content ?: query
             val retrieval = data["retrieval"]?.jsonObject ?: return null
             val source = retrieval["source"]?.jsonPrimitive?.content
                 ?: DocumentRetrievalConfig.defaultSource
@@ -463,27 +467,68 @@ class MultiServerOrchestrator(
                 ?: DocumentRetrievalConfig.DEFAULT_STRATEGY
             val selectedCount = retrieval["selectedCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
             val contextEnvelope = retrieval["contextEnvelope"]?.jsonPrimitive?.content.orEmpty()
-            val chunks = retrieval["chunks"]?.jsonArray?.map { chunkElement ->
-                val chunk = chunkElement.jsonObject
-                RetrievalSourceCard(
-                    title = chunk["title"]?.jsonPrimitive?.content.orEmpty(),
-                    relativePath = chunk["relativePath"]?.jsonPrimitive?.content.orEmpty(),
-                    section = chunk["section"]?.jsonPrimitive?.content.orEmpty(),
-                    score = chunk["score"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
-                )
+            val debug = retrieval["debug"]?.jsonObject
+            val chunks = retrieval["finalCandidates"]?.jsonArray?.map { chunkElement ->
+                parseRetrievalSourceCard(chunkElement.jsonObject)
+            } ?: retrieval["chunks"]?.jsonArray?.map { chunkElement ->
+                parseRetrievalSourceCard(chunkElement.jsonObject)
+            }.orEmpty()
+            val initialCandidates = retrieval["initialCandidates"]?.jsonArray?.map { chunkElement ->
+                parseRetrievalSourceCard(chunkElement.jsonObject)
+            }.orEmpty()
+            val filteredCandidates = retrieval["filteredCandidates"]?.jsonArray?.map { chunkElement ->
+                parseRetrievalSourceCard(chunkElement.jsonObject)
             }.orEmpty()
 
             RetrievalSummary(
                 query = query,
+                originalQuery = originalQuery,
+                rewrittenQuery = rewrittenQuery,
+                effectiveQuery = effectiveQuery,
                 source = source,
                 strategy = strategy,
                 selectedCount = selectedCount,
+                topKBeforeFilter = debug?.get("topKBeforeFilter")?.jsonPrimitive?.content?.toIntOrNull()
+                    ?: DocumentRetrievalConfig.DEFAULT_TOP_K,
+                finalTopK = debug?.get("finalTopK")?.jsonPrimitive?.content?.toIntOrNull()
+                    ?: selectedCount,
+                similarityThreshold = jsonContentOrNull(debug?.get("similarityThreshold"))?.toDoubleOrNull(),
+                postProcessingMode = debug?.get("postProcessingMode")?.jsonPrimitive?.content ?: "NONE",
+                rewriteApplied = debug?.get("rewriteApplied")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                detectedIntent = jsonContentOrNull(debug?.get("detectedIntent")),
+                rewriteStrategy = jsonContentOrNull(debug?.get("rewriteStrategy")),
+                addedTerms = debug?.get("addedTerms")?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                removedPhrases = debug?.get("removedPhrases")?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                fallbackApplied = debug?.get("fallbackApplied")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                fallbackReason = jsonContentOrNull(debug?.get("fallbackReason")),
                 contextEnvelope = contextEnvelope,
-                chunks = chunks
+                chunks = chunks,
+                initialCandidates = initialCandidates,
+                filteredCandidates = filteredCandidates
             )
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun parseRetrievalSourceCard(chunk: kotlinx.serialization.json.JsonObject): RetrievalSourceCard {
+        return RetrievalSourceCard(
+            chunkId = chunk["chunkId"]?.jsonPrimitive?.content.orEmpty(),
+            title = chunk["title"]?.jsonPrimitive?.content.orEmpty(),
+            relativePath = chunk["relativePath"]?.jsonPrimitive?.content.orEmpty(),
+            section = chunk["section"]?.jsonPrimitive?.content.orEmpty(),
+            score = chunk["score"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+            semanticScore = chunk["semanticScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+            keywordScore = chunk["keywordScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+            rerankScore = jsonContentOrNull(chunk["rerankScore"])?.toDoubleOrNull(),
+            filteredOut = chunk["filteredOut"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+            filterReason = jsonContentOrNull(chunk["filterReason"]),
+            explanation = jsonContentOrNull(chunk["explanation"])
+        )
+    }
+
+    private fun jsonContentOrNull(element: JsonElement?): String? {
+        return element?.jsonPrimitive?.content?.takeUnless { it == "null" }
     }
     
     data class ParamRequirements(

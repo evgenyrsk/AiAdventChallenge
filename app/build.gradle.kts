@@ -86,6 +86,7 @@ dependencies {
  implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.compose.material.iconsExtended)
+    implementation(project(":rag-core"))
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

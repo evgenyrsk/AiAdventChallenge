@@ -12,13 +12,18 @@ class RetrievalOrchestrationService(
         val retrieval = retrievalService.retrieveRelevantChunks(
             RetrieveRelevantChunksRequest(
                 query = request.query,
+                originalQuery = request.originalQuery,
+                rewrittenQuery = request.rewrittenQuery,
+                effectiveQuery = request.effectiveQuery,
                 source = request.source,
                 strategy = request.strategy,
                 topK = request.topK,
                 maxChars = request.maxChars,
                 documentType = request.documentType,
                 relativePathContains = request.relativePathContains,
-                perDocumentLimit = request.perDocumentLimit
+                perDocumentLimit = request.perDocumentLimit,
+                rewriteDebug = request.rewriteDebug,
+                pipelineConfig = request.pipelineConfig
             )
         )
 
@@ -31,7 +36,7 @@ class RetrievalOrchestrationService(
 
         val userPrompt = buildString {
             appendLine("User question:")
-            appendLine(request.query)
+            appendLine(request.originalQuery)
             appendLine()
             appendLine("Retrieved context:")
             append(retrieval.contextEnvelope)
@@ -44,7 +49,7 @@ class RetrievalOrchestrationService(
         }.trim()
 
         return AnswerWithRetrievalResult(
-            query = request.query,
+            query = request.effectiveQuery,
             retrieval = retrieval,
             systemPrompt = systemPrompt,
             userPrompt = userPrompt,

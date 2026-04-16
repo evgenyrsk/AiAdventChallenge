@@ -83,18 +83,30 @@ class ChatMessageHandlerImplTest {
             userPrompt = "Вопрос пользователя:\n$userInput\n\nRetrieved Context:\nКонтекст",
             retrievalSummary = RetrievalSummary(
                 query = userInput,
+                originalQuery = userInput,
+                rewrittenQuery = "сон восстановление аппетит качество тренировки недосып",
+                effectiveQuery = "сон восстановление аппетит качество тренировки недосып",
                 source = "fitness_knowledge",
                 strategy = "structure_aware",
                 selectedCount = 1,
+                topKBeforeFilter = 6,
+                finalTopK = 4,
+                similarityThreshold = 0.2,
+                postProcessingMode = "THRESHOLD_PLUS_RERANK",
+                fallbackApplied = false,
+                fallbackReason = null,
                 contextEnvelope = "Envelope",
                 chunks = listOf(
                     RetrievalSourceCard(
+                        chunkId = "chunk-1",
                         title = "recovery_sleep_steps.md",
                         relativePath = "training/recovery_sleep_steps.md",
                         section = "Why sleep matters",
                         score = 0.92
                     )
-                )
+                ),
+                initialCandidates = emptyList(),
+                filteredCandidates = emptyList()
             )
         )
 
@@ -103,7 +115,7 @@ class ChatMessageHandlerImplTest {
         every { contextStrategyFactory.create(any()) } returns contextStrategy
         every { agent.buildRequestConfigWithProfile(any()) } returns RequestConfig(systemPrompt = "system")
         coEvery { contextStrategy.buildContext(null, activeMessages, any()) } returns baseMessages
-        coEvery { prepareRagRequestUseCase.invoke(any(), any(), any(), any(), any(), any(), any()) } returns preparedRagRequest
+        coEvery { prepareRagRequestUseCase.invoke(any(), any(), any()) } returns preparedRagRequest
 
         val capturedMessages = mutableListOf<List<Message>>()
         coEvery {
@@ -137,11 +149,11 @@ class ChatMessageHandlerImplTest {
             activeBranchId = "main",
             parentMessageId = "user-1",
             mcpContext = null,
-            answerMode = AnswerMode.RAG
+            answerMode = AnswerMode.RAG_ENHANCED
         ) as ChatMessageResult.Success
 
         coVerify(exactly = 1) {
-            prepareRagRequestUseCase.invoke(any(), any(), any(), any(), any(), any(), any())
+            prepareRagRequestUseCase.invoke(any(), any(), any())
         }
 
         assertEquals(userInput, capturedMessages[0].last().content)

@@ -8,6 +8,8 @@ import com.example.mcp.server.documentindex.model.IndexingJobResult
 import com.example.mcp.server.documentindex.model.IndexingRequest
 import com.example.mcp.server.documentindex.model.AnswerWithRetrievalRequest
 import com.example.mcp.server.documentindex.model.AnswerWithRetrievalResult
+import com.example.mcp.server.documentindex.model.RetrievalPipelineConfig
+import com.example.mcp.server.documentindex.model.RewriteDebugInfo
 import com.example.mcp.server.documentindex.model.RetrieveRelevantChunksRequest
 import com.example.mcp.server.documentindex.model.RetrieveRelevantChunksResult
 import com.example.mcp.server.documentindex.model.SearchIndexRequest
@@ -92,48 +94,74 @@ class DocumentIndexingService(
 
     fun retrieveRelevantChunks(
         query: String,
+        originalQuery: String = query,
+        rewrittenQuery: String? = null,
+        effectiveQuery: String = query,
         source: String = "local_docs",
         strategy: String = "structure_aware",
         topK: Int = 5,
         maxChars: Int = 4000,
         documentType: String? = null,
         relativePathContains: String? = null,
-        perDocumentLimit: Int = 2
+        perDocumentLimit: Int = 2,
+        rewriteDebug: RewriteDebugInfo? = null,
+        pipelineConfig: RetrievalPipelineConfig = RetrievalPipelineConfig(
+            topKBeforeFilter = topK,
+            finalTopK = topK
+        )
     ): RetrieveRelevantChunksResult {
         return retrievalService.retrieveRelevantChunks(
             RetrieveRelevantChunksRequest(
                 query = query,
+                originalQuery = originalQuery,
+                rewrittenQuery = rewrittenQuery,
+                effectiveQuery = effectiveQuery,
                 source = source,
                 strategy = strategy,
                 topK = topK,
                 maxChars = maxChars,
                 documentType = documentType,
                 relativePathContains = relativePathContains,
-                perDocumentLimit = perDocumentLimit
+                perDocumentLimit = perDocumentLimit,
+                rewriteDebug = rewriteDebug,
+                pipelineConfig = pipelineConfig
             )
         )
     }
 
     fun answerWithRetrieval(
         query: String,
+        originalQuery: String = query,
+        rewrittenQuery: String? = null,
+        effectiveQuery: String = query,
         source: String = "local_docs",
         strategy: String = "structure_aware",
         topK: Int = 5,
         maxChars: Int = 4000,
         documentType: String? = null,
         relativePathContains: String? = null,
-        perDocumentLimit: Int = 2
+        perDocumentLimit: Int = 2,
+        rewriteDebug: RewriteDebugInfo? = null,
+        pipelineConfig: RetrievalPipelineConfig = RetrievalPipelineConfig(
+            topKBeforeFilter = topK,
+            finalTopK = topK
+        )
     ): AnswerWithRetrievalResult {
         return retrievalOrchestrationService.answerWithRetrieval(
             AnswerWithRetrievalRequest(
                 query = query,
+                originalQuery = originalQuery,
+                rewrittenQuery = rewrittenQuery,
+                effectiveQuery = effectiveQuery,
                 source = source,
                 strategy = strategy,
                 topK = topK,
                 maxChars = maxChars,
                 documentType = documentType,
                 relativePathContains = relativePathContains,
-                perDocumentLimit = perDocumentLimit
+                perDocumentLimit = perDocumentLimit,
+                rewriteDebug = rewriteDebug,
+                pipelineConfig = pipelineConfig
             )
         )
     }

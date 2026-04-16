@@ -2,10 +2,16 @@ package com.example.aiadventchallenge.domain.usecase
 
 import android.util.Log
 import com.example.aiadventchallenge.data.mcp.FitnessRagConfig
+import com.example.aiadventchallenge.domain.model.RagPipelineConfig
+import com.example.aiadventchallenge.domain.model.RagPostProcessingMode
 import com.example.aiadventchallenge.domain.model.RagContextChunk
+import com.example.aiadventchallenge.domain.model.RagRetrievalDebug
+import com.example.aiadventchallenge.domain.model.RagRetrievalRequest
 import com.example.aiadventchallenge.domain.model.RagRetrievalResult
+import com.example.aiadventchallenge.domain.rag.DefaultQueryRewriter
 import com.example.aiadventchallenge.domain.rag.RagPromptBuilder
 import com.example.aiadventchallenge.domain.rag.RagRetriever
+import com.example.aiadventchallenge.rag.rewrite.RewriteIntent
 import io.mockk.every
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
@@ -32,24 +38,21 @@ class PrepareRagRequestUseCaseTest {
     @Test
     fun `use case delegates to retriever with fitness defaults`() = runTest {
         val fakeRetriever = object : RagRetriever {
-            override suspend fun retrieve(
-                query: String,
-                source: String,
-                strategy: String,
-                topK: Int,
-                maxChars: Int,
-                perDocumentLimit: Int
-            ): RagRetrievalResult {
-                assertEquals(FitnessRagConfig.DEFAULT_SOURCE, source)
-                assertEquals(FitnessRagConfig.DEFAULT_STRATEGY, strategy)
-                assertEquals(FitnessRagConfig.DEFAULT_TOP_K, topK)
-                assertEquals(FitnessRagConfig.DEFAULT_MAX_CHARS, maxChars)
-                assertEquals(FitnessRagConfig.DEFAULT_PER_DOCUMENT_LIMIT, perDocumentLimit)
+            override suspend fun retrieve(request: RagRetrievalRequest): RagRetrievalResult {
+                assertEquals(FitnessRagConfig.DEFAULT_SOURCE, request.config.source)
+                assertEquals(FitnessRagConfig.DEFAULT_STRATEGY, request.config.strategy)
+                assertEquals(FitnessRagConfig.DEFAULT_TOP_K, request.config.retrievalTopKBeforeFilter)
+                assertEquals(FitnessRagConfig.DEFAULT_MAX_CHARS, request.config.maxChars)
+                assertEquals(FitnessRagConfig.DEFAULT_PER_DOCUMENT_LIMIT, request.config.perDocumentLimit)
+                assertEquals("Сколько белка нужно при похудении?", request.originalQuery)
 
                 return RagRetrievalResult(
-                    query = query,
-                    source = source,
-                    strategy = strategy,
+                    query = request.effectiveQuery,
+                    originalQuery = request.originalQuery,
+                    rewrittenQuery = request.rewrittenQuery,
+                    effectiveQuery = request.effectiveQuery,
+                    source = request.config.source,
+                    strategy = request.config.strategy,
                     selectedCount = 1,
                     totalChars = 120,
                     contextText = "Белок 1.6-2.2 г/кг",
@@ -65,6 +68,17 @@ class PrepareRagRequestUseCaseTest {
                             text = "Белок 1.6-2.2 г/кг"
                         )
                     ),
+                    initialCandidates = emptyList(),
+                    finalCandidates = emptyList(),
+                    filteredCandidates = emptyList(),
+                    debug = RagRetrievalDebug(
+                        topKBeforeFilter = request.config.retrievalTopKBeforeFilter,
+                        finalTopK = request.config.retrievalTopKAfterFilter,
+                        similarityThreshold = request.config.similarityThreshold,
+                        postProcessingMode = request.config.postProcessingMode,
+                        fallbackApplied = false,
+                        fallbackReason = null
+                    ),
                     contextEnvelope = "Envelope"
                 )
             }
@@ -72,7 +86,8 @@ class PrepareRagRequestUseCaseTest {
 
         val useCase = PrepareRagRequestUseCase(
             ragRetriever = fakeRetriever,
-            ragPromptBuilder = RagPromptBuilder()
+            ragPromptBuilder = RagPromptBuilder(),
+            rewriteQueryUseCase = RewriteQueryUseCase(DefaultQueryRewriter())
         )
 
         val result = useCase("Сколько белка нужно при похудении?")
@@ -80,5 +95,66 @@ class PrepareRagRequestUseCaseTest {
         assertTrue(result.userPrompt.contains("Белок 1.6-2.2 г/кг"))
         assertEquals("fitness_knowledge", result.retrievalSummary.source)
         assertEquals(1, result.retrievalSummary.selectedCount)
+    }
+
+    @Test
+    fun `use case rewrites query for enhanced config`() = runTest {
+        var capturedRequest: RagRetrievalRequest? = null
+        val fakeRetriever = object : RagRetriever {
+            override suspend fun retrieve(request: RagRetrievalRequest): RagRetrievalResult {
+                capturedRequest = request
+                return RagRetrievalResult(
+                    query = request.effectiveQuery,
+                    originalQuery = request.originalQuery,
+                    rewrittenQuery = request.rewrittenQuery,
+                    effectiveQuery = request.effectiveQuery,
+                    source = request.config.source,
+                    strategy = request.config.strategy,
+                    selectedCount = 0,
+                    totalChars = 0,
+                    contextText = "",
+                    chunks = emptyList(),
+                    initialCandidates = emptyList(),
+                    finalCandidates = emptyList(),
+                    filteredCandidates = emptyList(),
+                    debug = RagRetrievalDebug(
+                        topKBeforeFilter = request.config.retrievalTopKBeforeFilter,
+                        finalTopK = request.config.retrievalTopKAfterFilter,
+                        similarityThreshold = request.config.similarityThreshold,
+                        postProcessingMode = request.config.postProcessingMode,
+                        fallbackApplied = false,
+                        fallbackReason = null
+                    ),
+                    contextEnvelope = ""
+                )
+            }
+        }
+
+        val useCase = PrepareRagRequestUseCase(
+            ragRetriever = fakeRetriever,
+            ragPromptBuilder = RagPromptBuilder(),
+            rewriteQueryUseCase = RewriteQueryUseCase(DefaultQueryRewriter())
+        )
+
+        useCase(
+            question = "Подскажи пожалуйста, почему сон влияет на восстановление и контроль аппетита?",
+            config = RagPipelineConfig(
+                source = FitnessRagConfig.DEFAULT_SOURCE,
+                strategy = FitnessRagConfig.DEFAULT_STRATEGY,
+                rewriteEnabled = true,
+                postProcessingEnabled = true,
+                postProcessingMode = RagPostProcessingMode.THRESHOLD_PLUS_RERANK,
+                retrievalTopKBeforeFilter = 6,
+                retrievalTopKAfterFilter = 4,
+                similarityThreshold = 0.2,
+                maxChars = FitnessRagConfig.DEFAULT_MAX_CHARS,
+                perDocumentLimit = FitnessRagConfig.DEFAULT_PER_DOCUMENT_LIMIT,
+                fallbackOnEmptyPostProcessing = true
+            )
+        )
+
+        assertEquals("Подскажи пожалуйста, почему сон влияет на восстановление и контроль аппетита?", capturedRequest?.originalQuery)
+        assertTrue(capturedRequest?.rewrittenQuery?.contains("сон восстановление аппетит", ignoreCase = true) == true)
+        assertEquals(RewriteIntent.SLEEP_RECOVERY_APPETITE, capturedRequest?.rewriteResult?.detectedIntent)
     }
 }

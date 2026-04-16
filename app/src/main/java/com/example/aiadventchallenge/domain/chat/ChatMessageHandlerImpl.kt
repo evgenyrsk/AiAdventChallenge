@@ -4,6 +4,7 @@ import android.util.Log
 import java.util.UUID
 import com.example.aiadventchallenge.data.agent.ChatAgent
 import com.example.aiadventchallenge.data.mapper.MessageMapper
+import com.example.aiadventchallenge.data.mcp.FitnessRagConfig
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
@@ -159,9 +160,17 @@ class ChatMessageHandlerImpl(
         var apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
         var retrievalSummary: com.example.aiadventchallenge.domain.mcp.RetrievalSummary? = null
 
-        if (answerMode == AnswerMode.RAG) {
+        if (answerMode == AnswerMode.RAG_BASIC || answerMode == AnswerMode.RAG_ENHANCED) {
+            val ragConfig = when (answerMode) {
+                AnswerMode.RAG_ENHANCED -> FitnessRagConfig.enhancedPipeline
+                AnswerMode.RAG_BASIC -> FitnessRagConfig.basicPipeline
+                AnswerMode.PLAIN_LLM -> null
+            }
             runCatching {
-                prepareRagRequestUseCase(userInput)
+                prepareRagRequestUseCase(
+                    question = userInput,
+                    config = requireNotNull(ragConfig)
+                )
             }.onSuccess { preparedRagRequest ->
                 retrievalSummary = preparedRagRequest.retrievalSummary
                 config = config.copy(

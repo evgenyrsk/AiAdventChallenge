@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 rootProject.name = "AiAdventChallenge"
 include(":app")
 include(":mcp-server")
+include(":rag-core")

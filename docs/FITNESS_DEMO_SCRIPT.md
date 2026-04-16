@@ -164,9 +164,15 @@ adb shell run-as com.example.aiadventchallenge sqlite3 databases/app_database \
 
 Покажи:
 
-- переключатель режима `Обычный / RAG`
-- один и тот же вопрос сначала в `Обычный`, потом в `RAG`
-- `Knowledge Base Context` card для режима `RAG`
+- переключатель режима `Обычный / RAG Basic / RAG Enhanced`
+- один и тот же вопрос сначала в `Обычный`, потом в `RAG Basic`, затем в `RAG Enhanced`
+- `Knowledge Base Context` card для RAG-режимов
+- в `RAG Enhanced` показать:
+  - `originalQuery`
+  - `rewrittenQuery`
+  - `topK before -> after`
+  - `postProcessingMode`
+  - отброшенные чанки и причины
 
 Рекомендуемые вопросы:
 
@@ -186,7 +192,8 @@ adb shell run-as com.example.aiadventchallenge sqlite3 databases/app_database \
 Что сказать:
 
 - `PLAIN_LLM` отправляет вопрос в LLM без retrieval
-- `RAG` делает поиск релевантных чанков, собирает augmented prompt и только потом вызывает LLM
+- `RAG Basic` делает базовый retrieval без rewrite/post-processing
+- `RAG Enhanced` делает rewrite, затем retrieval, затем filtering/reranking и только после этого собирает prompt
 - retrieval идет через MCP server поверх локального индекса source `fitness_knowledge`
 
 ## 9. Показать evaluation runner

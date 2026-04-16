@@ -35,18 +35,41 @@ sealed class ToolExecutionResult {
 
 data class RetrievalSummary(
     val query: String,
+    val originalQuery: String,
+    val rewrittenQuery: String? = null,
+    val effectiveQuery: String,
     val source: String,
     val strategy: String,
     val selectedCount: Int,
+    val topKBeforeFilter: Int,
+    val finalTopK: Int,
+    val similarityThreshold: Double? = null,
+    val postProcessingMode: String = "NONE",
+    val rewriteApplied: Boolean = false,
+    val detectedIntent: String? = null,
+    val rewriteStrategy: String? = null,
+    val addedTerms: List<String> = emptyList(),
+    val removedPhrases: List<String> = emptyList(),
+    val fallbackApplied: Boolean = false,
+    val fallbackReason: String? = null,
     val contextEnvelope: String,
-    val chunks: List<RetrievalSourceCard>
+    val chunks: List<RetrievalSourceCard>,
+    val initialCandidates: List<RetrievalSourceCard> = emptyList(),
+    val filteredCandidates: List<RetrievalSourceCard> = emptyList()
 )
 
 data class RetrievalSourceCard(
+    val chunkId: String = "",
     val title: String,
     val relativePath: String,
     val section: String,
-    val score: Double
+    val score: Double,
+    val semanticScore: Double = 0.0,
+    val keywordScore: Double = 0.0,
+    val rerankScore: Double? = null,
+    val filteredOut: Boolean = false,
+    val filterReason: String? = null,
+    val explanation: String? = null
 )
 
 sealed class ValidationResult {

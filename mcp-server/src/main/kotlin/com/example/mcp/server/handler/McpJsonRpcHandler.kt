@@ -1,6 +1,9 @@
 package com.example.mcp.server.handler
 
 import com.example.mcp.server.model.*
+import com.example.mcp.server.documentindex.model.RetrievalPipelineConfig
+import com.example.mcp.server.documentindex.model.RetrievalPostProcessingMode
+import com.example.mcp.server.documentindex.model.RewriteDebugInfo
 import com.example.mcp.server.model.nutrition.NutritionMetricsRequest
 import com.example.mcp.server.model.nutrition.NutritionMetricsResponse
 import com.example.mcp.server.model.meal.MealGuidanceRequest
@@ -20,6 +23,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.*
 
@@ -392,6 +397,9 @@ abstract class AbstractMcpJsonRpcHandler {
             val params = request.params ?: throw Exception("Missing params")
             val query = params["query"]?.jsonPrimitive?.content
                 ?: throw Exception("Missing query parameter")
+            val originalQuery = params["originalQuery"]?.jsonPrimitive?.content ?: query
+            val rewrittenQuery = params["rewrittenQuery"]?.jsonPrimitive?.content
+            val effectiveQuery = params["effectiveQuery"]?.jsonPrimitive?.content ?: query
             val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
             val strategy = params["strategy"]?.jsonPrimitive?.content ?: "structure_aware"
             val topK = params["topK"]?.jsonPrimitive?.content?.toIntOrNull() ?: 5
@@ -399,16 +407,50 @@ abstract class AbstractMcpJsonRpcHandler {
             val documentType = params["documentType"]?.jsonPrimitive?.content
             val relativePathContains = params["relativePathContains"]?.jsonPrimitive?.content
             val perDocumentLimit = params["perDocumentLimit"]?.jsonPrimitive?.content?.toIntOrNull() ?: 2
+            val rewriteEnabled = params["rewriteEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            val postProcessingEnabled = params["postProcessingEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            val topKBeforeFilter = params["topKBeforeFilter"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
+            val finalTopK = params["finalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
+            val similarityThreshold = params["similarityThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
+            val fallbackOnEmptyPostProcessing = params["fallbackOnEmptyPostProcessing"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
+            val postProcessingMode = params["postProcessingMode"]?.jsonPrimitive?.content
+                ?.let { value ->
+                    runCatching { RetrievalPostProcessingMode.valueOf(value.uppercase()) }
+                        .getOrDefault(RetrievalPostProcessingMode.NONE)
+                }
+                ?: RetrievalPostProcessingMode.NONE
+            val rewriteDebug = params["rewriteDebug"]?.jsonObject?.let { debug ->
+                RewriteDebugInfo(
+                    rewriteApplied = debug["rewriteApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                    detectedIntent = debug["detectedIntent"]?.jsonPrimitive?.content,
+                    rewriteStrategy = debug["rewriteStrategy"]?.jsonPrimitive?.content,
+                    addedTerms = debug["addedTerms"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                    removedPhrases = debug["removedPhrases"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+                )
+            }
 
             val result = documentIndexingService.retrieveRelevantChunks(
                 query = query,
+                originalQuery = originalQuery,
+                rewrittenQuery = rewrittenQuery,
+                effectiveQuery = effectiveQuery,
                 source = source,
                 strategy = strategy,
                 topK = topK,
                 maxChars = maxChars,
                 documentType = documentType,
                 relativePathContains = relativePathContains,
-                perDocumentLimit = perDocumentLimit
+                perDocumentLimit = perDocumentLimit,
+                rewriteDebug = rewriteDebug,
+                pipelineConfig = RetrievalPipelineConfig(
+                    rewriteEnabled = rewriteEnabled,
+                    postProcessingEnabled = postProcessingEnabled,
+                    postProcessingMode = postProcessingMode,
+                    topKBeforeFilter = topKBeforeFilter,
+                    finalTopK = finalTopK,
+                    similarityThreshold = similarityThreshold,
+                    fallbackOnEmptyPostProcessing = fallbackOnEmptyPostProcessing
+                )
             )
             val resultJson = buildJsonObject {
                 put("message", "Retrieved relevant chunks for $source")
@@ -428,6 +470,9 @@ abstract class AbstractMcpJsonRpcHandler {
             val params = request.params ?: throw Exception("Missing params")
             val query = params["query"]?.jsonPrimitive?.content
                 ?: throw Exception("Missing query parameter")
+            val originalQuery = params["originalQuery"]?.jsonPrimitive?.content ?: query
+            val rewrittenQuery = params["rewrittenQuery"]?.jsonPrimitive?.content
+            val effectiveQuery = params["effectiveQuery"]?.jsonPrimitive?.content ?: query
             val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
             val strategy = params["strategy"]?.jsonPrimitive?.content ?: "structure_aware"
             val topK = params["topK"]?.jsonPrimitive?.content?.toIntOrNull() ?: 5
@@ -435,16 +480,50 @@ abstract class AbstractMcpJsonRpcHandler {
             val documentType = params["documentType"]?.jsonPrimitive?.content
             val relativePathContains = params["relativePathContains"]?.jsonPrimitive?.content
             val perDocumentLimit = params["perDocumentLimit"]?.jsonPrimitive?.content?.toIntOrNull() ?: 2
+            val rewriteEnabled = params["rewriteEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            val postProcessingEnabled = params["postProcessingEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            val topKBeforeFilter = params["topKBeforeFilter"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
+            val finalTopK = params["finalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
+            val similarityThreshold = params["similarityThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
+            val fallbackOnEmptyPostProcessing = params["fallbackOnEmptyPostProcessing"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
+            val postProcessingMode = params["postProcessingMode"]?.jsonPrimitive?.content
+                ?.let { value ->
+                    runCatching { RetrievalPostProcessingMode.valueOf(value.uppercase()) }
+                        .getOrDefault(RetrievalPostProcessingMode.NONE)
+                }
+                ?: RetrievalPostProcessingMode.NONE
+            val rewriteDebug = params["rewriteDebug"]?.jsonObject?.let { debug ->
+                RewriteDebugInfo(
+                    rewriteApplied = debug["rewriteApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                    detectedIntent = debug["detectedIntent"]?.jsonPrimitive?.content,
+                    rewriteStrategy = debug["rewriteStrategy"]?.jsonPrimitive?.content,
+                    addedTerms = debug["addedTerms"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                    removedPhrases = debug["removedPhrases"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+                )
+            }
 
             val result = documentIndexingService.answerWithRetrieval(
                 query = query,
+                originalQuery = originalQuery,
+                rewrittenQuery = rewrittenQuery,
+                effectiveQuery = effectiveQuery,
                 source = source,
                 strategy = strategy,
                 topK = topK,
                 maxChars = maxChars,
                 documentType = documentType,
                 relativePathContains = relativePathContains,
-                perDocumentLimit = perDocumentLimit
+                perDocumentLimit = perDocumentLimit,
+                rewriteDebug = rewriteDebug,
+                pipelineConfig = RetrievalPipelineConfig(
+                    rewriteEnabled = rewriteEnabled,
+                    postProcessingEnabled = postProcessingEnabled,
+                    postProcessingMode = postProcessingMode,
+                    topKBeforeFilter = topKBeforeFilter,
+                    finalTopK = finalTopK,
+                    similarityThreshold = similarityThreshold,
+                    fallbackOnEmptyPostProcessing = fallbackOnEmptyPostProcessing
+                )
             )
             val resultJson = buildJsonObject {
                 put("message", "Prepared answer package with retrieval for $source")

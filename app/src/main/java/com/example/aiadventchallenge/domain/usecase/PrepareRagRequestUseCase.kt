@@ -4,34 +4,42 @@ import android.util.Log
 import com.example.aiadventchallenge.data.mcp.FitnessRagConfig
 import com.example.aiadventchallenge.domain.model.PreparedRagRequest
 import com.example.aiadventchallenge.domain.model.RagAnswerPolicy
+import com.example.aiadventchallenge.domain.model.RagPipelineConfig
+import com.example.aiadventchallenge.domain.model.RagRetrievalRequest
 import com.example.aiadventchallenge.domain.rag.RagPromptBuilder
 import com.example.aiadventchallenge.domain.rag.RagRetriever
 
 class PrepareRagRequestUseCase(
     private val ragRetriever: RagRetriever,
-    private val ragPromptBuilder: RagPromptBuilder
+    private val ragPromptBuilder: RagPromptBuilder,
+    private val rewriteQueryUseCase: RewriteQueryUseCase
 ) {
     suspend operator fun invoke(
         question: String,
-        source: String = FitnessRagConfig.DEFAULT_SOURCE,
-        strategy: String = FitnessRagConfig.DEFAULT_STRATEGY,
-        topK: Int = FitnessRagConfig.DEFAULT_TOP_K,
-        maxChars: Int = FitnessRagConfig.DEFAULT_MAX_CHARS,
-        perDocumentLimit: Int = FitnessRagConfig.DEFAULT_PER_DOCUMENT_LIMIT,
+        config: RagPipelineConfig = FitnessRagConfig.basicPipeline,
         policy: RagAnswerPolicy = RagAnswerPolicy.STRICT
     ): PreparedRagRequest {
+        val rewriteResult = question
+            .takeIf { config.rewriteEnabled }
+            ?.let(rewriteQueryUseCase::invoke)
+
+        val rewrittenQuery = rewriteResult
+            ?.rewrittenQuery
+            ?.takeUnless { it.equals(question, ignoreCase = true) }
+
         val retrieval = ragRetriever.retrieve(
-            query = question,
-            source = source,
-            strategy = strategy,
-            topK = topK,
-            maxChars = maxChars,
-            perDocumentLimit = perDocumentLimit
+            RagRetrievalRequest(
+                originalQuery = question,
+                rewrittenQuery = rewrittenQuery,
+                effectiveQuery = rewrittenQuery ?: question,
+                rewriteResult = rewriteResult,
+                config = config
+            )
         )
 
         Log.d(
             TAG,
-            "Prepared RAG request: source=$source strategy=$strategy selectedChunks=${retrieval.selectedCount}"
+            "Prepared RAG request: source=${config.source} strategy=${config.strategy} selectedChunks=${retrieval.selectedCount} rewritten=${rewrittenQuery != null}"
         )
 
         return ragPromptBuilder.build(

@@ -6,6 +6,7 @@ import com.example.mcp.server.documentindex.index.SQLiteVectorIndexStorage
 import com.example.mcp.server.documentindex.index.VectorIndexStorage
 import com.example.mcp.server.documentindex.model.RetrieveRelevantChunksRequest
 import com.example.mcp.server.documentindex.model.RetrieveRelevantChunksResult
+import com.example.mcp.server.documentindex.model.RetrievalDebugInfo
 import com.example.mcp.server.documentindex.model.RetrievedContextChunk
 import com.example.mcp.server.documentindex.model.SearchIndexRequest
 import com.example.mcp.server.documentindex.model.SearchIndexResult
@@ -15,6 +16,7 @@ import com.example.mcp.server.documentindex.pipeline.DocumentIndexingPipeline
 
 class DocumentRetrievalService(
     private val embeddingProvider: EmbeddingProvider = HashingEmbeddingProvider(),
+    private val postProcessor: RetrievalPostProcessor = DefaultRetrievalPostProcessor(),
     private val indexStorage: VectorIndexStorage = SQLiteVectorIndexStorage(
         DocumentIndexingPipeline.defaultDatabasePath()
     )
@@ -58,31 +60,21 @@ class DocumentRetrievalService(
     }
 
     fun retrieveRelevantChunks(request: RetrieveRelevantChunksRequest): RetrieveRelevantChunksResult {
+        val effectiveQuery = request.effectiveQuery.ifBlank { request.query }
         val searchResult = searchIndex(
             SearchIndexRequest(
-                query = request.query,
+                query = effectiveQuery,
                 source = request.source,
-                    strategy = request.strategy,
-                    topK = request.topK,
-                    documentType = request.documentType,
-                    relativePathContains = request.relativePathContains,
-                    perDocumentLimit = request.perDocumentLimit
-                )
+                strategy = request.strategy,
+                topK = request.pipelineConfig.topKBeforeFilter.coerceAtLeast(request.topK).coerceAtLeast(1),
+                documentType = request.documentType,
+                relativePathContains = request.relativePathContains,
+                perDocumentLimit = request.perDocumentLimit
+            )
         )
 
-        val selected = mutableListOf<RetrievedContextChunk>()
-        val contextParts = mutableListOf<String>()
-        var totalChars = 0
-
-        searchResult.results.forEach { chunk ->
-            val header = "[${chunk.title} | ${chunk.section} | score=${"%.3f".format(chunk.score)}]"
-            val block = "$header\n${chunk.text}".trim()
-            if (totalChars > 0 && totalChars + 2 + block.length > request.maxChars) {
-                return@forEach
-            }
-            contextParts += block
-            totalChars += if (contextParts.size == 1) block.length else block.length + 2
-            selected += RetrievedContextChunk(
+        val initialCandidates = searchResult.results.map { chunk ->
+            RetrievedContextChunk(
                 chunkId = chunk.chunkId,
                 title = chunk.title,
                 relativePath = chunk.relativePath,
@@ -90,8 +82,36 @@ class DocumentRetrievalService(
                 score = chunk.score,
                 semanticScore = chunk.semanticScore,
                 keywordScore = chunk.keywordScore,
-                excerpt = chunk.text.take(280)
+                rerankScore = null,
+                excerpt = chunk.text.take(280),
+                filteredOut = false,
+                filterReason = null,
+                explanation = "Initial retrieval candidate"
             )
+        }
+        val postProcessingResult = postProcessor.process(
+            originalQuery = request.originalQuery,
+            rewrittenQuery = request.rewrittenQuery,
+            effectiveQuery = effectiveQuery,
+            candidates = searchResult.results,
+            config = request.pipelineConfig
+        )
+
+        val selected = mutableListOf<RetrievedContextChunk>()
+        val contextParts = mutableListOf<String>()
+        var totalChars = 0
+        val searchResultById = searchResult.results.associateBy { it.chunkId }
+
+        postProcessingResult.finalCandidates.forEach { chunk ->
+            val header = "[${chunk.title} | ${chunk.section} | score=${"%.3f".format(chunk.score)}]"
+            val fullText = searchResultById[chunk.chunkId]?.text ?: chunk.excerpt
+            val block = "$header\n$fullText".trim()
+            if (totalChars > 0 && totalChars + 2 + block.length > request.maxChars) {
+                return@forEach
+            }
+            contextParts += block
+            totalChars += if (contextParts.size == 1) block.length else block.length + 2
+            selected += chunk
         }
 
         val envelope = buildString {
@@ -102,15 +122,36 @@ class DocumentRetrievalService(
         }.trim()
 
         return RetrieveRelevantChunksResult(
-            query = request.query,
+            query = effectiveQuery,
+            originalQuery = request.originalQuery,
+            rewrittenQuery = request.rewrittenQuery,
+            effectiveQuery = effectiveQuery,
             source = request.source,
             strategy = request.strategy,
             topK = request.topK,
             selectedCount = selected.size,
             totalChars = totalChars,
             contextText = contextParts.joinToString("\n\n"),
-            chunks = selected
-            ,
+            chunks = selected,
+            initialCandidates = initialCandidates,
+            finalCandidates = selected,
+            filteredCandidates = postProcessingResult.filteredCandidates,
+            debug = RetrievalDebugInfo(
+                originalQuery = request.originalQuery,
+                rewrittenQuery = request.rewrittenQuery,
+                effectiveQuery = effectiveQuery,
+                topKBeforeFilter = request.pipelineConfig.topKBeforeFilter,
+                finalTopK = request.pipelineConfig.finalTopK,
+                similarityThreshold = request.pipelineConfig.similarityThreshold,
+                postProcessingMode = request.pipelineConfig.postProcessingMode,
+                rewriteApplied = request.rewriteDebug?.rewriteApplied ?: false,
+                detectedIntent = request.rewriteDebug?.detectedIntent,
+                rewriteStrategy = request.rewriteDebug?.rewriteStrategy,
+                addedTerms = request.rewriteDebug?.addedTerms.orEmpty(),
+                removedPhrases = request.rewriteDebug?.removedPhrases.orEmpty(),
+                fallbackApplied = postProcessingResult.fallbackApplied,
+                fallbackReason = postProcessingResult.fallbackReason
+            ),
             contextEnvelope = envelope
         )
     }
