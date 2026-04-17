@@ -9,12 +9,24 @@
 - показать сравнение `fixed_size` и `structure_aware`
 - показать, что Android app использует этот индекс
 - показать разницу между `RAG Basic` и `RAG Enhanced`
+- показать grounded evidence: `sources` и `quotes`
+- показать fallback `не знаю` при слабом контексте
 
 Что важно зафиксировать в кадре:
 
 - `RAG Basic` использует базовый retrieval без rewrite и reranking
 - `RAG Enhanced` показывает `rewrittenQuery`, filtering/reranking и более чистый финальный контекст
-- в debug card видны кандидаты до/после фильтрации и финальные источники
+- в debug card видны кандидаты до/после фильтрации, финальные источники, цитаты и fallback mode
+
+Отдельно снять 2 коротких эпизода:
+
+1. grounded ответ с достаточной релевантностью
+2. вопрос со слабым контекстом, где система честно отвечает `не знаю`
+
+Рекомендуемый fallback-question для второго эпизода:
+
+- `Как принимать креатин моногидрат: нужна ли фаза загрузки и сколько граммов в день?`
+- в этом кейсе в кадре должны быть видны пустые `sources` и `quotes`
 
 ## 1. Поднять MCP серверы
 
@@ -157,9 +169,10 @@ AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
 
 В кадре должно быть видно:
 
-- последовательный прогон 10 вопросов
+- последовательный прогон 11 вопросов
 - генерация `results.json`
 - генерация `report.md`
+- отдельный fallback-case `q11`
 
 ## 8. Оптимальная длина видео
 
@@ -179,3 +192,4 @@ AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
 4. comparison двух стратегий
 5. один сравнительный кейс `Обычный` vs `RAG` в Android app
 6. один запуск evaluation runner
+7. один low-relevance кейс с `не знаю`, пустыми `sources` и пустыми `quotes`

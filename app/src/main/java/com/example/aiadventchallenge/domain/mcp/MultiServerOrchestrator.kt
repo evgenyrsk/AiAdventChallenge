@@ -3,6 +3,12 @@ package com.example.aiadventchallenge.domain.mcp
 import android.util.Log
 import com.example.aiadventchallenge.data.mcp.DocumentRetrievalConfig
 import com.example.aiadventchallenge.data.mcp.MultiServerRepository
+import com.example.aiadventchallenge.domain.model.GroundedAnswerPayload
+import com.example.aiadventchallenge.domain.model.GroundedQuote
+import com.example.aiadventchallenge.domain.model.GroundedSource
+import com.example.aiadventchallenge.domain.model.RagAnswerMode
+import com.example.aiadventchallenge.domain.model.RagConfidenceSummary
+import com.example.aiadventchallenge.domain.model.RagPostProcessingMode
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
@@ -499,12 +505,22 @@ class MultiServerOrchestrator(
                 rewriteStrategy = jsonContentOrNull(debug?.get("rewriteStrategy")),
                 addedTerms = debug?.get("addedTerms")?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
                 removedPhrases = debug?.get("removedPhrases")?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                rerankProvider = jsonContentOrNull(debug?.get("rerankProvider")),
+                rerankModel = jsonContentOrNull(debug?.get("rerankModel")),
+                rerankApplied = debug?.get("rerankApplied")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                rerankInputCount = debug?.get("rerankInputCount")?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                rerankOutputCount = debug?.get("rerankOutputCount")?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                rerankScoreThreshold = jsonContentOrNull(debug?.get("rerankScoreThreshold"))?.toDoubleOrNull(),
+                rerankTimeoutMs = debug?.get("rerankTimeoutMs")?.jsonPrimitive?.content?.toLongOrNull(),
+                rerankFallbackUsed = debug?.get("rerankFallbackUsed")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                rerankFallbackReason = jsonContentOrNull(debug?.get("rerankFallbackReason")),
                 fallbackApplied = debug?.get("fallbackApplied")?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
                 fallbackReason = jsonContentOrNull(debug?.get("fallbackReason")),
                 contextEnvelope = contextEnvelope,
                 chunks = chunks,
                 initialCandidates = initialCandidates,
-                filteredCandidates = filteredCandidates
+                filteredCandidates = filteredCandidates,
+                groundedAnswer = parseGroundedAnswer(retrieval["grounding"]?.jsonObject, debug?.get("postProcessingMode")?.jsonPrimitive?.content ?: "NONE")
             )
         } catch (_: Exception) {
             null
@@ -514,16 +530,76 @@ class MultiServerOrchestrator(
     private fun parseRetrievalSourceCard(chunk: kotlinx.serialization.json.JsonObject): RetrievalSourceCard {
         return RetrievalSourceCard(
             chunkId = chunk["chunkId"]?.jsonPrimitive?.content.orEmpty(),
+            source = chunk["source"]?.jsonPrimitive?.content.orEmpty(),
             title = chunk["title"]?.jsonPrimitive?.content.orEmpty(),
             relativePath = chunk["relativePath"]?.jsonPrimitive?.content.orEmpty(),
             section = chunk["section"]?.jsonPrimitive?.content.orEmpty(),
+            finalRank = chunk["finalRank"]?.jsonPrimitive?.content?.toIntOrNull(),
             score = chunk["score"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
             semanticScore = chunk["semanticScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
             keywordScore = chunk["keywordScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
             rerankScore = jsonContentOrNull(chunk["rerankScore"])?.toDoubleOrNull(),
+            fullText = jsonContentOrNull(chunk["fullText"]),
             filteredOut = chunk["filteredOut"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
             filterReason = jsonContentOrNull(chunk["filterReason"]),
             explanation = jsonContentOrNull(chunk["explanation"])
+        )
+    }
+
+    private fun parseGroundedAnswer(
+        grounding: kotlinx.serialization.json.JsonObject?,
+        postProcessingMode: String
+    ): GroundedAnswerPayload? {
+        if (grounding == null) return null
+        val confidence = grounding["confidence"]?.jsonObject ?: return null
+        return GroundedAnswerPayload(
+            answerText = "",
+            sources = grounding["sources"]?.jsonArray?.map { element ->
+                val source = element.jsonObject
+                GroundedSource(
+                    source = jsonContentOrNull(source["source"]),
+                    title = jsonContentOrNull(source["title"]),
+                    section = jsonContentOrNull(source["section"]),
+                    chunkId = jsonContentOrNull(source["chunkId"]),
+                    similarityScore = jsonContentOrNull(source["similarityScore"])?.toDoubleOrNull(),
+                    rerankScore = jsonContentOrNull(source["rerankScore"])?.toDoubleOrNull(),
+                    finalRank = source["finalRank"]?.jsonPrimitive?.content?.toIntOrNull(),
+                    relativePath = jsonContentOrNull(source["relativePath"])
+                )
+            }.orEmpty(),
+            quotes = grounding["quotes"]?.jsonArray?.map { element ->
+                val quote = element.jsonObject
+                GroundedQuote(
+                    quotedText = quote["quotedText"]?.jsonPrimitive?.content.orEmpty(),
+                    source = jsonContentOrNull(quote["source"]),
+                    title = jsonContentOrNull(quote["title"]),
+                    section = jsonContentOrNull(quote["section"]),
+                    chunkId = jsonContentOrNull(quote["chunkId"]),
+                    relativePath = jsonContentOrNull(quote["relativePath"]),
+                    quoteRank = quote["quoteRank"]?.jsonPrimitive?.content?.toIntOrNull(),
+                    originFinalRank = quote["originFinalRank"]?.jsonPrimitive?.content?.toIntOrNull()
+                )
+            }.orEmpty(),
+            answerMode = if (grounding["isFallbackIDontKnow"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true) {
+                RagAnswerMode.FALLBACK_I_DONT_KNOW
+            } else {
+                RagAnswerMode.GROUNDED
+            },
+            pipelineMode = runCatching { RagPostProcessingMode.valueOf(postProcessingMode) }.getOrDefault(RagPostProcessingMode.NONE),
+            confidence = RagConfidenceSummary(
+                answerable = confidence["answerable"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true,
+                reason = jsonContentOrNull(confidence["reason"]),
+                minAnswerableChunks = confidence["minAnswerableChunks"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1,
+                finalChunkCount = confidence["finalChunkCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                topSimilarityScore = jsonContentOrNull(confidence["topSimilarityScore"])?.toDoubleOrNull(),
+                topSemanticScore = jsonContentOrNull(confidence["topSemanticScore"])?.toDoubleOrNull(),
+                topRerankScore = jsonContentOrNull(confidence["topRerankScore"])?.toDoubleOrNull(),
+                similarityThreshold = jsonContentOrNull(confidence["similarityThreshold"])?.toDoubleOrNull(),
+                rerankThreshold = jsonContentOrNull(confidence["rerankThreshold"])?.toDoubleOrNull(),
+                retrievalFallbackApplied = confidence["retrievalFallbackApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            ),
+            fallbackReason = jsonContentOrNull(grounding["fallbackReason"]),
+            isFallbackIDontKnow = grounding["isFallbackIDontKnow"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
         )
     }
 

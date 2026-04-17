@@ -57,15 +57,43 @@ class McpRagRetrieverTest {
                   "chunks": [
                     {
                       "chunkId": "chunk-1",
+                    "source": "fitness_knowledge",
                     "title": "fitness_faq.md",
                     "relativePath": "faq/fitness_faq.md",
                     "section": "Что важнее",
+                    "finalRank": 1,
                     "score": 1.35,
                     "semanticScore": 0.81,
                     "keywordScore": 3.5,
-                    "excerpt": "Для снижения веса важнее дефицит калорий."
+                    "excerpt": "Для снижения веса важнее дефицит калорий.",
+                    "fullText": "Для снижения веса важнее дефицит калорий. Время приема пищи вторично."
                   }
-                ]
+                ],
+                "grounding": {
+                  "sources": [
+                    {
+                      "source": "fitness_knowledge",
+                      "title": "fitness_faq.md",
+                      "section": "Что важнее",
+                      "chunkId": "chunk-1",
+                      "similarityScore": 1.35,
+                      "relativePath": "faq/fitness_faq.md"
+                    }
+                  ],
+                  "quotes": [
+                    {
+                      "quotedText": "Для снижения веса важнее дефицит калорий.",
+                      "source": "fitness_knowledge",
+                      "section": "Что важнее",
+                      "chunkId": "chunk-1"
+                    }
+                  ],
+                  "confidence": {
+                    "answerable": true,
+                    "minAnswerableChunks": 1,
+                    "finalChunkCount": 1
+                  }
+                }
               }
             }
             """.trimIndent()
@@ -82,6 +110,8 @@ class McpRagRetrieverTest {
         assertEquals(6, result.debug.topKBeforeFilter)
         assertTrue(result.debug.rewriteApplied)
         assertEquals("FAT_LOSS_PRIORITY", result.debug.detectedIntent)
+        assertTrue(result.grounding?.sources?.isNotEmpty() == true)
+        assertTrue(result.grounding?.quotes?.isNotEmpty() == true)
     }
 
     @Test
@@ -117,13 +147,16 @@ class McpRagRetrieverTest {
                   "chunks": [
                     {
                       "chunkId": "chunk-1",
+                      "source": "fitness_knowledge",
                       "title": "fitness_faq.md",
                       "relativePath": "faq/fitness_faq.md",
                       "section": "Что важнее",
+                      "finalRank": 1,
                       "score": 1.35,
                       "semanticScore": 0.81,
                       "keywordScore": 3.5,
-                      "excerpt": "Для снижения веса важнее дефицит калорий."
+                      "excerpt": "Для снижения веса важнее дефицит калорий.",
+                      "fullText": "Для снижения веса важнее дефицит калорий."
                     }
                   ]
                 }
@@ -166,6 +199,8 @@ class McpRagRetrieverTest {
                 retrievalTopKBeforeFilter = 4,
                 retrievalTopKAfterFilter = 4,
                 similarityThreshold = null,
+                minAnswerableChunks = 1,
+                allowAnswerWithRetrievalFallback = true,
                 maxChars = 2500,
                 perDocumentLimit = 1,
                 fallbackOnEmptyPostProcessing = true

@@ -54,9 +54,11 @@ class FitnessRagEvaluationRunner(
         }
 
         writeOutputs(results)
-        val ragWithSources = results.count { it.ragEnhanced.sources.isNotEmpty() }
+        val groundedWithSources = results.count { !it.ragEnhanced.fallbackTriggered && it.ragEnhanced.hasSources }
+        val fallbackCount = results.count { it.ragEnhanced.fallbackTriggered }
         println("Finished. Generated ${config.outputMarkdownPath} and ${config.outputJsonPath}")
-        println("Enhanced RAG answers with sources: $ragWithSources/${results.size}")
+        println("Enhanced grounded answers with sources: $groundedWithSources/${results.size}")
+        println("Enhanced fallback answers: $fallbackCount/${results.size}")
     }
 
     private suspend fun evaluateQuestion(question: EvaluationQuestion): EvaluatedQuestion {
@@ -74,30 +76,31 @@ class FitnessRagEvaluationRunner(
                 topKBeforeFilter = config.topK,
                 finalTopK = config.topK,
                 similarityThreshold = null,
+                minAnswerableChunks = 1,
+                allowAnswerWithRetrievalFallback = true,
                 fallbackOnEmptyPostProcessing = true
             )
         )
-        val ragBasicAnswer = askLlm(
-            systemPrompt = ragBasicPackage.systemPrompt,
-            userPrompt = ragBasicPackage.userPrompt
-        )
+        val ragBasicAnswer = askGroundedAnswer(ragBasicPackage)
 
         val ragEnhancedPackage = fetchRagPackage(
             question = question.question,
             pipelineConfig = RetrievalPipelineConfig(
                 rewriteEnabled = true,
                 postProcessingEnabled = true,
-                postProcessingMode = RetrievalPostProcessingMode.THRESHOLD_PLUS_RERANK,
+                postProcessingMode = RetrievalPostProcessingMode.THRESHOLD_PLUS_MODEL_RERANK,
                 topKBeforeFilter = config.enhancedTopKBeforeFilter,
                 finalTopK = config.enhancedTopKAfterFilter,
                 similarityThreshold = config.enhancedSimilarityThreshold,
-                fallbackOnEmptyPostProcessing = true
+                minAnswerableChunks = 2,
+                allowAnswerWithRetrievalFallback = false,
+                fallbackOnEmptyPostProcessing = true,
+                rerankEnabled = true,
+                rerankScoreThreshold = config.enhancedSimilarityThreshold,
+                rerankTimeoutMs = config.rerankTimeoutMs
             )
         )
-        val ragEnhancedAnswer = askLlm(
-            systemPrompt = ragEnhancedPackage.systemPrompt,
-            userPrompt = ragEnhancedPackage.userPrompt
-        )
+        val ragEnhancedAnswer = askGroundedAnswer(ragEnhancedPackage)
 
         return EvaluatedQuestion(
             id = question.id,
@@ -113,11 +116,13 @@ class FitnessRagEvaluationRunner(
             ),
             ragBasic = RagAnswerRecord.from(
                 answer = ragBasicAnswer,
-                payload = ragBasicPackage
+                payload = ragBasicPackage,
+                question = question
             ),
             ragEnhanced = RagAnswerRecord.from(
                 answer = ragEnhancedAnswer,
-                payload = ragEnhancedPackage
+                payload = ragEnhancedPackage,
+                question = question
             ),
             comparisonSummary = buildComparisonSummary(
                 question = question,
@@ -138,36 +143,32 @@ class FitnessRagEvaluationRunner(
         ragEnhancedAnswer: String,
         ragEnhancedPackage: AnswerWithRetrievalPayload
     ): String {
-        val basicSourceHits = question.expectedSources.count { expected ->
-            ragBasicPackage.retrieval.finalCandidates.any { chunk -> chunk.relativePath.endsWith(expected) || chunk.title == expected }
-        }
-        val enhancedSourceHits = question.expectedSources.count { expected ->
-            ragEnhancedPackage.retrieval.finalCandidates.any { chunk -> chunk.relativePath.endsWith(expected) || chunk.title == expected }
-        }
-        val basicFactHits = question.expectedRetrievalFacts.count { fact ->
-            ragBasicPackage.retrieval.contextEnvelope.contains(fact, ignoreCase = true) ||
-                ragBasicAnswer.contains(fact.substringBefore(','), ignoreCase = true)
-        }
-        val enhancedFactHits = question.expectedRetrievalFacts.count { fact ->
-            ragEnhancedPackage.retrieval.contextEnvelope.contains(fact, ignoreCase = true) ||
-                ragEnhancedAnswer.contains(fact.substringBefore(','), ignoreCase = true)
-        }
+        val basicRecord = RagAnswerRecord.from(
+            ParsedLlmResponse(ragBasicAnswer, null, null, null),
+            ragBasicPackage,
+            question
+        )
+        val enhancedRecord = RagAnswerRecord.from(
+            ParsedLlmResponse(ragEnhancedAnswer, null, null, null),
+            ragEnhancedPackage,
+            question
+        )
 
         return buildString {
             append("plainLen=${plainAnswer.length}; ")
             append("basicLen=${ragBasicAnswer.length}; ")
             append("enhancedLen=${ragEnhancedAnswer.length}; ")
-            append("basicSources=${ragBasicPackage.retrieval.finalCandidates.size}; ")
-            append("enhancedSources=${ragEnhancedPackage.retrieval.finalCandidates.size}; ")
-            append("basicExpectedSourcesHit=$basicSourceHits/${question.expectedSources.size}; ")
-            append("enhancedExpectedSourcesHit=$enhancedSourceHits/${question.expectedSources.size}; ")
-            append("basicFactsHit=$basicFactHits/${question.expectedRetrievalFacts.size}; ")
-            append("enhancedFactsHit=$enhancedFactHits/${question.expectedRetrievalFacts.size}; ")
+            append("basicHasSources=${basicRecord.hasSources}; ")
+            append("enhancedHasSources=${enhancedRecord.hasSources}; ")
+            append("basicHasQuotes=${basicRecord.hasQuotes}; ")
+            append("enhancedHasQuotes=${enhancedRecord.hasQuotes}; ")
+            append("basicGrounded=${basicRecord.answerGroundedInQuotes}; ")
+            append("enhancedGrounded=${enhancedRecord.answerGroundedInQuotes}; ")
             append(
                 when {
-                    enhancedFactHits > basicFactHits || enhancedSourceHits > basicSourceHits ->
+                    enhancedRecord.answerGroundedInQuotes && !basicRecord.answerGroundedInQuotes ->
                         "improved"
-                    enhancedFactHits == basicFactHits && enhancedSourceHits == basicSourceHits ->
+                    enhancedRecord.answerGroundedInQuotes == basicRecord.answerGroundedInQuotes ->
                         "unchanged"
                     else -> "worse"
                 }
@@ -211,7 +212,12 @@ class FitnessRagEvaluationRunner(
                 put("topKBeforeFilter", pipelineConfig.topKBeforeFilter)
                 put("finalTopK", pipelineConfig.finalTopK)
                 pipelineConfig.similarityThreshold?.let { put("similarityThreshold", it) }
+                put("minAnswerableChunks", pipelineConfig.minAnswerableChunks)
+                put("allowAnswerWithRetrievalFallback", pipelineConfig.allowAnswerWithRetrievalFallback)
                 put("fallbackOnEmptyPostProcessing", pipelineConfig.fallbackOnEmptyPostProcessing)
+                put("rerankEnabled", pipelineConfig.rerankEnabled)
+                pipelineConfig.rerankScoreThreshold?.let { put("rerankScoreThreshold", it) }
+                put("rerankTimeoutMs", pipelineConfig.rerankTimeoutMs)
                 rewriteResult?.let { rewrite ->
                     put("rewriteDebug", buildJsonObject {
                         put("rewriteApplied", rewrite.applied)
@@ -229,6 +235,21 @@ class FitnessRagEvaluationRunner(
             ?: error("Missing result in answer_with_retrieval response")
         val data = result["data"] ?: error("Missing data in answer_with_retrieval response")
         return json.decodeFromString(data.toString())
+    }
+
+    private suspend fun askGroundedAnswer(payload: AnswerWithRetrievalPayload): ParsedLlmResponse {
+        payload.fallbackAnswer?.let { fallback ->
+            return ParsedLlmResponse(
+                content = fallback,
+                promptTokens = 0,
+                completionTokens = 0,
+                totalTokens = 0
+            )
+        }
+        return askLlm(
+            systemPrompt = payload.systemPrompt,
+            userPrompt = payload.userPrompt
+        )
     }
 
     private suspend fun askLlm(systemPrompt: String, userPrompt: String): ParsedLlmResponse {
@@ -341,14 +362,18 @@ class FitnessRagEvaluationRunner(
             appendLine("**RAG Basic**")
             appendLine(result.ragBasic.answer.ifBlank { "_empty_" })
             appendLine()
+            appendLine("**RAG Basic Checks**")
+            appendLine("- hasSources: `${result.ragBasic.hasSources}`")
+            appendLine("- hasQuotes: `${result.ragBasic.hasQuotes}`")
+            appendLine("- groundedInQuotes: `${result.ragBasic.answerGroundedInQuotes}`")
+            appendLine("- fallbackTriggered: `${result.ragBasic.fallbackTriggered}`")
+            appendLine("- fallbackAppropriate: `${result.ragBasic.fallbackAppropriate}`")
+            appendLine()
             appendLine("**RAG Basic Sources**")
-            if (result.ragBasic.sources.isEmpty()) {
-                appendLine("- none")
-            } else {
-                result.ragBasic.sources.forEach { source ->
-                    appendLine("- `${source.relativePath}` | ${source.section} | score=${"%.3f".format(source.score)}")
-                }
-            }
+            appendSources(result.ragBasic.sources)
+            appendLine()
+            appendLine("**RAG Basic Quotes**")
+            appendQuotes(result.ragBasic.quotes)
             appendLine()
             appendLine("**RAG Enhanced**")
             appendLine(result.ragEnhanced.answer.ifBlank { "_empty_" })
@@ -370,18 +395,50 @@ class FitnessRagEvaluationRunner(
             appendLine("- mode: `${result.ragEnhanced.postProcessingMode}`")
             appendLine("- threshold: `${result.ragEnhanced.similarityThreshold?.toString() ?: "none"}`")
             appendLine()
+            appendLine("**RAG Enhanced Checks**")
+            appendLine("- hasSources: `${result.ragEnhanced.hasSources}`")
+            appendLine("- hasQuotes: `${result.ragEnhanced.hasQuotes}`")
+            appendLine("- groundedInQuotes: `${result.ragEnhanced.answerGroundedInQuotes}`")
+            appendLine("- fallbackTriggered: `${result.ragEnhanced.fallbackTriggered}`")
+            appendLine("- fallbackExpected: `${result.ragEnhanced.fallbackExpected}`")
+            appendLine("- fallbackAppropriate: `${result.ragEnhanced.fallbackAppropriate}`")
+            result.ragEnhanced.notes?.let { appendLine("- notes: `$it`") }
+            appendLine()
             appendLine("**RAG Enhanced Sources**")
-            if (result.ragEnhanced.sources.isEmpty()) {
-                appendLine("- none")
-            } else {
-                result.ragEnhanced.sources.forEach { source ->
-                    appendLine("- `${source.relativePath}` | ${source.section} | score=${"%.3f".format(source.score)}")
-                }
-            }
+            appendSources(result.ragEnhanced.sources)
+            appendLine()
+            appendLine("**RAG Enhanced Quotes**")
+            appendQuotes(result.ragEnhanced.quotes)
             appendLine()
             appendLine("**Comparison Summary**")
             appendLine(result.comparisonSummary)
             appendLine()
+        }
+    }
+
+    private fun StringBuilder.appendSources(sources: List<RetrievalSource>) {
+        if (sources.isEmpty()) {
+            appendLine("- none")
+            return
+        }
+        sources.forEach { source ->
+            appendLine(
+                "- `${source.relativePath ?: source.source ?: source.title ?: "unknown"}` | " +
+                    "${source.section ?: "no-section"} | chunk=${source.chunkId ?: "n/a"}" +
+                    (source.score?.let { " | score=${"%.3f".format(it)}" } ?: "") +
+                    (source.rerankScore?.let { " | rerank=${"%.3f".format(it)}" } ?: "")
+            )
+        }
+    }
+
+    private fun StringBuilder.appendQuotes(quotes: List<GroundedQuotePayload>) {
+        if (quotes.isEmpty()) {
+            appendLine("- none")
+            return
+        }
+        quotes.forEach { quote ->
+            appendLine("- \"${quote.quotedText}\"")
+            appendLine("  source=${quote.relativePath ?: quote.source ?: quote.title ?: "unknown"} | section=${quote.section ?: "no-section"} | chunk=${quote.chunkId ?: "n/a"}")
         }
     }
 
@@ -414,6 +471,7 @@ data class EvaluationConfig(
     val enhancedTopKBeforeFilter: Int,
     val enhancedTopKAfterFilter: Int,
     val enhancedSimilarityThreshold: Double,
+    val rerankTimeoutMs: Long,
     val maxChars: Int,
     val perDocumentLimit: Int,
     val temperature: Double,
@@ -434,6 +492,7 @@ data class EvaluationConfig(
             enhancedTopKBeforeFilter = System.getenv("RAG_ENHANCED_TOP_K_BEFORE")?.toIntOrNull() ?: 6,
             enhancedTopKAfterFilter = System.getenv("RAG_ENHANCED_TOP_K_AFTER")?.toIntOrNull() ?: 4,
             enhancedSimilarityThreshold = System.getenv("RAG_ENHANCED_THRESHOLD")?.toDoubleOrNull() ?: 0.2,
+            rerankTimeoutMs = System.getenv("RAG_RERANK_TIMEOUT_MS")?.toLongOrNull() ?: 3500L,
             maxChars = System.getenv("RAG_MAX_CHARS")?.toIntOrNull() ?: 2500,
             perDocumentLimit = System.getenv("RAG_PER_DOCUMENT_LIMIT")?.toIntOrNull() ?: 1,
             temperature = System.getenv("EVAL_TEMPERATURE")?.toDoubleOrNull() ?: 0.2,
@@ -499,16 +558,49 @@ data class RagAnswerRecord(
     val rewriteStrategy: String? = null,
     val addedTerms: List<String> = emptyList(),
     val removedPhrases: List<String> = emptyList(),
+    val rerankApplied: Boolean = false,
+    val rerankScoreThreshold: Double? = null,
     val retrievalApplied: Boolean,
     val selectedCount: Int,
     val sources: List<RetrievalSource>,
+    val quotes: List<GroundedQuotePayload>,
+    val hasSources: Boolean,
+    val hasQuotes: Boolean,
+    val answerGroundedInQuotes: Boolean,
+    val fallbackTriggered: Boolean,
+    val fallbackExpected: Boolean,
+    val fallbackAppropriate: Boolean,
+    val notes: String? = null,
     val contextEnvelope: String
 ) {
     companion object {
         fun from(
             answer: ParsedLlmResponse,
-            payload: AnswerWithRetrievalPayload
+            payload: AnswerWithRetrievalPayload,
+            question: EvaluationQuestion
         ): RagAnswerRecord {
+            val sources = payload.retrieval.grounding?.sources?.map {
+                RetrievalSource(
+                    title = it.title,
+                    source = it.source,
+                    relativePath = it.relativePath,
+                    section = it.section,
+                    chunkId = it.chunkId,
+                    score = it.similarityScore,
+                    rerankScore = it.rerankScore
+                )
+            }.orEmpty()
+            val quotes = payload.retrieval.grounding?.quotes.orEmpty()
+            val fallbackTriggered = payload.retrieval.grounding?.isFallbackIDontKnow == true
+            val fallbackExpected = question.expectedSources.isEmpty()
+            val answerGroundedInQuotes = quotes.isNotEmpty() &&
+                question.expectedAnswerPoints.any { point ->
+                    quotes.any { quote ->
+                        quote.quotedText.contains(point.substringBefore(' '), ignoreCase = true) ||
+                            answer.content.contains(point.substringBefore(' '), ignoreCase = true)
+                    }
+                } &&
+                sources.isNotEmpty()
             return RagAnswerRecord(
                 answer = answer.content,
                 promptTokens = answer.promptTokens,
@@ -526,16 +618,19 @@ data class RagAnswerRecord(
                 rewriteStrategy = payload.retrieval.debug.rewriteStrategy,
                 addedTerms = payload.retrieval.debug.addedTerms,
                 removedPhrases = payload.retrieval.debug.removedPhrases,
+                rerankApplied = payload.retrieval.debug.rerankApplied,
+                rerankScoreThreshold = payload.retrieval.debug.rerankScoreThreshold,
                 retrievalApplied = payload.retrievalApplied,
                 selectedCount = payload.retrieval.selectedCount,
-                sources = payload.retrieval.finalCandidates.map {
-                    RetrievalSource(
-                        title = it.title,
-                        relativePath = it.relativePath,
-                        section = it.section,
-                        score = it.score
-                    )
-                },
+                sources = sources,
+                quotes = quotes,
+                hasSources = sources.isNotEmpty(),
+                hasQuotes = quotes.isNotEmpty(),
+                answerGroundedInQuotes = answerGroundedInQuotes,
+                fallbackTriggered = fallbackTriggered,
+                fallbackExpected = fallbackExpected,
+                fallbackAppropriate = fallbackTriggered == fallbackExpected || (!fallbackTriggered && !fallbackExpected),
+                notes = payload.retrieval.grounding?.fallbackReason,
                 contextEnvelope = payload.retrieval.contextEnvelope
             )
         }
@@ -544,10 +639,13 @@ data class RagAnswerRecord(
 
 @Serializable
 data class RetrievalSource(
-    val title: String,
-    val relativePath: String,
-    val section: String,
-    val score: Double
+    val title: String? = null,
+    val source: String? = null,
+    val relativePath: String? = null,
+    val section: String? = null,
+    val chunkId: String? = null,
+    val score: Double? = null,
+    val rerankScore: Double? = null
 )
 
 @Serializable
@@ -557,7 +655,8 @@ data class AnswerWithRetrievalPayload(
     val systemPrompt: String,
     val userPrompt: String,
     val answerPrompt: String,
-    val retrievalApplied: Boolean
+    val retrievalApplied: Boolean,
+    val fallbackAnswer: String? = null
 )
 
 @Serializable
@@ -576,7 +675,8 @@ data class RetrievalPayload(
     val finalCandidates: List<RetrievedChunkPayload> = emptyList(),
     val filteredCandidates: List<RetrievedChunkPayload> = emptyList(),
     val debug: RetrievalDebugPayload,
-    val contextEnvelope: String
+    val contextEnvelope: String,
+    val grounding: RetrievalGroundingPayload? = null
 )
 
 @Serializable
@@ -593,6 +693,15 @@ data class RetrievalDebugPayload(
     val rewriteStrategy: String? = null,
     val addedTerms: List<String> = emptyList(),
     val removedPhrases: List<String> = emptyList(),
+    val rerankProvider: String? = null,
+    val rerankModel: String? = null,
+    val rerankApplied: Boolean = false,
+    val rerankInputCount: Int = 0,
+    val rerankOutputCount: Int = 0,
+    val rerankScoreThreshold: Double? = null,
+    val rerankTimeoutMs: Long? = null,
+    val rerankFallbackUsed: Boolean = false,
+    val rerankFallbackReason: String? = null,
     val fallbackApplied: Boolean,
     val fallbackReason: String? = null
 )
@@ -600,17 +709,67 @@ data class RetrievalDebugPayload(
 @Serializable
 data class RetrievedChunkPayload(
     val chunkId: String,
+    val source: String,
     val title: String,
     val relativePath: String,
     val section: String,
+    val finalRank: Int? = null,
     val score: Double,
     val semanticScore: Double,
     val keywordScore: Double,
     val rerankScore: Double? = null,
     val excerpt: String,
+    val fullText: String = "",
     val filteredOut: Boolean = false,
     val filterReason: String? = null,
     val explanation: String? = null
+)
+
+@Serializable
+data class RetrievalGroundingPayload(
+    val sources: List<RetrievalGroundedSourcePayload> = emptyList(),
+    val quotes: List<GroundedQuotePayload> = emptyList(),
+    val confidence: RetrievalConfidencePayload,
+    val fallbackReason: String? = null,
+    val isFallbackIDontKnow: Boolean = false
+)
+
+@Serializable
+data class RetrievalGroundedSourcePayload(
+    val source: String? = null,
+    val title: String? = null,
+    val section: String? = null,
+    val chunkId: String? = null,
+    val similarityScore: Double? = null,
+    val rerankScore: Double? = null,
+    val finalRank: Int? = null,
+    val relativePath: String? = null
+)
+
+@Serializable
+data class GroundedQuotePayload(
+    val quotedText: String,
+    val source: String? = null,
+    val title: String? = null,
+    val section: String? = null,
+    val chunkId: String? = null,
+    val relativePath: String? = null,
+    val quoteRank: Int? = null,
+    val originFinalRank: Int? = null
+)
+
+@Serializable
+data class RetrievalConfidencePayload(
+    val answerable: Boolean,
+    val reason: String? = null,
+    val minAnswerableChunks: Int,
+    val finalChunkCount: Int,
+    val topSimilarityScore: Double? = null,
+    val topSemanticScore: Double? = null,
+    val topRerankScore: Double? = null,
+    val similarityThreshold: Double? = null,
+    val rerankThreshold: Double? = null,
+    val retrievalFallbackApplied: Boolean = false
 )
 
 @Serializable

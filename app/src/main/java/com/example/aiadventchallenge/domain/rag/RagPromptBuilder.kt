@@ -2,7 +2,9 @@ package com.example.aiadventchallenge.domain.rag
 
 import com.example.aiadventchallenge.domain.mcp.RetrievalSourceCard
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
+import com.example.aiadventchallenge.domain.model.GroundedAnswerPayload
 import com.example.aiadventchallenge.domain.model.PreparedRagRequest
+import com.example.aiadventchallenge.domain.model.RagAnswerMode
 import com.example.aiadventchallenge.domain.model.RagAnswerPolicy
 import com.example.aiadventchallenge.domain.model.RagRetrievalResult
 
@@ -29,7 +31,9 @@ class RagPromptBuilder {
             appendLine()
             appendLine("RAG MODE")
             appendLine(policyInstruction)
-            appendLine("По возможности указывай названия документов и секций, на которые опираешься.")
+            appendLine("Отвечай только по найденному контексту.")
+            appendLine("Не придумывай источники, секции, цитаты или факты вне retrieved context.")
+            appendLine("Приложение само прикрепит sources и quotes детерминированно, поэтому сгенерируй только answerText.")
         }.trim()
 
         val userPrompt = buildString {
@@ -48,6 +52,10 @@ class RagPromptBuilder {
                 appendLine(retrieval.contextText)
             }
         }.trim()
+
+        val fallbackAnswerText = retrieval.grounding
+            ?.takeIf { it.isFallbackIDontKnow }
+            ?.let { "Не знаю на основе найденного контекста. Уточни вопрос или сформулируй его иначе." }
 
         return PreparedRagRequest(
             systemPromptSuffix = systemPromptSuffix,
@@ -69,55 +77,58 @@ class RagPromptBuilder {
                 rewriteStrategy = retrieval.debug.rewriteStrategy,
                 addedTerms = retrieval.debug.addedTerms,
                 removedPhrases = retrieval.debug.removedPhrases,
+                rerankProvider = retrieval.debug.rerankProvider,
+                rerankModel = retrieval.debug.rerankModel,
+                rerankApplied = retrieval.debug.rerankApplied,
+                rerankInputCount = retrieval.debug.rerankInputCount,
+                rerankOutputCount = retrieval.debug.rerankOutputCount,
+                rerankScoreThreshold = retrieval.debug.rerankScoreThreshold,
+                rerankTimeoutMs = retrieval.debug.rerankTimeoutMs,
+                rerankFallbackUsed = retrieval.debug.rerankFallbackUsed,
+                rerankFallbackReason = retrieval.debug.rerankFallbackReason,
                 fallbackApplied = retrieval.debug.fallbackApplied,
                 fallbackReason = retrieval.debug.fallbackReason,
                 contextEnvelope = retrieval.contextEnvelope,
-                chunks = retrieval.finalCandidates.map { chunk ->
-                    RetrievalSourceCard(
-                        chunkId = chunk.chunkId,
-                        title = chunk.title,
-                        relativePath = chunk.relativePath,
-                        section = chunk.section,
-                        score = chunk.score,
-                        semanticScore = chunk.semanticScore,
-                        keywordScore = chunk.keywordScore,
-                        rerankScore = chunk.rerankScore,
-                        filteredOut = chunk.filteredOut,
-                        filterReason = chunk.filterReason,
-                        explanation = chunk.explanation
-                    )
-                },
-                initialCandidates = retrieval.initialCandidates.map { chunk ->
-                    RetrievalSourceCard(
-                        chunkId = chunk.chunkId,
-                        title = chunk.title,
-                        relativePath = chunk.relativePath,
-                        section = chunk.section,
-                        score = chunk.score,
-                        semanticScore = chunk.semanticScore,
-                        keywordScore = chunk.keywordScore,
-                        rerankScore = chunk.rerankScore,
-                        filteredOut = chunk.filteredOut,
-                        filterReason = chunk.filterReason,
-                        explanation = chunk.explanation
-                    )
-                },
-                filteredCandidates = retrieval.filteredCandidates.map { chunk ->
-                    RetrievalSourceCard(
-                        chunkId = chunk.chunkId,
-                        title = chunk.title,
-                        relativePath = chunk.relativePath,
-                        section = chunk.section,
-                        score = chunk.score,
-                        semanticScore = chunk.semanticScore,
-                        keywordScore = chunk.keywordScore,
-                        rerankScore = chunk.rerankScore,
-                        filteredOut = chunk.filteredOut,
-                        filterReason = chunk.filterReason,
-                        explanation = chunk.explanation
+                chunks = retrieval.finalCandidates.map(::toSourceCard),
+                initialCandidates = retrieval.initialCandidates.map(::toSourceCard),
+                filteredCandidates = retrieval.filteredCandidates.map(::toSourceCard),
+                groundedAnswer = retrieval.grounding?.let { grounding ->
+                    GroundedAnswerPayload(
+                        answerText = fallbackAnswerText.orEmpty(),
+                        sources = grounding.sources,
+                        quotes = grounding.quotes,
+                        answerMode = if (grounding.isFallbackIDontKnow) {
+                            RagAnswerMode.FALLBACK_I_DONT_KNOW
+                        } else {
+                            RagAnswerMode.GROUNDED
+                        },
+                        pipelineMode = retrieval.debug.postProcessingMode,
+                        confidence = grounding.confidence,
+                        fallbackReason = grounding.fallbackReason,
+                        isFallbackIDontKnow = grounding.isFallbackIDontKnow
                     )
                 }
-            )
+            ),
+            fallbackAnswerText = fallbackAnswerText
+        )
+    }
+
+    private fun toSourceCard(chunk: com.example.aiadventchallenge.domain.model.RagContextChunk): RetrievalSourceCard {
+        return RetrievalSourceCard(
+            chunkId = chunk.chunkId,
+            source = chunk.source,
+            title = chunk.title,
+            relativePath = chunk.relativePath,
+            section = chunk.section,
+            finalRank = chunk.finalRank,
+            score = chunk.score,
+            semanticScore = chunk.semanticScore,
+            keywordScore = chunk.keywordScore,
+            rerankScore = chunk.rerankScore,
+            fullText = chunk.text,
+            filteredOut = chunk.filteredOut,
+            filterReason = chunk.filterReason,
+            explanation = chunk.explanation
         )
     }
 }

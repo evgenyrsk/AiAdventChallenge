@@ -4,6 +4,8 @@ import com.example.aiadventchallenge.domain.model.RagAnswerPolicy
 import com.example.aiadventchallenge.domain.model.RagContextChunk
 import com.example.aiadventchallenge.domain.model.RagPostProcessingMode
 import com.example.aiadventchallenge.domain.model.RagRetrievalDebug
+import com.example.aiadventchallenge.domain.model.RagConfidenceSummary
+import com.example.aiadventchallenge.domain.model.RagGrounding
 import com.example.aiadventchallenge.domain.model.RagRetrievalResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -28,9 +30,11 @@ class RagPromptBuilderTest {
             chunks = listOf(
                 RagContextChunk(
                     chunkId = "chunk-1",
+                    source = "fitness_knowledge",
                     title = "protein_guide.md",
                     relativePath = "nutrition/protein_guide.md",
                     section = "Practical intake ranges",
+                    finalRank = 1,
                     score = 0.913,
                     semanticScore = 0.88,
                     keywordScore = 1.0,
@@ -41,9 +45,11 @@ class RagPromptBuilderTest {
             finalCandidates = listOf(
                 RagContextChunk(
                     chunkId = "chunk-1",
+                    source = "fitness_knowledge",
                     title = "protein_guide.md",
                     relativePath = "nutrition/protein_guide.md",
                     section = "Practical intake ranges",
+                    finalRank = 1,
                     score = 0.913,
                     semanticScore = 0.88,
                     keywordScore = 1.0,
@@ -54,9 +60,11 @@ class RagPromptBuilderTest {
             filteredCandidates = listOf(
                 RagContextChunk(
                     chunkId = "chunk-2",
+                    source = "fitness_knowledge",
                     title = "faq.md",
                     relativePath = "faq/fitness_faq.md",
                     section = "General",
+                    finalRank = null,
                     score = 0.4,
                     semanticScore = 0.2,
                     keywordScore = 0.1,
@@ -72,10 +80,20 @@ class RagPromptBuilderTest {
                 finalTopK = 2,
                 similarityThreshold = 0.2,
                 postProcessingMode = RagPostProcessingMode.THRESHOLD_PLUS_RERANK,
+                rerankApplied = true,
                 fallbackApplied = false,
                 fallbackReason = null
             ),
-            contextEnvelope = "Envelope"
+            contextEnvelope = "Envelope",
+            grounding = RagGrounding(
+                sources = emptyList(),
+                quotes = emptyList(),
+                confidence = RagConfidenceSummary(
+                    answerable = true,
+                    minAnswerableChunks = 1,
+                    finalChunkCount = 1
+                )
+            )
         )
 
         val prompt = builder.build(
@@ -93,5 +111,6 @@ class RagPromptBuilderTest {
         assertEquals(2, prompt.retrievalSummary.selectedCount)
         assertEquals("protein_guide.md", prompt.retrievalSummary.chunks.first().title)
         assertEquals(4, prompt.retrievalSummary.topKBeforeFilter)
+        assertTrue(prompt.retrievalSummary.groundedAnswer != null)
     }
 }

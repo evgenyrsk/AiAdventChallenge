@@ -4,6 +4,7 @@ import com.example.mcp.server.documentindex.embedding.EmbeddingProvider
 import com.example.mcp.server.documentindex.embedding.HashingEmbeddingProvider
 import com.example.mcp.server.documentindex.index.SQLiteVectorIndexStorage
 import com.example.mcp.server.documentindex.index.VectorIndexStorage
+import com.example.mcp.server.documentindex.model.RetrievalConfidenceSummary
 import com.example.mcp.server.documentindex.model.RetrieveRelevantChunksRequest
 import com.example.mcp.server.documentindex.model.RetrieveRelevantChunksResult
 import com.example.mcp.server.documentindex.model.RetrievalDebugInfo
@@ -17,6 +18,8 @@ import com.example.mcp.server.documentindex.pipeline.DocumentIndexingPipeline
 class DocumentRetrievalService(
     private val embeddingProvider: EmbeddingProvider = HashingEmbeddingProvider(),
     private val postProcessor: RetrievalPostProcessor = DefaultRetrievalPostProcessor(),
+    private val answerabilityGate: AnswerabilityGate = AnswerabilityGate(),
+    private val evidenceAssembler: EvidenceAssembler = EvidenceAssembler(),
     private val indexStorage: VectorIndexStorage = SQLiteVectorIndexStorage(
         DocumentIndexingPipeline.defaultDatabasePath()
     )
@@ -76,14 +79,17 @@ class DocumentRetrievalService(
         val initialCandidates = searchResult.results.map { chunk ->
             RetrievedContextChunk(
                 chunkId = chunk.chunkId,
+                source = request.source,
                 title = chunk.title,
                 relativePath = chunk.relativePath,
                 section = chunk.section,
+                finalRank = null,
                 score = chunk.score,
                 semanticScore = chunk.semanticScore,
                 keywordScore = chunk.keywordScore,
                 rerankScore = null,
                 excerpt = chunk.text.take(280),
+                fullText = chunk.text,
                 filteredOut = false,
                 filterReason = null,
                 explanation = "Initial retrieval candidate"
@@ -104,7 +110,7 @@ class DocumentRetrievalService(
 
         postProcessingResult.finalCandidates.forEach { chunk ->
             val header = "[${chunk.title} | ${chunk.section} | score=${"%.3f".format(chunk.score)}]"
-            val fullText = searchResultById[chunk.chunkId]?.text ?: chunk.excerpt
+            val fullText = chunk.fullText.ifBlank { searchResultById[chunk.chunkId]?.text ?: chunk.excerpt }
             val block = "$header\n$fullText".trim()
             if (totalChars > 0 && totalChars + 2 + block.length > request.maxChars) {
                 return@forEach
@@ -121,7 +127,33 @@ class DocumentRetrievalService(
             append(contextParts.joinToString("\n\n"))
         }.trim()
 
-        return RetrieveRelevantChunksResult(
+        val debug = RetrievalDebugInfo(
+            originalQuery = request.originalQuery,
+            rewrittenQuery = request.rewrittenQuery,
+            effectiveQuery = effectiveQuery,
+            topKBeforeFilter = request.pipelineConfig.topKBeforeFilter,
+            finalTopK = request.pipelineConfig.finalTopK,
+            similarityThreshold = request.pipelineConfig.similarityThreshold,
+            postProcessingMode = request.pipelineConfig.postProcessingMode,
+            rewriteApplied = request.rewriteDebug?.rewriteApplied ?: false,
+            detectedIntent = request.rewriteDebug?.detectedIntent,
+            rewriteStrategy = request.rewriteDebug?.rewriteStrategy,
+            addedTerms = request.rewriteDebug?.addedTerms.orEmpty(),
+            removedPhrases = request.rewriteDebug?.removedPhrases.orEmpty(),
+            rerankProvider = postProcessingResult.rerankExecution.provider,
+            rerankModel = postProcessingResult.rerankExecution.model,
+            rerankApplied = postProcessingResult.rerankExecution.applied,
+            rerankInputCount = postProcessingResult.rerankExecution.inputCount,
+            rerankOutputCount = postProcessingResult.rerankExecution.outputCount,
+            rerankScoreThreshold = postProcessingResult.rerankExecution.scoreThreshold,
+            rerankTimeoutMs = postProcessingResult.rerankExecution.timeoutMs,
+            rerankFallbackUsed = postProcessingResult.rerankExecution.fallbackUsed,
+            rerankFallbackReason = postProcessingResult.rerankExecution.fallbackReason,
+            fallbackApplied = postProcessingResult.fallbackApplied,
+            fallbackReason = postProcessingResult.fallbackReason
+        )
+
+        val retrieval = RetrieveRelevantChunksResult(
             query = effectiveQuery,
             originalQuery = request.originalQuery,
             rewrittenQuery = request.rewrittenQuery,
@@ -136,25 +168,31 @@ class DocumentRetrievalService(
             initialCandidates = initialCandidates,
             finalCandidates = selected,
             filteredCandidates = postProcessingResult.filteredCandidates,
-            debug = RetrievalDebugInfo(
-                originalQuery = request.originalQuery,
-                rewrittenQuery = request.rewrittenQuery,
-                effectiveQuery = effectiveQuery,
-                topKBeforeFilter = request.pipelineConfig.topKBeforeFilter,
-                finalTopK = request.pipelineConfig.finalTopK,
-                similarityThreshold = request.pipelineConfig.similarityThreshold,
-                postProcessingMode = request.pipelineConfig.postProcessingMode,
-                rewriteApplied = request.rewriteDebug?.rewriteApplied ?: false,
-                detectedIntent = request.rewriteDebug?.detectedIntent,
-                rewriteStrategy = request.rewriteDebug?.rewriteStrategy,
-                addedTerms = request.rewriteDebug?.addedTerms.orEmpty(),
-                removedPhrases = request.rewriteDebug?.removedPhrases.orEmpty(),
-                fallbackApplied = postProcessingResult.fallbackApplied,
-                fallbackReason = postProcessingResult.fallbackReason
-            ),
+            debug = debug,
             contextEnvelope = envelope
         )
+        val confidence = answerabilityGate.evaluate(retrieval, request.pipelineConfig)
+        val grounding = buildGrounding(
+            request = request,
+            retrieval = retrieval,
+            confidence = confidence
+        )
+
+        return retrieval.copy(grounding = grounding)
     }
+
+    private fun buildGrounding(
+        request: RetrieveRelevantChunksRequest,
+        retrieval: RetrieveRelevantChunksResult,
+        confidence: RetrievalConfidenceSummary
+    ) = evidenceAssembler.assemble(
+        originalQuery = request.originalQuery,
+        effectiveQuery = request.effectiveQuery.ifBlank { request.query },
+        finalCandidates = retrieval.finalCandidates,
+        confidence = confidence,
+        fallbackReason = confidence.reason,
+        isFallbackIDontKnow = !confidence.answerable
+    )
 
     private fun diversify(
         ranked: List<RankedChunk>,

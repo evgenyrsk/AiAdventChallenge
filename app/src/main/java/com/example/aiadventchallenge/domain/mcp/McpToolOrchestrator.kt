@@ -1,5 +1,9 @@
 package com.example.aiadventchallenge.domain.mcp
 
+import com.example.aiadventchallenge.domain.model.GroundedAnswerPayload
+import com.example.aiadventchallenge.domain.model.GroundedQuote
+import com.example.aiadventchallenge.domain.model.GroundedSource
+import com.example.aiadventchallenge.domain.model.RagConfidenceSummary
 import com.example.aiadventchallenge.domain.model.mcp.CalculateNutritionParams
 
 /**
@@ -50,26 +54,47 @@ data class RetrievalSummary(
     val rewriteStrategy: String? = null,
     val addedTerms: List<String> = emptyList(),
     val removedPhrases: List<String> = emptyList(),
+    val rerankProvider: String? = null,
+    val rerankModel: String? = null,
+    val rerankApplied: Boolean = false,
+    val rerankInputCount: Int = 0,
+    val rerankOutputCount: Int = 0,
+    val rerankScoreThreshold: Double? = null,
+    val rerankTimeoutMs: Long? = null,
+    val rerankFallbackUsed: Boolean = false,
+    val rerankFallbackReason: String? = null,
     val fallbackApplied: Boolean = false,
     val fallbackReason: String? = null,
     val contextEnvelope: String,
     val chunks: List<RetrievalSourceCard>,
     val initialCandidates: List<RetrievalSourceCard> = emptyList(),
-    val filteredCandidates: List<RetrievalSourceCard> = emptyList()
+    val filteredCandidates: List<RetrievalSourceCard> = emptyList(),
+    val groundedAnswer: GroundedAnswerPayload? = null
 )
 
 data class RetrievalSourceCard(
     val chunkId: String = "",
+    val source: String = "",
     val title: String,
     val relativePath: String,
     val section: String,
+    val finalRank: Int? = null,
     val score: Double,
     val semanticScore: Double = 0.0,
     val keywordScore: Double = 0.0,
     val rerankScore: Double? = null,
+    val fullText: String? = null,
     val filteredOut: Boolean = false,
     val filterReason: String? = null,
     val explanation: String? = null
+)
+
+data class RetrievalGroundingCard(
+    val sources: List<GroundedSource> = emptyList(),
+    val quotes: List<GroundedQuote> = emptyList(),
+    val confidence: RagConfidenceSummary,
+    val fallbackReason: String? = null,
+    val isFallbackIDontKnow: Boolean = false
 )
 
 sealed class ValidationResult {

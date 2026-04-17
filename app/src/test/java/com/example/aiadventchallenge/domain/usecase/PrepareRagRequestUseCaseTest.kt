@@ -59,9 +59,11 @@ class PrepareRagRequestUseCaseTest {
                     chunks = listOf(
                         RagContextChunk(
                             chunkId = "chunk-1",
+                            source = "fitness_knowledge",
                             title = "protein_guide.md",
                             relativePath = "nutrition/protein_guide.md",
                             section = "Practical intake ranges",
+                            finalRank = 1,
                             score = 0.9,
                             semanticScore = 0.85,
                             keywordScore = 1.0,
@@ -147,6 +149,8 @@ class PrepareRagRequestUseCaseTest {
                 retrievalTopKBeforeFilter = 6,
                 retrievalTopKAfterFilter = 4,
                 similarityThreshold = 0.2,
+                minAnswerableChunks = 1,
+                allowAnswerWithRetrievalFallback = false,
                 maxChars = FitnessRagConfig.DEFAULT_MAX_CHARS,
                 perDocumentLimit = FitnessRagConfig.DEFAULT_PER_DOCUMENT_LIMIT,
                 fallbackOnEmptyPostProcessing = true
