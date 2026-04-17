@@ -4,6 +4,27 @@
 
 > локальный индекс документов с эмбеддингами + метаданные + сравнение 2 стратегий chunking
 
+## Grounded RAG focus
+
+В текущем demo дополнительно нужно показать два сценария:
+
+- normal grounded answer:
+  - `answer`
+  - `sources`
+  - `quotes`
+- anti-hallucination fallback:
+  - `Не знаю на основе найденного контекста.`
+  - `Уточни вопрос или сформулируй его иначе.`
+  - пустые `sources`
+  - пустые `quotes`
+
+В Android debug sheet теперь нужно отдельно открыть:
+
+- `Grounded Answer`
+- `Grounded Sources`
+- `Grounded Quotes`
+- confidence / fallback reason
+
 ## 1. Поднять MCP серверы
 
 ```bash
@@ -180,6 +201,7 @@ adb shell run-as com.example.aiadventchallenge sqlite3 databases/app_database \
 - `Сколько белка обычно рекомендуют человеку, который хочет сохранить мышцы при похудении?`
 - `Почему сон влияет на восстановление и контроль аппетита?`
 - `Почему жидкие калории могут мешать снижению веса?`
+- `Как принимать креатин моногидрат: нужна ли фаза загрузки и сколько граммов в день?` для принудительной проверки low-relevance fallback
 
 Что показать:
 
@@ -188,6 +210,7 @@ adb shell run-as com.example.aiadventchallenge sqlite3 databases/app_database \
 - `Knowledge Base Context` card
 - source / strategy / найденные chunks
 - title / section / score
+- для `q11` в `RAG Enhanced` показать `fallback mode`, пустые `Grounded Sources` и пустые `Grounded Quotes`
 
 Что сказать:
 
@@ -209,6 +232,7 @@ AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
 - сохраняет результаты в:
   - `output/fitness-rag-evaluation/results.json`
   - `output/fitness-rag-evaluation/report.md`
+- в текущем наборе 11 вопросов, где `q11` специально проверяет сценарий `не знаю` при слабой релевантности
 
 Что сказать:
 

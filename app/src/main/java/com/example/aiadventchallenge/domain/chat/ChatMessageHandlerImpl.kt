@@ -8,12 +8,14 @@ import com.example.aiadventchallenge.data.mcp.FitnessRagConfig
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
+import com.example.aiadventchallenge.domain.model.GroundedAnswerPayload
 
 import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
 import com.example.aiadventchallenge.domain.model.AnswerMode
+import com.example.aiadventchallenge.domain.model.RagAnswerMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -159,6 +161,7 @@ class ChatMessageHandlerImpl(
         val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())
         var apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
         var retrievalSummary: com.example.aiadventchallenge.domain.mcp.RetrievalSummary? = null
+        var fallbackAnswerText: String? = null
 
         if (answerMode == AnswerMode.RAG_BASIC || answerMode == AnswerMode.RAG_ENHANCED) {
             val ragConfig = when (answerMode) {
@@ -173,6 +176,7 @@ class ChatMessageHandlerImpl(
                 )
             }.onSuccess { preparedRagRequest ->
                 retrievalSummary = preparedRagRequest.retrievalSummary
+                fallbackAnswerText = preparedRagRequest.fallbackAnswerText
                 config = config.copy(
                     systemPrompt = config.systemPrompt + "\n\n" + preparedRagRequest.systemPromptSuffix
                 )
@@ -185,6 +189,39 @@ class ChatMessageHandlerImpl(
                 )
                 apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
             }
+        }
+
+        if (!fallbackAnswerText.isNullOrBlank()) {
+            val fallbackText = fallbackAnswerText!!.trim()
+            logLlmResponse(fallbackText, 0, fallbackText.length)
+
+            val aiMessage = createAiMessage(
+                content = fallbackText,
+                parentMessageId = parentMessageId,
+                activeBranchId = activeBranchId,
+                promptTokens = 0,
+                completionTokens = 0,
+                totalTokens = 0
+            )
+            chatRepository.insertMessage(aiMessage, activeBranchId, aiMessage.parentMessageId)
+
+            val updatedSummary = retrievalSummary?.let { summary ->
+                val grounded = summary.groundedAnswer
+                if (grounded != null) {
+                    summary.copy(
+                        groundedAnswer = grounded.copy(answerText = fallbackText)
+                    )
+                } else {
+                    summary
+                }
+            }
+
+            return ChatMessageResult.Success(
+                userMessage = null,
+                aiMessage = aiMessage,
+                aiResponse = fallbackText,
+                retrievalSummary = updatedSummary
+            )
         }
 
         return when (val result = agent.processRequestWithContextAndUsage(
@@ -213,12 +250,46 @@ class ChatMessageHandlerImpl(
                 )
                 
                 chatRepository.insertMessage(aiMessage, activeBranchId, aiMessage.parentMessageId)
+
+                val updatedSummary = retrievalSummary?.let { summary ->
+                    val grounded = summary.groundedAnswer
+                    if (grounded != null) {
+                        summary.copy(
+                            groundedAnswer = grounded.copy(
+                                answerText = aiResponseText,
+                                answerMode = if (grounded.isFallbackIDontKnow) {
+                                    RagAnswerMode.FALLBACK_I_DONT_KNOW
+                                } else {
+                                    RagAnswerMode.GROUNDED
+                                }
+                            )
+                        )
+                    } else if (summary.chunks.isNotEmpty()) {
+                        summary.copy(
+                            groundedAnswer = GroundedAnswerPayload(
+                                answerText = aiResponseText,
+                                sources = emptyList(),
+                                quotes = emptyList(),
+                                answerMode = RagAnswerMode.GROUNDED,
+                                pipelineMode = com.example.aiadventchallenge.domain.model.RagPostProcessingMode.valueOf(summary.postProcessingMode),
+                                confidence = com.example.aiadventchallenge.domain.model.RagConfidenceSummary(
+                                    answerable = true,
+                                    reason = null,
+                                    minAnswerableChunks = 1,
+                                    finalChunkCount = summary.chunks.size
+                                )
+                            )
+                        )
+                    } else {
+                        summary
+                    }
+                }
                 
                 ChatMessageResult.Success(
                     userMessage = null,
                     aiMessage = aiMessage,
                     aiResponse = aiResponseText,
-                    retrievalSummary = retrievalSummary
+                    retrievalSummary = updatedSummary
                 )
             }
             is ChatResult.Error -> {

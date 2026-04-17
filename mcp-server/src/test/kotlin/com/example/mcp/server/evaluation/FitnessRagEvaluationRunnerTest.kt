@@ -27,6 +27,7 @@ class FitnessRagEvaluationRunnerTest {
                 enhancedTopKBeforeFilter = 6,
                 enhancedTopKAfterFilter = 4,
                 enhancedSimilarityThreshold = 0.2,
+                rerankTimeoutMs = 3500,
                 maxChars = 2500,
                 perDocumentLimit = 1,
                 temperature = 0.2,
@@ -72,6 +73,7 @@ class FitnessRagEvaluationRunnerTest {
                     enhancedTopKBeforeFilter = 6,
                     enhancedTopKAfterFilter = 4,
                     enhancedSimilarityThreshold = 0.2,
+                    rerankTimeoutMs = 3500,
                     maxChars = 2500,
                     perDocumentLimit = 1,
                     temperature = 0.2,
@@ -126,6 +128,7 @@ class FitnessRagEvaluationRunnerTest {
                 enhancedTopKBeforeFilter = 6,
                 enhancedTopKAfterFilter = 4,
                 enhancedSimilarityThreshold = 0.2,
+                rerankTimeoutMs = 3500,
                 maxChars = 2500,
                 perDocumentLimit = 1,
                 temperature = 0.2,
@@ -162,6 +165,8 @@ class FitnessRagEvaluationRunnerTest {
                             rewriteStrategy = null,
                             addedTerms = emptyList(),
                             removedPhrases = emptyList(),
+                            rerankApplied = false,
+                            rerankScoreThreshold = null,
                             retrievalApplied = true,
                             selectedCount = 1,
                             sources = listOf(
@@ -172,6 +177,20 @@ class FitnessRagEvaluationRunnerTest {
                                     score = 0.91
                                 )
                             ),
+                            quotes = listOf(
+                                GroundedQuotePayload(
+                                    quotedText = "Для снижения веса важнее дефицит калорий.",
+                                    relativePath = "nutrition/calorie_balance.md",
+                                    section = "What matters most for fat loss",
+                                    chunkId = "chunk-1"
+                                )
+                            ),
+                            hasSources = true,
+                            hasQuotes = true,
+                            answerGroundedInQuotes = true,
+                            fallbackTriggered = false,
+                            fallbackExpected = false,
+                            fallbackAppropriate = true,
                             contextEnvelope = "Envelope"
                         ),
                         ragEnhanced = RagAnswerRecord(
@@ -191,6 +210,8 @@ class FitnessRagEvaluationRunnerTest {
                             rewriteStrategy = "INTENT_EXPANSION",
                             addedTerms = listOf("energy balance", "meal timing"),
                             removedPhrases = emptyList(),
+                            rerankApplied = true,
+                            rerankScoreThreshold = 0.2,
                             retrievalApplied = true,
                             selectedCount = 1,
                             sources = listOf(
@@ -201,6 +222,20 @@ class FitnessRagEvaluationRunnerTest {
                                     score = 0.95
                                 )
                             ),
+                            quotes = listOf(
+                                GroundedQuotePayload(
+                                    quotedText = "Для снижения веса важнее дефицит калорий.",
+                                    relativePath = "nutrition/calorie_balance.md",
+                                    section = "What matters most for fat loss",
+                                    chunkId = "chunk-1"
+                                )
+                            ),
+                            hasSources = true,
+                            hasQuotes = true,
+                            answerGroundedInQuotes = true,
+                            fallbackTriggered = false,
+                            fallbackExpected = false,
+                            fallbackAppropriate = true,
                             contextEnvelope = "Envelope"
                         ),
                         comparisonSummary = "RAG answer grounded in retrieved context"
@@ -219,6 +254,8 @@ class FitnessRagEvaluationRunnerTest {
             assertTrue(markdown.contains("Ответ с RAG enhanced"))
             assertTrue(markdown.contains("nutrition/calorie_balance.md"))
             assertTrue(markdown.contains("дефицит калорий energy balance meal timing время приема пищи"))
+            assertTrue(markdown.contains("hasSources"))
+            assertTrue(markdown.contains("RAG Enhanced Quotes"))
         } finally {
             tempDir.deleteRecursively()
         }

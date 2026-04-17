@@ -245,7 +245,15 @@ enum class RetrievalPostProcessingMode {
     NONE,
     THRESHOLD_ONLY,
     HEURISTIC_RERANK,
-    THRESHOLD_PLUS_RERANK
+    THRESHOLD_PLUS_RERANK,
+    MODEL_RERANK,
+    THRESHOLD_PLUS_MODEL_RERANK
+}
+
+@Serializable
+enum class RetrievalRerankFallbackPolicy {
+    HEURISTIC_THEN_RETRIEVAL,
+    RETRIEVAL_ONLY
 }
 
 @Serializable
@@ -256,7 +264,14 @@ data class RetrievalPipelineConfig(
     val topKBeforeFilter: Int = 5,
     val finalTopK: Int = 5,
     val similarityThreshold: Double? = null,
-    val fallbackOnEmptyPostProcessing: Boolean = true
+    val minAnswerableChunks: Int = 1,
+    val allowAnswerWithRetrievalFallback: Boolean = false,
+    val fallbackOnEmptyPostProcessing: Boolean = true,
+    val rerankEnabled: Boolean = false,
+    val rerankScoreThreshold: Double? = null,
+    val rerankTimeoutMs: Long = 3500,
+    val rerankFallbackPolicy: RetrievalRerankFallbackPolicy = RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL,
+    val queryContext: String? = null
 )
 
 @Serializable
@@ -291,17 +306,67 @@ data class RetrieveRelevantChunksRequest(
 @Serializable
 data class RetrievedContextChunk(
     val chunkId: String,
+    val source: String,
     val title: String,
     val relativePath: String,
     val section: String,
+    val finalRank: Int? = null,
     val score: Double,
     val semanticScore: Double,
     val keywordScore: Double,
     val rerankScore: Double? = null,
     val excerpt: String,
+    val fullText: String = "",
     val filteredOut: Boolean = false,
     val filterReason: String? = null,
     val explanation: String? = null
+)
+
+@Serializable
+data class GroundedSource(
+    val source: String? = null,
+    val title: String? = null,
+    val section: String? = null,
+    val chunkId: String? = null,
+    val similarityScore: Double? = null,
+    val rerankScore: Double? = null,
+    val finalRank: Int? = null,
+    val relativePath: String? = null
+)
+
+@Serializable
+data class GroundedQuote(
+    val quotedText: String,
+    val source: String? = null,
+    val title: String? = null,
+    val section: String? = null,
+    val chunkId: String? = null,
+    val relativePath: String? = null,
+    val quoteRank: Int? = null,
+    val originFinalRank: Int? = null
+)
+
+@Serializable
+data class RetrievalConfidenceSummary(
+    val answerable: Boolean,
+    val reason: String? = null,
+    val minAnswerableChunks: Int,
+    val finalChunkCount: Int,
+    val topSimilarityScore: Double? = null,
+    val topSemanticScore: Double? = null,
+    val topRerankScore: Double? = null,
+    val similarityThreshold: Double? = null,
+    val rerankThreshold: Double? = null,
+    val retrievalFallbackApplied: Boolean = false
+)
+
+@Serializable
+data class RetrievalGrounding(
+    val sources: List<GroundedSource> = emptyList(),
+    val quotes: List<GroundedQuote> = emptyList(),
+    val confidence: RetrievalConfidenceSummary,
+    val fallbackReason: String? = null,
+    val isFallbackIDontKnow: Boolean = false
 )
 
 @Serializable
@@ -318,6 +383,15 @@ data class RetrievalDebugInfo(
     val rewriteStrategy: String? = null,
     val addedTerms: List<String> = emptyList(),
     val removedPhrases: List<String> = emptyList(),
+    val rerankProvider: String? = null,
+    val rerankModel: String? = null,
+    val rerankApplied: Boolean = false,
+    val rerankInputCount: Int = 0,
+    val rerankOutputCount: Int = 0,
+    val rerankScoreThreshold: Double? = null,
+    val rerankTimeoutMs: Long? = null,
+    val rerankFallbackUsed: Boolean = false,
+    val rerankFallbackReason: String? = null,
     val fallbackApplied: Boolean = false,
     val fallbackReason: String? = null
 )
@@ -339,7 +413,8 @@ data class RetrieveRelevantChunksResult(
     val finalCandidates: List<RetrievedContextChunk> = emptyList(),
     val filteredCandidates: List<RetrievedContextChunk> = emptyList(),
     val debug: RetrievalDebugInfo,
-    val contextEnvelope: String
+    val contextEnvelope: String,
+    val grounding: RetrievalGrounding? = null
 )
 
 @Serializable
@@ -369,7 +444,8 @@ data class AnswerWithRetrievalResult(
     val systemPrompt: String,
     val userPrompt: String,
     val answerPrompt: String,
-    val retrievalApplied: Boolean
+    val retrievalApplied: Boolean,
+    val fallbackAnswer: String? = null
 )
 
 data class StoredIndexedChunk(

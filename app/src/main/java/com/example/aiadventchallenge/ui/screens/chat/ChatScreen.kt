@@ -654,6 +654,8 @@ private fun buildRetrievalPreviewText(summary: RetrievalSummary): String {
         append(" ${summary.finalTopK}/${summary.topKBeforeFilter} chunks")
         append(" • ${summary.postProcessingMode}")
         append(" • $primarySource")
+        summary.groundedAnswer?.quotes?.takeIf { it.isNotEmpty() }?.let { append(" • quotes=${it.size}") }
+        summary.groundedAnswer?.takeIf { it.isFallbackIDontKnow }?.let { append(" • no-answer") }
         if (summary.fallbackApplied) {
             append(" • fallback")
         }
@@ -712,6 +714,59 @@ private fun RetrievalDetailsSheet(
             RetrievalDetailText("Threshold: ${summary.similarityThreshold?.let { "%.2f".format(it) } ?: "none"}")
             if (summary.fallbackApplied) {
                 RetrievalDetailText("Fallback: ${summary.fallbackReason ?: "applied"}")
+            }
+        }
+
+        summary.groundedAnswer?.let { grounded ->
+            RetrievalDetailsSection(title = "Grounded Answer") {
+                RetrievalDetailText("Mode: ${grounded.answerMode}")
+                RetrievalDetailText("Answerable: ${if (grounded.confidence.answerable) "yes" else "no"}")
+                grounded.fallbackReason?.let { RetrievalDetailText("Fallback reason: $it") }
+                RetrievalDetailText(
+                    "Confidence: chunks=${grounded.confidence.finalChunkCount}, " +
+                        "topSemantic=${grounded.confidence.topSemanticScore?.let { "%.2f".format(it) } ?: "n/a"}, " +
+                        "topRerank=${grounded.confidence.topRerankScore?.let { "%.2f".format(it) } ?: "n/a"}"
+                )
+                if (grounded.answerText.isNotBlank()) {
+                    RetrievalDetailText("Answer: ${grounded.answerText}")
+                }
+            }
+
+            RetrievalDetailsSection(title = "Grounded Sources") {
+                if (grounded.sources.isEmpty()) {
+                    RetrievalDetailText("Нет источников")
+                } else {
+                    grounded.sources.forEach { source ->
+                        RetrievalDetailText(
+                            listOfNotNull(
+                                source.title ?: source.relativePath ?: source.source,
+                                source.section,
+                                source.chunkId?.let { "chunk=$it" },
+                                source.similarityScore?.let { "score=${"%.3f".format(it)}" },
+                                source.rerankScore?.let { "rerank=${"%.3f".format(it)}" }
+                            ).joinToString(" • ")
+                        )
+                    }
+                }
+            }
+
+            RetrievalDetailsSection(title = "Grounded Quotes") {
+                if (grounded.quotes.isEmpty()) {
+                    RetrievalDetailText("Нет цитат")
+                } else {
+                    grounded.quotes.forEach { quote ->
+                        RetrievalDetailText(
+                            "“${quote.quotedText}”"
+                        )
+                        RetrievalDetailText(
+                            listOfNotNull(
+                                quote.title ?: quote.relativePath ?: quote.source,
+                                quote.section,
+                                quote.chunkId?.let { "chunk=$it" }
+                            ).joinToString(" • ")
+                        )
+                    }
+                }
             }
         }
 
