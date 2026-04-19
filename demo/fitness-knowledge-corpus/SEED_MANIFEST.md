@@ -1,6 +1,7 @@
 # Fitness Knowledge Seed Manifest
 
-Этот корпус является явным seed-набором документов для RAG-демо фитнес-ассистента.
+Этот corpus содержит явный seed-набор документов для RAG-демо фитнес-ассистента.
+Индексируемой knowledge base считается только каталог `content/`.
 
 ## Назначение
 
@@ -10,15 +11,15 @@
 
 ## Канонические документы для RAG v1
 
-- `nutrition/nutrition_basics.md`
-- `nutrition/protein_guide.md`
-- `nutrition/calorie_balance.md`
-- `training/beginner_strength_training.md`
-- `training/recovery_sleep_steps.md`
-- `nutrition/fat_loss_myths.md`
-- `nutrition/muscle_gain_basics.md`
-- `training/workout_frequency.md`
-- `nutrition/hydration_and_habits.md`
-- `faq/fitness_faq.md`
+- `content/nutrition/nutrition_basics.md`
+- `content/nutrition/protein_guide.md`
+- `content/nutrition/calorie_balance.md`
+- `content/training/beginner_strength_training.md`
+- `content/training/recovery_sleep_steps.md`
+- `content/nutrition/fat_loss_myths.md`
+- `content/nutrition/muscle_gain_basics.md`
+- `content/training/workout_frequency.md`
+- `content/nutrition/hydration_and_habits.md`
+- `content/faq/fitness_faq.md`
 
 Документы являются статическими seed-файлами, чтобы corpus был прозрачен, читаем в git и воспроизводим при локальной пересборке индекса.

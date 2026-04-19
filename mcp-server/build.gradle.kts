@@ -15,6 +15,7 @@ dependencies {
     implementation("org.apache.pdfbox:pdfbox:2.0.30")
 
     testImplementation(kotlin("test"))
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 }
 
 tasks.register("run", JavaExec::class) {
@@ -100,4 +101,11 @@ tasks.register("runFitnessRagEvaluation", JavaExec::class) {
     description = "Run plain LLM vs RAG evaluation for the fitness knowledge base"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.example.mcp.server.evaluation.FitnessRagEvaluationRunnerKt")
+}
+
+tasks.register("runFitnessLongDialogEvaluation", JavaExec::class) {
+    group = "application"
+    description = "Run long multi-turn production-like RAG evaluation with task memory"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.example.mcp.server.evaluation.FitnessLongDialogEvaluationRunnerKt")
 }

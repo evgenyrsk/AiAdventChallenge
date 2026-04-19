@@ -5,11 +5,13 @@ import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.model.ChatBranch
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.repository.BranchRepository
+import com.example.aiadventchallenge.domain.repository.TaskStateRepository
 import com.example.aiadventchallenge.ui.screens.chat.BranchUiModel
 
 class BranchOrchestratorImpl(
     private val branchRepository: BranchRepository,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val taskStateRepository: TaskStateRepository
 ) : BranchOrchestrator {
     
     private val TAG = "BranchOrchestrator"
@@ -50,6 +52,7 @@ class BranchOrchestratorImpl(
         )
         
         branchRepository.createBranch(newBranch)
+        taskStateRepository.copyTaskState(fromBranchId = activeBranchId, toBranchId = newBranchId)
         Log.d(TAG, "Branch created successfully")
         
         // Переключаемся на новую ветку если нужно
@@ -81,6 +84,7 @@ class BranchOrchestratorImpl(
         Log.d(TAG, "Branch ID: $branchId")
         
         branchRepository.deleteBranch(branchId)
+        taskStateRepository.deleteByBranch(branchId)
         Log.d(TAG, "Branch deleted successfully")
         Log.d(TAG, "=== Branch Deleted ===\n")
     }

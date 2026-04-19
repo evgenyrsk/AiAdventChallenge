@@ -23,7 +23,28 @@
 - `Grounded Answer`
 - `Grounded Sources`
 - `Grounded Quotes`
+- `Task Memory`
 - confidence / fallback reason
+
+Для production-like multi-turn demo дополнительно использовать:
+
+- `docs/FITNESS_LONG_DIALOG_SCENARIOS.md`
+- `docs/FITNESS_TASK_MEMORY_NOTES.md`
+- `docs/FITNESS_PRODUCTION_CHAT_FLOW.md`
+
+Для автоматического прогона без Android UI можно показать:
+
+```bash
+AI_API_KEY=... ./gradlew :mcp-server:runFitnessLongDialogEvaluation
+```
+
+Что это доказывает:
+
+- 2 длинных сценария выполняются последовательно
+- `task memory` обновляется на каждом ходе
+- retrieval query учитывает цель и ограничения
+- grounded answers продолжают давать `sources`
+- генерируется demo-friendly Markdown report
 
 ## 1. Поднять MCP серверы
 
@@ -138,7 +159,7 @@ curl -s http://localhost:8084 \
     "method":"compare_chunking_strategies",
     "params":{
       "source":"fitness_knowledge",
-      "path":"'"$(pwd)"'/demo/fitness-knowledge-corpus"
+      "path":"'"$(pwd)"'/demo/fitness-knowledge-corpus/content"
     }
   }'
 ```

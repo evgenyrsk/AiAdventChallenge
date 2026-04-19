@@ -4,7 +4,9 @@ import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.AnswerMode
+import com.example.aiadventchallenge.domain.model.PreparedRagRequest
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
+import com.example.aiadventchallenge.rag.memory.ConversationTaskState
 
 /**
  * Обработчик сообщений чата.
@@ -47,7 +49,8 @@ interface ChatMessageHandler {
         activeBranchId: String,
         parentMessageId: String?,
         mcpContext: String?,
-        answerMode: AnswerMode = AnswerMode.PLAIN_LLM
+        answerMode: AnswerMode = AnswerMode.PLAIN_LLM,
+        preparedRagRequest: PreparedRagRequest? = null
     ): ChatMessageResult
     
     suspend fun handleSystemPrompt(systemPrompt: String): SystemPromptResult
@@ -58,7 +61,8 @@ sealed class ChatMessageResult {
         val userMessage: ChatMessage?,
         val aiMessage: ChatMessage?,
         val aiResponse: String,
-        val retrievalSummary: RetrievalSummary? = null
+        val retrievalSummary: RetrievalSummary? = null,
+        val taskStateSnapshot: ConversationTaskState? = null
     ) : ChatMessageResult()
     
     data class Error(

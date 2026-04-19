@@ -1,6 +1,7 @@
 package com.example.aiadventchallenge.domain.model
 
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
+import com.example.aiadventchallenge.rag.memory.RagConversationContext
 import com.example.aiadventchallenge.rag.rewrite.RewriteResult
 
 enum class RagAnswerPolicy {
@@ -70,7 +71,10 @@ data class RagRetrievalRequest(
     val rewrittenQuery: String? = null,
     val effectiveQuery: String,
     val rewriteResult: RewriteResult? = null,
-    val config: RagPipelineConfig
+    val config: RagPipelineConfig,
+    val conversationGoal: String? = null,
+    val retrievalHints: List<String> = emptyList(),
+    val memorySummary: String? = null
 )
 
 data class RagRetrievalDebug(
@@ -173,5 +177,6 @@ data class PreparedRagRequest(
     val systemPromptSuffix: String,
     val userPrompt: String,
     val retrievalSummary: RetrievalSummary,
-    val fallbackAnswerText: String? = null
+    val fallbackAnswerText: String? = null,
+    val conversationContextBlock: String? = null
 )

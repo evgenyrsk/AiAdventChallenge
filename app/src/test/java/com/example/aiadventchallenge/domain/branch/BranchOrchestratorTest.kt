@@ -1,15 +1,21 @@
 package com.example.aiadventchallenge.domain.branch
 
+import android.util.Log
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.model.ChatBranch
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.repository.BranchRepository
+import com.example.aiadventchallenge.domain.repository.TaskStateRepository
 import com.example.aiadventchallenge.ui.screens.chat.BranchUiModel
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -20,6 +26,7 @@ class BranchOrchestratorTest {
     
     private lateinit var branchRepository: BranchRepository
     private lateinit var chatRepository: ChatRepository
+    private lateinit var taskStateRepository: TaskStateRepository
     private lateinit var orchestrator: BranchOrchestratorImpl
     
     private val testBranches = listOf(
@@ -60,9 +67,20 @@ class BranchOrchestratorTest {
     
     @Before
     fun setup() {
+        mockkStatic(Log::class)
+        every { Log.d(any<String>(), any<String>()) } returns 0
+        every { Log.w(any<String>(), any<String>()) } returns 0
+        every { Log.e(any<String>(), any<String>()) } returns 0
+        every { Log.e(any<String>(), any<String>(), any()) } returns 0
         branchRepository = mockk(relaxed = true)
         chatRepository = mockk(relaxed = true)
-        orchestrator = BranchOrchestratorImpl(branchRepository, chatRepository)
+        taskStateRepository = mockk(relaxed = true)
+        orchestrator = BranchOrchestratorImpl(branchRepository, chatRepository, taskStateRepository)
+    }
+
+    @After
+    fun tearDown() {
+        unmockkStatic(Log::class)
     }
     
     @Test
@@ -86,6 +104,7 @@ class BranchOrchestratorTest {
         
         coVerify(exactly = 1) { branchRepository.createBranch(any()) }
         coVerify(exactly = 1) { branchRepository.setActiveBranchId(any()) }
+        coVerify(exactly = 1) { taskStateRepository.copyTaskState("main", any()) }
     }
     
     @Test
@@ -128,6 +147,7 @@ class BranchOrchestratorTest {
         orchestrator.deleteBranch("branch_1")
         
         coVerify(exactly = 1) { branchRepository.deleteBranch("branch_1") }
+        coVerify(exactly = 1) { taskStateRepository.deleteByBranch("branch_1") }
     }
     
     @Test

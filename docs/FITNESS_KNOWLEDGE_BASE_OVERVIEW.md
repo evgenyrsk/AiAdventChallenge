@@ -2,9 +2,11 @@
 
 ## Где лежит база знаний
 
-Основной корпус для RAG находится в `demo/fitness-knowledge-corpus/`.
+Индексируемая knowledge base для RAG находится в `demo/fitness-knowledge-corpus/content/`.
 
 Рекомендуемый source для индексации: `fitness_knowledge`.
+
+Structured fixtures и навигационные файлы живут рядом в `demo/fitness-knowledge-corpus/`, но не считаются частью retrieval corpus.
 
 ## Что входит в corpus v1
 
@@ -19,16 +21,16 @@
 
 ## Канонические документы
 
-- `nutrition/nutrition_basics.md`
-- `nutrition/protein_guide.md`
-- `nutrition/calorie_balance.md`
-- `training/beginner_strength_training.md`
-- `training/recovery_sleep_steps.md`
-- `nutrition/fat_loss_myths.md`
-- `nutrition/muscle_gain_basics.md`
-- `training/workout_frequency.md`
-- `nutrition/hydration_and_habits.md`
-- `faq/fitness_faq.md`
+- `content/nutrition/nutrition_basics.md`
+- `content/nutrition/protein_guide.md`
+- `content/nutrition/calorie_balance.md`
+- `content/training/beginner_strength_training.md`
+- `content/training/recovery_sleep_steps.md`
+- `content/nutrition/fat_loss_myths.md`
+- `content/nutrition/muscle_gain_basics.md`
+- `content/training/workout_frequency.md`
+- `content/nutrition/hydration_and_habits.md`
+- `content/faq/fitness_faq.md`
 
 ## Почему corpus подходит для RAG
 
@@ -46,5 +48,5 @@ bash scripts/reindex-fitness-knowledge.sh
 или
 
 ```bash
-bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus fitness_knowledge
+bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus/content fitness_knowledge
 ```

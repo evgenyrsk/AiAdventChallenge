@@ -7,6 +7,8 @@ import com.example.aiadventchallenge.domain.model.PreparedRagRequest
 import com.example.aiadventchallenge.domain.model.RagAnswerMode
 import com.example.aiadventchallenge.domain.model.RagAnswerPolicy
 import com.example.aiadventchallenge.domain.model.RagRetrievalResult
+import com.example.aiadventchallenge.rag.memory.RagConversationContext
+import com.example.aiadventchallenge.rag.memory.TaskMemoryRagSupport
 
 /**
  * Builds the augmented prompt for RAG mode without coupling retrieval to UI or transport.
@@ -16,8 +18,11 @@ class RagPromptBuilder {
     fun build(
         question: String,
         retrieval: RagRetrievalResult,
-        policy: RagAnswerPolicy = RagAnswerPolicy.STRICT
+        policy: RagAnswerPolicy = RagAnswerPolicy.STRICT,
+        conversationContext: RagConversationContext? = null
     ): PreparedRagRequest {
+        val conversationTaskBlock = TaskMemoryRagSupport.buildPromptBlock(conversationContext)
+
         val policyInstruction = when (policy) {
             RagAnswerPolicy.STRICT -> {
                 "Отвечай только на основе retrieved context. Если контекста недостаточно, прямо скажи об этом и не додумывай факты."
@@ -33,12 +38,18 @@ class RagPromptBuilder {
             appendLine(policyInstruction)
             appendLine("Отвечай только по найденному контексту.")
             appendLine("Не придумывай источники, секции, цитаты или факты вне retrieved context.")
+            appendLine("Task memory помогает понять цель и ограничения диалога, но не является доказательной базой.")
             appendLine("Приложение само прикрепит sources и quotes детерминированно, поэтому сгенерируй только answerText.")
         }.trim()
 
         val userPrompt = buildString {
             appendLine("Вопрос пользователя:")
             appendLine(question)
+            conversationTaskBlock?.let {
+                appendLine()
+                appendLine("Conversation Task State:")
+                appendLine(it)
+            }
             retrieval.rewrittenQuery?.let {
                 appendLine()
                 appendLine("Rewritten retrieval query:")
@@ -109,7 +120,8 @@ class RagPromptBuilder {
                     )
                 }
             ),
-            fallbackAnswerText = fallbackAnswerText
+            fallbackAnswerText = fallbackAnswerText,
+            conversationContextBlock = conversationTaskBlock
         )
     }
 

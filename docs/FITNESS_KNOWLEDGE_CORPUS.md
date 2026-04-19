@@ -10,17 +10,24 @@
 
 - соответствует домену приложения: фитнес, питание, восстановление
 - помогает нагляднее показать ценность retrieval в Android app
-- включает markdown, text и code
+- indexable knowledge docs теперь отделены от fixtures и служебных материалов
 - хорошо подходит для сравнения chunking и проверки metadata
 
 ## Рекомендуемая команда индексации
 
 ```bash
-bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus local_docs
+bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus/content fitness_knowledge
 ```
 
 Скрипт сам приводит путь корпуса к абсолютному, поэтому пример работает независимо от того,
 из какого подпроекта был запущен document index server.
+
+## Layout
+
+- `content/` — каноническая knowledge base для индексации
+- `fixtures/` — structured evaluation assets для runner'ов
+- `support/` — corpus-adjacent материалы, которые не должны попадать в retrieval index
+- root-level `README.md` / `SEED_MANIFEST.md` — навигация и описание структуры, а не knowledge source
 
 ## Подходящие demo-вопросы
 

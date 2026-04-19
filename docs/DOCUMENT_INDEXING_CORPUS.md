@@ -6,7 +6,7 @@
 - все файлы в `docs/`
 - исходники Kotlin в `mcp-server/src/main/kotlin/`
 - `demo/document-indexing-corpus/` для технических retrieval-демо
-- `demo/fitness-knowledge-corpus/` для retrieval-демо в фитнес-домене
+- `demo/fitness-knowledge-corpus/content/` для retrieval-демо в фитнес-домене
 
 Дополнительное расширение корпуса:
 
@@ -43,4 +43,4 @@
 - техническое/архитектурное демо:
   - `demo/document-indexing-corpus/`
 - продуктовое/фитнес-демо:
-  - `demo/fitness-knowledge-corpus/`
+  - `demo/fitness-knowledge-corpus/content/`

@@ -37,7 +37,7 @@ bash scripts/document-indexing-smoke.sh demo/document-indexing-corpus local_docs
 Для fitness-specific demo используй:
 
 ```bash
-bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus local_docs
+bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus/content local_docs
 ```
 
 Что проговорить:

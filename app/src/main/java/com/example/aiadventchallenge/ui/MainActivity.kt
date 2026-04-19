@@ -15,6 +15,7 @@ import com.example.aiadventchallenge.data.repository.ChatSettingsRepository as D
 import com.example.aiadventchallenge.data.repository.FactRepositoryImpl
 import com.example.aiadventchallenge.data.repository.BranchRepositoryImpl
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
+import com.example.aiadventchallenge.data.repository.TaskStateRepositoryImpl
 import com.example.aiadventchallenge.di.AppDependencies
 import com.example.aiadventchallenge.ui.screens.chat.ChatScreen
 import com.example.aiadventchallenge.ui.screens.chat.ChatViewModel
@@ -25,12 +26,15 @@ import com.example.aiadventchallenge.domain.repository.FactRepository
 import com.example.aiadventchallenge.domain.repository.BranchRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.AiRepository
+import com.example.aiadventchallenge.domain.repository.TaskStateRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
 import com.example.aiadventchallenge.domain.chat.ChatMessageHandlerImpl
 import com.example.aiadventchallenge.domain.branch.BranchOrchestrator
 import com.example.aiadventchallenge.domain.branch.BranchOrchestratorImpl
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
+import com.example.aiadventchallenge.domain.usecase.ProcessChatTurnUseCase
+import com.example.aiadventchallenge.rag.memory.TaskStateUpdater
 import com.example.aiadventchallenge.ui.theme.AiAdventChallengeTheme
 
 class MainActivity : ComponentActivity() {
@@ -40,10 +44,12 @@ class MainActivity : ComponentActivity() {
     private val chatSettingsRepository by lazy { DataChatSettingsRepository(database.chatSettingsDao()) }
     private val factRepository by lazy { FactRepositoryImpl(database.factDao()) }
     private val branchRepository by lazy { BranchRepositoryImpl(database.branchDao()) }
+    private val taskStateRepository by lazy { TaskStateRepositoryImpl(database.conversationTaskStateDao()) }
     private val aiRequestRepository by lazy { AiRequestRepository(database.aiRequestDao()) }
     private val factExtractor by lazy { FactExtractor(AppDependencies.repository) }
     private val contextStrategyFactory by lazy { ContextStrategyFactory(factRepository, branchRepository, factExtractor, chatRepository) }
     private val fitnessProfileManager by lazy { FitnessProfileManager(chatSettingsRepository) }
+    private val taskStateUpdater by lazy { TaskStateUpdater() }
     private val chatMessageHandler by lazy {
         ChatMessageHandlerImpl(
             chatRepository = chatRepository,
@@ -56,11 +62,22 @@ class MainActivity : ComponentActivity() {
     private val branchOrchestrator by lazy {
         BranchOrchestratorImpl(
             branchRepository = branchRepository,
-            chatRepository = chatRepository
+            chatRepository = chatRepository,
+            taskStateRepository = taskStateRepository
         )
     }
     private val mcpToolOrchestrator by lazy {
         AppDependencies.multiServerOrchestrator
+    }
+    private val processChatTurnUseCase by lazy {
+        ProcessChatTurnUseCase(
+            chatRepository = chatRepository,
+            branchRepository = branchRepository,
+            taskStateRepository = taskStateRepository,
+            taskStateUpdater = taskStateUpdater,
+            chatMessageHandler = chatMessageHandler,
+            prepareRagRequestUseCase = AppDependencies.prepareRagRequestUseCase
+        )
     }
 
     private val chatViewModel: ChatViewModel by viewModels {
@@ -69,11 +86,13 @@ class MainActivity : ComponentActivity() {
             chatSettingsRepository,
             contextStrategyFactory,
             branchRepository,
+            taskStateRepository,
             aiRequestRepository,
             fitnessProfileManager,
             chatMessageHandler,
             branchOrchestrator,
             mcpToolOrchestrator,
+            processChatTurnUseCase,
         )
     }
 
