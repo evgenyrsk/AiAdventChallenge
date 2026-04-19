@@ -51,7 +51,10 @@ class McpRagRetriever(
                     "rerankScoreThreshold" to request.config.rerankScoreThreshold,
                     "rerankTimeoutMs" to request.config.rerankTimeoutMs,
                     "rerankFallbackPolicy" to request.config.rerankFallbackPolicy.name.lowercase(),
-                    "queryContext" to request.config.queryContext,
+                    "queryContext" to (request.memorySummary ?: request.config.queryContext),
+                    "conversationGoal" to request.conversationGoal,
+                    "retrievalHints" to request.retrievalHints,
+                    "memorySummary" to request.memorySummary,
                     "rewriteDebug" to request.rewriteResult?.let { rewrite ->
                         mapOf(
                             "rewriteApplied" to rewrite.applied,

@@ -79,6 +79,7 @@ import com.example.aiadventchallenge.ui.screens.chat.components.CreateBranchDial
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchStartDivider
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchIndicatorBadge
 import com.example.aiadventchallenge.ui.screens.chat.components.BranchInputHint
+import com.example.aiadventchallenge.rag.memory.ConversationTaskState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -439,6 +440,7 @@ fun ChatScreen(
             ) {
                 RetrievalDetailsSheet(
                     summary = chatUiState.latestRetrievalSummary!!,
+                    taskState = chatUiState.latestTaskState,
                     onClose = { showRetrievalDetails = false },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -665,6 +667,7 @@ private fun buildRetrievalPreviewText(summary: RetrievalSummary): String {
 @Composable
 private fun RetrievalDetailsSheet(
     summary: RetrievalSummary,
+    taskState: ConversationTaskState?,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -714,6 +717,37 @@ private fun RetrievalDetailsSheet(
             RetrievalDetailText("Threshold: ${summary.similarityThreshold?.let { "%.2f".format(it) } ?: "none"}")
             if (summary.fallbackApplied) {
                 RetrievalDetailText("Fallback: ${summary.fallbackReason ?: "applied"}")
+            }
+        }
+
+        taskState?.let { state ->
+            RetrievalDetailsSection(title = "Task Memory") {
+                RetrievalDetailText("Goal: ${state.dialogGoal ?: "не зафиксирована"}")
+                RetrievalDetailText(
+                    "Constraints: ${
+                        state.resolvedConstraints.takeIf { it.isNotEmpty() }?.joinToString("; ")
+                            ?: "нет"
+                    }"
+                )
+                RetrievalDetailText(
+                    "Clarifications: ${
+                        state.userClarifications.takeIf { it.isNotEmpty() }?.joinToString("; ")
+                            ?: "нет"
+                    }"
+                )
+                RetrievalDetailText(
+                    "Open questions: ${
+                        state.openQuestions.takeIf { it.isNotEmpty() }?.joinToString("; ")
+                            ?: "нет"
+                    }"
+                )
+                state.definedTerms.takeIf { it.isNotEmpty() }?.let { terms ->
+                    RetrievalDetailText(
+                        "Terms: ${terms.joinToString("; ") { "${it.term}=${it.meaning}" }}"
+                    )
+                }
+                RetrievalDetailText("Summary: ${state.latestSummary ?: "нет"}")
+                RetrievalDetailText("Updated at: ${state.updatedAt}")
             }
         }
 

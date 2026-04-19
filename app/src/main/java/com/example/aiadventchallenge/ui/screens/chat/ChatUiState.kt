@@ -3,6 +3,7 @@ package com.example.aiadventchallenge.ui.screens.chat
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
 import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
+import com.example.aiadventchallenge.rag.memory.ConversationTaskState
 
 data class ChatUiState(
     val isLoading: Boolean = false,
@@ -27,7 +28,8 @@ data class ChatUiState(
 
     val fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE,
     val answerMode: AnswerMode = AnswerMode.PLAIN_LLM,
-    val latestRetrievalSummary: RetrievalSummary? = null
+    val latestRetrievalSummary: RetrievalSummary? = null,
+    val latestTaskState: ConversationTaskState? = null
 ) {
     val hasMultipleBranches: Boolean
         get() = availableBranches.size > 1

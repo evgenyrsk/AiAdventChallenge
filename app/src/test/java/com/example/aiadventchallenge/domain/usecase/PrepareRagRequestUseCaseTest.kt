@@ -11,6 +11,8 @@ import com.example.aiadventchallenge.domain.model.RagRetrievalResult
 import com.example.aiadventchallenge.domain.rag.DefaultQueryRewriter
 import com.example.aiadventchallenge.domain.rag.RagPromptBuilder
 import com.example.aiadventchallenge.domain.rag.RagRetriever
+import com.example.aiadventchallenge.rag.memory.ConversationTaskState
+import com.example.aiadventchallenge.rag.memory.RagConversationContext
 import com.example.aiadventchallenge.rag.rewrite.RewriteIntent
 import io.mockk.every
 import io.mockk.mockkStatic
@@ -160,5 +162,63 @@ class PrepareRagRequestUseCaseTest {
         assertEquals("Подскажи пожалуйста, почему сон влияет на восстановление и контроль аппетита?", capturedRequest?.originalQuery)
         assertTrue(capturedRequest?.rewrittenQuery?.contains("сон восстановление аппетит", ignoreCase = true) == true)
         assertEquals(RewriteIntent.SLEEP_RECOVERY_APPETITE, capturedRequest?.rewriteResult?.detectedIntent)
+    }
+
+    @Test
+    fun `use case includes task state in retrieval input and prompt`() = runTest {
+        var capturedRequest: RagRetrievalRequest? = null
+        val fakeRetriever = object : RagRetriever {
+            override suspend fun retrieve(request: RagRetrievalRequest): RagRetrievalResult {
+                capturedRequest = request
+                return RagRetrievalResult(
+                    query = request.effectiveQuery,
+                    originalQuery = request.originalQuery,
+                    rewrittenQuery = request.rewrittenQuery,
+                    effectiveQuery = request.effectiveQuery,
+                    source = request.config.source,
+                    strategy = request.config.strategy,
+                    selectedCount = 1,
+                    totalChars = 64,
+                    contextText = "Контекст по белку и дефициту",
+                    chunks = emptyList(),
+                    initialCandidates = emptyList(),
+                    finalCandidates = emptyList(),
+                    filteredCandidates = emptyList(),
+                    debug = RagRetrievalDebug(
+                        topKBeforeFilter = request.config.retrievalTopKBeforeFilter,
+                        finalTopK = request.config.retrievalTopKAfterFilter,
+                        similarityThreshold = request.config.similarityThreshold,
+                        postProcessingMode = request.config.postProcessingMode,
+                        fallbackApplied = false,
+                        fallbackReason = null
+                    ),
+                    contextEnvelope = "Envelope"
+                )
+            }
+        }
+
+        val useCase = PrepareRagRequestUseCase(
+            ragRetriever = fakeRetriever,
+            ragPromptBuilder = RagPromptBuilder(),
+            rewriteQueryUseCase = RewriteQueryUseCase(DefaultQueryRewriter())
+        )
+
+        val result = useCase(
+            question = "А что насчет белка?",
+            config = FitnessRagConfig.enhancedPipeline,
+            conversationContext = RagConversationContext(
+                taskState = ConversationTaskState(
+                    dialogGoal = "Снижение веса с удержанием мышц",
+                    resolvedConstraints = listOf("Времени мало"),
+                    userClarifications = listOf("Пользователь хочет держать дефицит"),
+                    latestSummary = "Фокус на похудении без потери мышц"
+                )
+            )
+        )
+
+        assertEquals("Снижение веса с удержанием мышц", capturedRequest?.conversationGoal)
+        assertTrue(capturedRequest?.retrievalHints?.isNotEmpty() == true)
+        assertTrue(result.userPrompt.contains("Conversation Task State"))
+        assertTrue(result.userPrompt.contains("Снижение веса"))
     }
 }

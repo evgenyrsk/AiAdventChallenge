@@ -14,6 +14,7 @@ import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.RequestLog
 import com.example.aiadventchallenge.domain.model.AnswerMode
+import com.example.aiadventchallenge.domain.repository.TaskStateRepository
 import com.example.aiadventchallenge.domain.repository.BranchRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
@@ -26,6 +27,7 @@ import com.example.aiadventchallenge.domain.branch.BranchCreationErrorType
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.ToolExecutionResult
 import com.example.aiadventchallenge.domain.model.mcp.McpConnectionStatus
+import com.example.aiadventchallenge.domain.usecase.ProcessChatTurnUseCase
 import com.example.aiadventchallenge.di.AppDependencies
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,11 +41,13 @@ class ChatViewModel(
     private val chatSettingsRepository: ChatSettingsRepository,
     private val contextStrategyFactory: ContextStrategyFactory,
     private val branchRepository: BranchRepository,
+    private val taskStateRepository: TaskStateRepository,
     private val aiRequestRepository: AiRequestRepository,
     private val fitnessProfileManager: FitnessProfileManager,
     private val chatMessageHandler: ChatMessageHandler,
     private val branchOrchestrator: BranchOrchestrator,
-    private val mcpToolOrchestrator: McpToolOrchestrator
+    private val mcpToolOrchestrator: McpToolOrchestrator,
+    private val processChatTurnUseCase: ProcessChatTurnUseCase
 ) : ViewModel() {
 
     private val TAG = "ChatViewModel"
@@ -90,6 +94,7 @@ class ChatViewModel(
         loadStrategyConfig()
         loadBranchState()
         loadFitnessProfile()
+        loadTaskStateForActiveBranch()
     }
 
     private fun initializeMcpConnection() {
@@ -160,9 +165,19 @@ class ChatViewModel(
                     activeBranchId = activeBranchId,
                     activeBranchName = branchUiModels.find { it.isActive }?.title ?: "Main",
                     availableBranches = branchUiModels,
-                    currentBranchCheckpointMessageId = activeBranch?.checkpointMessageId
+                    currentBranchCheckpointMessageId = activeBranch?.checkpointMessageId,
+                    latestTaskState = taskStateRepository.getTaskState(activeBranchId ?: "main")
                 )
             }
+        }
+    }
+
+    private fun loadTaskStateForActiveBranch() {
+        viewModelScope.launch {
+            val branchId = branchRepository.getActiveBranchId() ?: "main"
+            _chatUiState.value = _chatUiState.value.copy(
+                latestTaskState = taskStateRepository.getTaskState(branchId)
+            )
         }
     }
 
@@ -220,13 +235,7 @@ class ChatViewModel(
 
         viewModelScope.launch {
             val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
-            val parentMessageId = if (_messages.value.isNotEmpty()) _messages.value.last().id else null
-
-            val userMessage = chatMessageHandler.saveUserMessage(
-                userInput = userInput,
-                activeBranchId = activeBranchId,
-                parentMessageId = parentMessageId
-            )
+            val parentMessageId = _messages.value.lastOrNull()?.id
 
             val answerMode = _chatUiState.value.answerMode
             val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(
@@ -236,19 +245,45 @@ class ChatViewModel(
             
             when (mcpToolResult) {
                 is ToolExecutionResult.Success -> {
-                    val result = chatMessageHandler.generateAiResponse(
-                        userInput = userInput,
-                        fitnessProfile = _chatUiState.value.fitnessProfile,
-                        activeBranchId = activeBranchId,
-                        parentMessageId = userMessage.id,
-                        mcpContext = mcpToolResult.context,
-                        answerMode = answerMode
-                    )
-                    
-                    when (result) {
+                    val processedTurn = if (answerMode == AnswerMode.RAG_ENHANCED) {
+                        processChatTurnUseCase(
+                            userInput = userInput,
+                            fitnessProfile = _chatUiState.value.fitnessProfile,
+                            activeBranchId = activeBranchId,
+                            parentMessageId = parentMessageId,
+                            mcpContext = mcpToolResult.context,
+                            answerMode = answerMode
+                        )
+                    } else {
+                        val userMessage = chatMessageHandler.saveUserMessage(
+                            userInput = userInput,
+                            activeBranchId = activeBranchId,
+                            parentMessageId = parentMessageId
+                        )
+                        branchRepository.updateLastMessage(activeBranchId, userMessage.id)
+                        val result = chatMessageHandler.generateAiResponse(
+                            userInput = userInput,
+                            fitnessProfile = _chatUiState.value.fitnessProfile,
+                            activeBranchId = activeBranchId,
+                            parentMessageId = userMessage.id,
+                            mcpContext = mcpToolResult.context,
+                            answerMode = answerMode
+                        )
+                        (result as? ChatMessageResult.Success)?.aiMessage?.id?.let { aiMessageId ->
+                            branchRepository.updateLastMessage(activeBranchId, aiMessageId)
+                        }
+                        com.example.aiadventchallenge.domain.usecase.ProcessChatTurnResult(
+                            result = result,
+                            taskState = _chatUiState.value.latestTaskState,
+                            retrievalSummary = (result as? ChatMessageResult.Success)?.retrievalSummary
+                        )
+                    }
+
+                    when (val result = processedTurn.result) {
                         is ChatMessageResult.Success -> {
                             _chatUiState.value = _chatUiState.value.copy(
-                                latestRetrievalSummary = result.retrievalSummary ?: mcpToolResult.retrievalSummary
+                                latestRetrievalSummary = result.retrievalSummary ?: mcpToolResult.retrievalSummary,
+                                latestTaskState = processedTurn.taskState
                             )
                             _isLoading.value = false
                         }
@@ -266,19 +301,20 @@ class ChatViewModel(
                     _chatUiState.value = _chatUiState.value.copy(
                         latestRetrievalSummary = null
                     )
-                    val result = chatMessageHandler.generateAiResponse(
+                    val processedTurn = processChatTurnUseCase(
                         userInput = userInput,
                         fitnessProfile = _chatUiState.value.fitnessProfile,
                         activeBranchId = activeBranchId,
-                        parentMessageId = userMessage.id,
+                        parentMessageId = parentMessageId,
                         mcpContext = null,
                         answerMode = answerMode
                     )
-                    
-                    when (result) {
+
+                    when (val result = processedTurn.result) {
                         is ChatMessageResult.Success -> {
                             _chatUiState.value = _chatUiState.value.copy(
-                                latestRetrievalSummary = result.retrievalSummary
+                                latestRetrievalSummary = result.retrievalSummary,
+                                latestTaskState = processedTurn.taskState
                             )
                             _isLoading.value = false
                         }
@@ -296,6 +332,13 @@ class ChatViewModel(
                     _chatUiState.value = _chatUiState.value.copy(
                         latestRetrievalSummary = null
                     )
+                    chatMessageHandler.saveUserMessage(
+                        userInput = userInput,
+                        activeBranchId = activeBranchId,
+                        parentMessageId = parentMessageId
+                    ).also { userMessage ->
+                        branchRepository.updateLastMessage(activeBranchId, userMessage.id)
+                    }
                     Log.e(TAG, "❌ MCP tool error: ${mcpToolResult.message}")
                     addSystemMessage("❌ Ошибка MCP: ${mcpToolResult.message}")
                     _isLoading.value = false
@@ -303,6 +346,11 @@ class ChatViewModel(
                 is ToolExecutionResult.MissingParameters -> {
                     _chatUiState.value = _chatUiState.value.copy(
                         latestRetrievalSummary = null
+                    )
+                    val userMessage = chatMessageHandler.saveUserMessage(
+                        userInput = userInput,
+                        activeBranchId = activeBranchId,
+                        parentMessageId = parentMessageId
                     )
                     val prompt = buildString {
                         appendLine("Пользователь хочет выполнить действие, но не указал необходимые параметры:")
@@ -357,6 +405,7 @@ class ChatViewModel(
     fun clearChat() {
         viewModelScope.launch {
             chatRepository.deleteAllMessages()
+            taskStateRepository.clearAll()
             aiRequestRepository.clearAllRequests()
             _dialogStats.value = DialogTokenStats()
             _allTimeStats.value = DialogTokenStats()
@@ -368,7 +417,8 @@ class ChatViewModel(
                 activeBranchId = null,
                 activeBranchName = null,
                 currentBranchCheckpointMessageId = null,
-                latestRetrievalSummary = null
+                latestRetrievalSummary = null,
+                latestTaskState = null
             )
         }
     }
@@ -434,7 +484,8 @@ class ChatViewModel(
                         showBranchPicker = false,
                         activeBranchId = branchId,
                         activeBranchName = result.branchName,
-                        currentBranchCheckpointMessageId = result.checkpointMessageId
+                        currentBranchCheckpointMessageId = result.checkpointMessageId,
+                        latestTaskState = taskStateRepository.getTaskState(branchId)
                     )
                 }
                 is BranchSwitchResult.Error -> {
@@ -483,6 +534,7 @@ class ChatViewModel(
                         activeBranchId = result.branchId,
                         activeBranchName = state.newBranchName,
                         currentBranchCheckpointMessageId = result.checkpointMessageId,
+                        latestTaskState = taskStateRepository.getTaskState(result.branchId),
                         branchCreationTargetMessageId = null,
                         branchCreationTargetPreview = null,
                         newBranchName = ""

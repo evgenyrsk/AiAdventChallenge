@@ -32,7 +32,7 @@
 - эмулятор Android или подключённое устройство
 - `adb`
 - локальный проект в актуальном состоянии
-- corpus `demo/fitness-knowledge-corpus`
+- indexable corpus `demo/fitness-knowledge-corpus/content`
 
 ## Быстрый сценарий
 
@@ -110,7 +110,7 @@ bash scripts/reindex-fitness-knowledge.sh
 
 Что делает скрипт:
 
-- берёт corpus из `demo/fitness-knowledge-corpus`
+- берёт knowledge docs из `demo/fitness-knowledge-corpus/content`
 - запускает document indexing pipeline
 - строит индекс для source `fitness_knowledge`
 - прогоняет smoke flow индексации

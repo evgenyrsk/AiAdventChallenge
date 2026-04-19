@@ -10,6 +10,7 @@ import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.GroundedAnswerPayload
 
+import com.example.aiadventchallenge.domain.model.PreparedRagRequest
 import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
@@ -34,6 +35,22 @@ class ChatMessageHandlerImpl(
     private val TAG = "ChatMessageHandler"
 
     private val classificationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val numberedSourcesBlockRegex = Regex(
+        """\n\nИсточники:\n(?:\d+\.\s.+(?:\n|$))+${'$'}""",
+        setOf(RegexOption.MULTILINE)
+    )
+    private val fallbackSourcesBlockRegex = Regex(
+        """\n\nИсточники:\s*нет\s*[—-]\s*недостаточно релевантного контекста\.\s*${'$'}""",
+        setOf(RegexOption.IGNORE_CASE)
+    )
+    private val englishSourcesBlockRegex = Regex(
+        """\n\nSources:\n(?:[-*]\s.+(?:\n|$)|\d+\.\s.+(?:\n|$))+${'$'}""",
+        setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE)
+    )
+    private val englishInlineSourcesRegex = Regex(
+        """\n\nSources:\s*[^\n]+(?:\n[^\n]+)*${'$'}""",
+        setOf(RegexOption.IGNORE_CASE)
+    )
 
     
     override suspend fun handleUserMessage(
@@ -71,7 +88,11 @@ class ChatMessageHandlerImpl(
         }
         
         val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())
-        val apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
+        val apiMessages = strategy.buildContext(
+            null,
+            sanitizeMessagesForLlmContext(activeMessages),
+            config.systemPrompt
+        )
 
         return when (val result = agent.processRequestWithContextAndUsage(
             messages = apiMessages,
@@ -145,7 +166,8 @@ class ChatMessageHandlerImpl(
         activeBranchId: String,
         parentMessageId: String?,
         mcpContext: String?,
-        answerMode: AnswerMode
+        answerMode: AnswerMode,
+        preparedRagRequest: PreparedRagRequest?
     ): ChatMessageResult {
         val activeMessages = chatRepository.getMessagesByBranch(activeBranchId)
 
@@ -159,11 +181,19 @@ class ChatMessageHandlerImpl(
         }
 
         val strategy = contextStrategyFactory.create(chatSettingsRepository.getSettings())
-        var apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
+        val sanitizedMessages = sanitizeMessagesForLlmContext(activeMessages)
+        var apiMessages = strategy.buildContext(null, sanitizedMessages, config.systemPrompt)
         var retrievalSummary: com.example.aiadventchallenge.domain.mcp.RetrievalSummary? = null
         var fallbackAnswerText: String? = null
 
-        if (answerMode == AnswerMode.RAG_BASIC || answerMode == AnswerMode.RAG_ENHANCED) {
+        if (preparedRagRequest != null) {
+            retrievalSummary = preparedRagRequest.retrievalSummary
+            fallbackAnswerText = preparedRagRequest.fallbackAnswerText
+            config = config.copy(
+                systemPrompt = config.systemPrompt + "\n\n" + preparedRagRequest.systemPromptSuffix
+            )
+            apiMessages = buildRagEnhancedMessages(preparedRagRequest.userPrompt, config.systemPrompt)
+        } else if (answerMode == AnswerMode.RAG_BASIC || answerMode == AnswerMode.RAG_ENHANCED) {
             val ragConfig = when (answerMode) {
                 AnswerMode.RAG_ENHANCED -> FitnessRagConfig.enhancedPipeline
                 AnswerMode.RAG_BASIC -> FitnessRagConfig.basicPipeline
@@ -180,19 +210,23 @@ class ChatMessageHandlerImpl(
                 config = config.copy(
                     systemPrompt = config.systemPrompt + "\n\n" + preparedRagRequest.systemPromptSuffix
                 )
-                apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
-                apiMessages = replaceLastUserMessage(apiMessages, preparedRagRequest.userPrompt)
+                apiMessages = if (answerMode == AnswerMode.RAG_ENHANCED) {
+                    buildRagEnhancedMessages(preparedRagRequest.userPrompt, config.systemPrompt)
+                } else {
+                    strategy.buildContext(null, sanitizedMessages, config.systemPrompt)
+                        .let { replaceLastUserMessage(it, preparedRagRequest.userPrompt) }
+                }
             }.onFailure { error ->
                 Log.e(TAG, "❌ RAG retrieval failed, falling back to base prompt", error)
                 config = config.copy(
                     systemPrompt = config.systemPrompt + "\n\nRAG MODE\nЕсли контекста недостаточно или retrieval недоступен, прямо скажи об этом и не выдумывай факты."
                 )
-                apiMessages = strategy.buildContext(null, activeMessages, config.systemPrompt)
+                apiMessages = strategy.buildContext(null, sanitizedMessages, config.systemPrompt)
             }
         }
 
         if (!fallbackAnswerText.isNullOrBlank()) {
-            val fallbackText = fallbackAnswerText!!.trim()
+            val fallbackText = sanitizeAnswerTextForDisplay(fallbackAnswerText!!.trim())
             logLlmResponse(fallbackText, 0, fallbackText.length)
 
             val aiMessage = createAiMessage(
@@ -232,7 +266,7 @@ class ChatMessageHandlerImpl(
         )) {
             is ChatResult.Success -> {
                 val answerWithUsage = result.data
-                val aiResponseText = answerWithUsage.content.trim()
+                val aiResponseText = sanitizeAnswerTextForDisplay(answerWithUsage.content.trim())
                 
                 logLlmResponse(aiResponseText, answerWithUsage.totalTokens ?: 0, aiResponseText.length)
                 
@@ -312,6 +346,50 @@ class ChatMessageHandlerImpl(
                 content = augmentedPrompt
             )
         }
+    }
+
+    private fun sanitizeAnswerTextForDisplay(answerText: String): String {
+        return answerText
+            .trimEnd()
+            .replace(numberedSourcesBlockRegex, "")
+            .replace(fallbackSourcesBlockRegex, "")
+            .replace(englishSourcesBlockRegex, "")
+            .replace(englishInlineSourcesRegex, "")
+            .trimEnd()
+    }
+
+    private fun sanitizeMessagesForLlmContext(messages: List<ChatMessage>): List<ChatMessage> {
+        return messages.map { message ->
+            if (message.isFromUser) {
+                message
+            } else {
+                message.copy(content = sanitizeAssistantContentForLlm(message.content))
+            }
+        }
+    }
+
+    private fun sanitizeAssistantContentForLlm(content: String): String {
+        return content
+            .trimEnd()
+            .replace(numberedSourcesBlockRegex, "")
+            .replace(fallbackSourcesBlockRegex, "")
+            .trimEnd()
+    }
+
+    private fun buildRagEnhancedMessages(
+        userPrompt: String,
+        systemPrompt: String
+    ): List<Message> {
+        return listOf(
+            Message(
+                role = com.example.aiadventchallenge.data.model.MessageRole.SYSTEM,
+                content = systemPrompt
+            ),
+            Message(
+                role = com.example.aiadventchallenge.data.model.MessageRole.USER,
+                content = userPrompt
+            )
+        )
     }
     
     override suspend fun handleSystemPrompt(systemPrompt: String): SystemPromptResult {

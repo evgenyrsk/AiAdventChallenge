@@ -47,7 +47,7 @@ bash scripts/document-indexing-smoke.sh demo/document-indexing-corpus local_docs
 Если нужен более продуктовый demo для fitness-assistant сценария, вместо этого можно использовать:
 
 ```bash
-bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus local_docs
+bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus/content local_docs
 ```
 
 Smoke-скрипт завершится сразу при первом JSON-RPC error и напечатает method, source и path,

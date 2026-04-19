@@ -15,8 +15,11 @@ class FitnessKnowledgeCorpusTest {
 
     @Test
     fun `fitness seed corpus contains expected documents and sufficient volume`() {
-        val corpusDir = DocumentPathResolver().resolve("demo/fitness-knowledge-corpus")
+        val corpusRoot = DocumentPathResolver().resolve("demo/fitness-knowledge-corpus")
+        val corpusDir = DocumentPathResolver().resolve("demo/fitness-knowledge-corpus/content")
         assertTrue(corpusDir.exists(), "Corpus directory must exist")
+        assertTrue(File(corpusRoot, "fixtures/rag_questions.json").exists(), "Missing fixture file")
+        assertTrue(File(corpusRoot, "README.md").exists(), "Missing corpus root README")
 
         val expectedFiles = listOf(
             "nutrition/nutrition_basics.md",
@@ -28,8 +31,7 @@ class FitnessKnowledgeCorpusTest {
             "nutrition/muscle_gain_basics.md",
             "training/workout_frequency.md",
             "nutrition/hydration_and_habits.md",
-            "faq/fitness_faq.md",
-            "fixtures/rag_questions.json"
+            "faq/fitness_faq.md"
         )
 
         expectedFiles.forEach { relativePath ->
@@ -51,7 +53,7 @@ class FitnessKnowledgeCorpusTest {
     fun `fitness corpus can be indexed and retrieved for rag questions`() {
         val pipeline = DocumentIndexingPipeline()
         val source = "fitness_knowledge_test"
-        val corpusDir = DocumentPathResolver().resolve("demo/fitness-knowledge-corpus")
+        val corpusDir = DocumentPathResolver().resolve("demo/fitness-knowledge-corpus/content")
 
         val result = pipeline.index(
             IndexingRequest(
@@ -70,6 +72,9 @@ class FitnessKnowledgeCorpusTest {
         val indexedDocuments = pipeline.listIndexedDocuments(source)
         assertTrue(indexedDocuments.any { it.relativePath.endsWith("nutrition/protein_guide.md") })
         assertTrue(indexedDocuments.any { it.relativePath.endsWith("faq/fitness_faq.md") })
+        assertTrue(indexedDocuments.none { it.relativePath == "README.md" })
+        assertTrue(indexedDocuments.none { it.relativePath.contains("fixtures/") })
+        assertTrue(indexedDocuments.none { it.relativePath.contains("support/") })
 
         val retrieval = DocumentRetrievalService().retrieveRelevantChunks(
             RetrieveRelevantChunksRequest(

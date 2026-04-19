@@ -7,21 +7,25 @@ import com.example.aiadventchallenge.data.repository.AiRequestRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
 import com.example.aiadventchallenge.domain.repository.BranchRepository
+import com.example.aiadventchallenge.domain.repository.TaskStateRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
 import com.example.aiadventchallenge.domain.branch.BranchOrchestrator
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
+import com.example.aiadventchallenge.domain.usecase.ProcessChatTurnUseCase
 
 class ChatViewModelFactory(
     private val chatRepository: ChatRepository,
     private val chatSettingsRepository: ChatSettingsRepository,
     private val contextStrategyFactory: ContextStrategyFactory,
     private val branchRepository: BranchRepository,
+    private val taskStateRepository: TaskStateRepository,
     private val aiRequestRepository: AiRequestRepository,
     private val fitnessProfileManager: FitnessProfileManager,
     private val chatMessageHandler: ChatMessageHandler,
     private val branchOrchestrator: BranchOrchestrator,
     private val mcpToolOrchestrator: McpToolOrchestrator,
+    private val processChatTurnUseCase: ProcessChatTurnUseCase,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -31,11 +35,13 @@ class ChatViewModelFactory(
                 chatSettingsRepository,
                 contextStrategyFactory,
                 branchRepository,
+                taskStateRepository,
                 aiRequestRepository,
                 fitnessProfileManager,
                 chatMessageHandler,
                 branchOrchestrator,
                 mcpToolOrchestrator,
+                processChatTurnUseCase,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

@@ -1,9 +1,20 @@
 package com.example.aiadventchallenge.domain.mcp
 
+import android.util.Log
+import com.example.aiadventchallenge.domain.model.mcp.Exercise
+import com.example.aiadventchallenge.domain.model.mcp.MealGuidanceResponse
+import com.example.aiadventchallenge.domain.model.mcp.MealSuggestion
+import com.example.aiadventchallenge.domain.model.mcp.NutritionMetricsResponse
+import com.example.aiadventchallenge.domain.model.mcp.TrainingDay
+import com.example.aiadventchallenge.domain.model.mcp.TrainingGuidanceResponse
 import com.example.aiadventchallenge.domain.usecase.mcp.CallMcpToolUseCase
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -16,8 +27,53 @@ class FitnessFlowDetectionTest {
 
     @Before
     fun setup() {
+        mockkStatic(Log::class)
+        every { Log.d(any<String>(), any<String>()) } returns 0
+        every { Log.e(any<String>(), any<String>(), any()) } returns 0
+        every { Log.e(any<String>(), any<String>()) } returns 0
         callMcpToolUseCase = mockk(relaxed = true)
+        coEvery { callMcpToolUseCase(any(), any()) } answers {
+            when (invocation.args[0] as String) {
+                "calculate_nutrition_metrics" -> McpToolData.NutritionMetrics(
+                    NutritionMetricsResponse(
+                        bmr = 1600,
+                        tdee = 2100,
+                        targetCalories = 1800,
+                        proteinG = 130,
+                        fatG = 60,
+                        carbsG = 180,
+                        notes = "default"
+                    )
+                )
+                "generate_meal_guidance" -> McpToolData.MealGuidance(
+                    MealGuidanceResponse(
+                        mealStrategy = "default",
+                        mealDistribution = listOf(MealSuggestion(1, 600, 40, "Meal")),
+                        recommendedFoods = listOf("protein"),
+                        foodsToLimit = listOf("sugar"),
+                        notes = "default"
+                    )
+                )
+                "generate_training_guidance" -> McpToolData.TrainingGuidance(
+                    TrainingGuidanceResponse(
+                        trainingSplit = "3x/week",
+                        weeklyPlan = listOf(
+                            TrainingDay(1, "Full Body", listOf(Exercise("Squat", 3, "8-10")))
+                        ),
+                        exercisePrinciples = "consistency",
+                        recoveryNotes = "sleep",
+                        notes = "default"
+                    )
+                )
+                else -> error("Unexpected tool")
+            }
+        }
         orchestrator = McpToolOrchestratorImpl(callMcpToolUseCase)
+    }
+
+    @After
+    fun tearDown() {
+        unmockkStatic(Log::class)
     }
 
     @Test
@@ -60,7 +116,7 @@ class FitnessFlowDetectionTest {
 
     @Test
     fun `detect summary keyword - should trigger flow`() = runTest {
-        val userInput = "Составь сводку моих тренировок"
+        val userInput = "Составь фитнес-сводку моих тренировок"
 
         val result = orchestrator.detectAndExecuteTool(userInput)
 

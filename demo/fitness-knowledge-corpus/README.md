@@ -1,33 +1,20 @@
-# Demo corpus знаний о фитнесе
+# Fitness Knowledge Corpus Layout
 
-Стабильный фитнес-ориентированный корпус для document indexing и retrieval-демо.
+Этот каталог больше не индексируется целиком как knowledge base.
 
-Этот корпус предназначен для:
+## Структура
 
-- локальной индексации
-- сравнения chunking
-- проверки metadata
-- retrieval-демо в Android chat app
+- `content/`
+  indexable fitness knowledge base для source `fitness_knowledge`
+- `fixtures/`
+  machine-readable сценарии и вопросы для evaluation runner'ов
+- `support/`
+  служебные corpus-adjacent материалы, которые не должны попадать в retrieval index
 
-## Что входит в корпус
-
-- 10 seed-документов под RAG v1
-- гайды по питанию, тренировкам, восстановлению и шагам
-- FAQ с прикладными вопросами
-- существующие demo-файлы, совместимые с индексацией
-
-## Рекомендуемые demo-запросы
-
-- `Что важнее для похудения: дефицит калорий или время приёма пищи?`
-- `Сколько белка рекомендуют при похудении для сохранения мышц?`
-- `Что важнее новичку: идеальный сплит или регулярность?`
-- `Помогают ли шаги увеличить расход энергии?`
-- `Почему сон влияет на аппетит?`
-
-## Рекомендуемый smoke-запуск
+## Каноническая индексация
 
 ```bash
-bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus fitness_knowledge
+bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus/content fitness_knowledge
 ```
 
 или
@@ -35,3 +22,5 @@ bash scripts/document-indexing-smoke.sh demo/fitness-knowledge-corpus fitness_kn
 ```bash
 bash scripts/reindex-fitness-knowledge.sh
 ```
+
+Project/demo инструкции смотри в `docs/`, а не в indexable corpus.

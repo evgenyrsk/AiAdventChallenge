@@ -52,6 +52,28 @@ AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
 - `output/fitness-rag-evaluation/results.json`
 - `output/fitness-rag-evaluation/report.md`
 
+## Long dialog runner
+
+Для production-like multi-turn `RAG_ENHANCED` есть отдельный Gradle task:
+
+```bash
+AI_API_KEY=... ./gradlew :mcp-server:runFitnessLongDialogEvaluation
+```
+
+Он:
+
+- читает structured fixtures из `demo/fitness-knowledge-corpus/fixtures/long_dialog_scenarios.json`
+- прогоняет 2 длинных сценария без Android UI
+- использует shared `task memory` logic из `rag-core`
+- проверяет `goalPreserved`, `constraintsPreserved`, `hasSources`
+- пишет Markdown report по умолчанию в:
+  - `output/fitness-long-dialog-evaluation/report.md`
+
+Опциональные env-параметры:
+
+- `RAG_LONG_DIALOG_FIXTURES_PATH`
+- `RAG_LONG_DIALOG_EVAL_MARKDOWN`
+
 ## Ручной режим
 
 1. Пересобрать индекс по source `fitness_knowledge`
@@ -60,6 +82,25 @@ AI_API_KEY=... ./gradlew :mcp-server:runFitnessRagEvaluation
 4. Задать тот же вопрос снова
 5. Переключить чат в режим `RAG Enhanced`
 6. Зафиксировать rewrite, кандидатов до/после фильтрации, ответ, источники и краткий вывод
+
+## Long dialog evaluation
+
+Для production-like mini-chat дополнительно нужно прогонять 2 длинных сценария из:
+
+- `docs/FITNESS_LONG_DIALOG_SCENARIOS.md`
+
+На каждом шаге фиксировать:
+
+- `taskStateBefore`
+- `taskStateAfter`
+- `retrievalQuery`
+- `rewrittenQuery`
+- `retrievedSources`
+- `finalAnswer`
+- `hasSources`
+- `goalPreserved`
+- `constraintsPreserved`
+- `notes`
 
 ## Что теперь проверяется на 11 вопросах
 

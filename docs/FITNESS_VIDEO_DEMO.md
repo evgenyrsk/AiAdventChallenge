@@ -16,12 +16,39 @@
 
 - `RAG Basic` использует базовый retrieval без rewrite и reranking
 - `RAG Enhanced` показывает `rewrittenQuery`, filtering/reranking и более чистый финальный контекст
-- в debug card видны кандидаты до/после фильтрации, финальные источники, цитаты и fallback mode
+- в debug card видны кандидаты до/после фильтрации, финальные источники, цитаты, `Task Memory` и fallback mode
 
 Отдельно снять 2 коротких эпизода:
 
 1. grounded ответ с достаточной релевантностью
 2. вопрос со слабым контекстом, где система честно отвечает `не знаю`
+
+Для production-like mini-chat дополнительно снять длинный follow-up сценарий на 10+ сообщений, где:
+
+- цель диалога остается стабильной
+- ограничения накапливаются в `Task Memory`
+- grounded answers продолжают показывать `sources`
+
+Если нужно доказать это без Android UI, можно отдельно показать terminal-only прогон:
+
+```bash
+AI_API_KEY=... ./gradlew :mcp-server:runFitnessLongDialogEvaluation
+```
+
+В кадре стоит открыть итоговый файл:
+
+```bash
+sed -n '1,220p' output/fitness-long-dialog-evaluation/report.md
+```
+
+Что должно быть видно:
+
+- оба сценария
+- `Task State Before/After`
+- `effectiveQuery`
+- `retrieved sources`
+- `goalPreserved`
+- `constraintsPreserved`
 
 Рекомендуемый fallback-question для второго эпизода:
 
@@ -117,7 +144,7 @@ curl -s http://localhost:8084 \
     "method":"compare_chunking_strategies",
     "params":{
       "source":"fitness_knowledge",
-      "path":"'"$(pwd)"'/demo/fitness-knowledge-corpus"
+      "path":"'"$(pwd)"'/demo/fitness-knowledge-corpus/content"
     }
   }'
 ```
