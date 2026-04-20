@@ -124,6 +124,24 @@ AI_API_KEY=... ./gradlew :mcp-server:runFitnessLongDialogEvaluation
 - при слабой релевантности система возвращает честный fallback вместо догадки
 - у специального low-relevance кейса `q11` ожидаются `fallbackTriggered = true`, `sources = []`, `quotes = []`
 
+## Practical grounded mode
+
+Текущий `RAG_ENHANCED` нужно интерпретировать как practical grounded mode, а не как formal proof system.
+
+Что это означает:
+
+- assistant инструктируется отвечать только на основе retrieved context
+- anti-hallucination / answerability gate переводит слабый retrieval в честный fallback
+- `sources` и `quotes` всегда retrieval-derived
+- quality groundedness подтверждается через evaluation reports
+
+Что это не означает:
+
+- система не доказывает формально невозможность любого выхода LLM за пределы контекста
+- runtime не использует дополнительные heuristic post-generation verifier'ы поверх текста ответа
+
+На текущем этапе acceptance опирается на retrieval-first архитектуру, grounded evidence и воспроизводимые evaluation-сценарии.
+
 ## Шаблон сравнения
 
 | ID | Вопрос | Без RAG | RAG Basic | RAG Enhanced | Итог |
