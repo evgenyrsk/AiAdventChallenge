@@ -42,6 +42,19 @@
 - не участвует в `Grounded Sources`
 - не подменяет retrieved evidence
 
+## Grounded Runtime Note
+
+Текущий chat runtime специально не использует дополнительные ручные или heuristic post-generation проверки текста ответа.
+
+Вместо этого grounded behavior обеспечивается комбинацией:
+
+- retrieval-first prompt assembly
+- answerability / fallback policy
+- retrieval-derived `sources` и `quotes`
+- evaluation runner'ов, которые позволяют проверять groundedness и fallback на воспроизводимых сценариях
+
+Это уменьшает риск хрупких корнер-кейсов в runtime и сохраняет архитектуру простой и предсказуемой.
+
 ## Persistence
 
 - scope: `per branch`
