@@ -43,6 +43,9 @@ class McpRagRetriever(
                     "postProcessingMode" to request.config.postProcessingMode.name.lowercase(),
                     "topKBeforeFilter" to request.config.retrievalTopKBeforeFilter,
                     "finalTopK" to request.config.retrievalTopKAfterFilter,
+                    "lexicalTopK" to request.config.lexicalTopK,
+                    "semanticTopK" to request.config.semanticTopK,
+                    "fusionK" to request.config.fusionK,
                     "similarityThreshold" to request.config.similarityThreshold,
                     "minAnswerableChunks" to request.config.minAnswerableChunks,
                     "allowAnswerWithRetrievalFallback" to request.config.allowAnswerWithRetrievalFallback,
@@ -52,9 +55,16 @@ class McpRagRetriever(
                     "rerankTimeoutMs" to request.config.rerankTimeoutMs,
                     "rerankFallbackPolicy" to request.config.rerankFallbackPolicy.name.lowercase(),
                     "queryContext" to (request.memorySummary ?: request.config.queryContext),
-                    "conversationGoal" to request.conversationGoal,
-                    "retrievalHints" to request.retrievalHints,
-                    "memorySummary" to request.memorySummary,
+                    "canonicalOnly" to request.config.canonicalOnly,
+                    "contextInput" to request.contextInput?.let { context ->
+                        mapOf(
+                            "userQuestion" to context.userQuestion,
+                            "conversationGoal" to context.conversationGoal,
+                            "constraints" to context.constraints,
+                            "retrievalHints" to context.retrievalHints,
+                            "memorySummary" to context.memorySummary
+                        )
+                    },
                     "rewriteDebug" to request.rewriteResult?.let { rewrite ->
                         mapOf(
                             "rewriteApplied" to rewrite.applied,
@@ -92,6 +102,9 @@ class McpRagRetriever(
                 RagRetrievalDebug(
                     topKBeforeFilter = debug["topKBeforeFilter"]?.jsonPrimitive?.content?.toIntOrNull() ?: request.config.retrievalTopKBeforeFilter,
                     finalTopK = debug["finalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: request.config.retrievalTopKAfterFilter,
+                    lexicalTopK = debug["lexicalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: request.config.lexicalTopK,
+                    semanticTopK = debug["semanticTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: request.config.semanticTopK,
+                    fusionK = debug["fusionK"]?.jsonPrimitive?.content?.toIntOrNull() ?: request.config.fusionK,
                     similarityThreshold = jsonContentOrNull(debug["similarityThreshold"])?.toDoubleOrNull(),
                     postProcessingMode = jsonContentOrNull(debug["postProcessingMode"])
                         ?.let { mode ->
@@ -114,11 +127,15 @@ class McpRagRetriever(
                     rerankFallbackUsed = debug["rerankFallbackUsed"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
                     rerankFallbackReason = jsonContentOrNull(debug["rerankFallbackReason"]),
                     fallbackApplied = debug["fallbackApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                    fallbackReason = jsonContentOrNull(debug["fallbackReason"])
+                    fallbackReason = jsonContentOrNull(debug["fallbackReason"]),
+                    degradedMode = debug["degradedMode"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
                 )
             } ?: RagRetrievalDebug(
                 topKBeforeFilter = request.config.retrievalTopKBeforeFilter,
                 finalTopK = request.config.retrievalTopKAfterFilter,
+                lexicalTopK = request.config.lexicalTopK,
+                semanticTopK = request.config.semanticTopK,
+                fusionK = request.config.fusionK,
                 similarityThreshold = request.config.similarityThreshold,
                 postProcessingMode = request.config.postProcessingMode,
                 rewriteApplied = request.rewriteResult?.applied ?: false,
@@ -136,10 +153,12 @@ class McpRagRetriever(
                 rerankFallbackUsed = false,
                 rerankFallbackReason = null,
                 fallbackApplied = false,
-                fallbackReason = null
+                fallbackReason = null,
+                degradedMode = false
             ),
             contextEnvelope = data["contextEnvelope"]?.jsonPrimitive?.content.orEmpty(),
-            grounding = parseGrounding(data["grounding"]?.jsonObject)
+            grounding = parseGrounding(data["grounding"]?.jsonObject),
+            degradedMode = data["degradedMode"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
         )
     }
 
@@ -156,6 +175,13 @@ class McpRagRetriever(
                 score = chunk["score"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
                 semanticScore = chunk["semanticScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
                 keywordScore = chunk["keywordScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                lexicalScore = chunk["lexicalScore"]?.jsonPrimitive?.content?.toDoubleOrNull()
+                    ?: chunk["keywordScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                vectorScore = chunk["vectorScore"]?.jsonPrimitive?.content?.toDoubleOrNull()
+                    ?: chunk["semanticScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                fusionScore = chunk["fusionScore"]?.jsonPrimitive?.content?.toDoubleOrNull()
+                    ?: chunk["score"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                candidateSource = jsonContentOrNull(chunk["candidateSource"]) ?: "hybrid",
                 rerankScore = jsonContentOrNull(chunk["rerankScore"])?.toDoubleOrNull(),
                 text = jsonContentOrNull(chunk["fullText"])
                     ?: chunk["excerpt"]?.jsonPrimitive?.content.orEmpty(),
@@ -206,7 +232,11 @@ class McpRagRetriever(
                 topRerankScore = jsonContentOrNull(confidence["topRerankScore"])?.toDoubleOrNull(),
                 similarityThreshold = jsonContentOrNull(confidence["similarityThreshold"])?.toDoubleOrNull(),
                 rerankThreshold = jsonContentOrNull(confidence["rerankThreshold"])?.toDoubleOrNull(),
-                retrievalFallbackApplied = confidence["retrievalFallbackApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+                retrievalFallbackApplied = confidence["retrievalFallbackApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                confidenceLevel = jsonContentOrNull(confidence["confidenceLevel"]),
+                coverageScore = jsonContentOrNull(confidence["coverageScore"])?.toDoubleOrNull() ?: 0.0,
+                consistencyScore = jsonContentOrNull(confidence["consistencyScore"])?.toDoubleOrNull() ?: 0.0,
+                evidenceScore = jsonContentOrNull(confidence["evidenceScore"])?.toDoubleOrNull() ?: 0.0
             ),
             fallbackReason = jsonContentOrNull(grounding["fallbackReason"]),
             isFallbackIDontKnow = grounding["isFallbackIDontKnow"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false

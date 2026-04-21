@@ -31,6 +31,10 @@ class StructureAwareChunkingStrategy : ChunkingStrategy {
                 val chunkIndex = chunks.size
                 val sourceKey = document.rawDocument.source.replace(Regex("[^a-zA-Z0-9]+"), "_")
                 val chunkId = "${sourceKey}_${document.rawDocument.documentId}_${type.toWireName()}_${chunkIndex.toString().padStart(4, '0')}"
+                val sectionTitle = buildSectionTitle(section.title, sectionIndex, localIndex)
+                val corpusSegment = document.rawDocument.relativePath.substringBefore('/')
+                    .takeIf { it.isNotBlank() }
+                    ?: "root"
                 chunks += DocumentChunk(
                     chunkId = chunkId,
                     documentId = document.rawDocument.documentId,
@@ -41,13 +45,20 @@ class StructureAwareChunkingStrategy : ChunkingStrategy {
                         title = document.rawDocument.title,
                         filePath = document.rawDocument.filePath,
                         relativePath = document.rawDocument.relativePath,
-                        section = buildSectionTitle(section.title, sectionIndex, localIndex),
+                        section = sectionTitle,
                         chunkingStrategy = type.toWireName(),
                         documentType = document.rawDocument.documentType.name.lowercase(),
                         documentId = document.rawDocument.documentId,
                         positionStart = split.positionStart,
                         positionEnd = split.positionEnd,
-                        pageNumber = split.pageNumber
+                        pageNumber = split.pageNumber,
+                        corpusSegment = corpusSegment,
+                        language = detectLanguage(split.content),
+                        headingPath = listOfNotNull(section.title.takeIf { it.isNotBlank() }),
+                        parentSectionId = "${document.rawDocument.documentId}:${sectionIndex}",
+                        tokenCount = approximateTokenCount(split.content),
+                        charCount = split.content.length,
+                        isCanonicalKnowledge = isCanonicalKnowledge(document.rawDocument.relativePath)
                     )
                 )
             }
@@ -69,7 +80,13 @@ class StructureAwareChunkingStrategy : ChunkingStrategy {
             .filter { it.isNotBlank() }
 
         if (paragraphs.isEmpty()) {
-            return listOf(section.copy(content = section.content.take(config.structureMaxChunkSize).trim()))
+            return splitLargeParagraph(
+                paragraph = section.content,
+                title = section.title,
+                startPosition = section.positionStart,
+                pageNumber = section.pageNumber,
+                maxChunkSize = config.structureMaxChunkSize
+            )
         }
 
         val result = mutableListOf<DocumentSection>()
@@ -143,19 +160,44 @@ class StructureAwareChunkingStrategy : ChunkingStrategy {
         maxChunkSize: Int
     ): List<DocumentSection> {
         val chunks = mutableListOf<DocumentSection>()
-        var localStart = 0
+        val sentences = paragraph.split(Regex("(?<=[.!?])\\s+"))
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+        if (sentences.isEmpty()) return emptyList()
 
-        while (localStart < paragraph.length) {
-            val localEnd = minOf(paragraph.length, localStart + maxChunkSize)
-            val content = paragraph.substring(localStart, localEnd).trim()
+        val overlapSentences = 1
+        var localCursor = 0
+        var sentenceIndex = 0
+        while (sentenceIndex < sentences.size) {
+            val builder = StringBuilder()
+            val firstSentenceIndex = sentenceIndex
+            var lastSentenceIndex = sentenceIndex
+            while (lastSentenceIndex < sentences.size) {
+                val sentence = sentences[lastSentenceIndex]
+                val projectedLength = if (builder.isEmpty()) sentence.length else builder.length + 1 + sentence.length
+                if (builder.isNotEmpty() && projectedLength > maxChunkSize) break
+                if (builder.isNotEmpty()) builder.append(' ')
+                builder.append(sentence)
+                lastSentenceIndex += 1
+            }
+
+            val content = builder.toString().trim()
+            val contentStart = paragraph.indexOf(content.substringBefore(' ').ifBlank { content }, startIndex = localCursor)
+                .takeIf { it >= 0 }
+                ?: localCursor
             chunks += DocumentSection(
                 title = title,
                 content = content,
-                positionStart = startPosition + localStart,
-                positionEnd = startPosition + localStart + content.length,
+                positionStart = startPosition + contentStart,
+                positionEnd = startPosition + contentStart + content.length,
                 pageNumber = pageNumber
             )
-            localStart = localEnd
+            localCursor = contentStart + content.length
+            sentenceIndex = if (lastSentenceIndex >= sentences.size) {
+                sentences.size
+            } else {
+                maxOf(firstSentenceIndex + 1, lastSentenceIndex - overlapSentences)
+            }
         }
 
         return chunks
@@ -167,5 +209,28 @@ class StructureAwareChunkingStrategy : ChunkingStrategy {
         } else {
             "${if (baseTitle.isBlank()) "Section ${sectionIndex + 1}" else baseTitle} (part ${localIndex + 1})"
         }
+    }
+
+    private fun approximateTokenCount(text: String): Int {
+        return text
+            .split(Regex("\\s+"))
+            .count { it.isNotBlank() }
+    }
+
+    private fun detectLanguage(text: String): String {
+        val cyrillic = text.count { it in '\u0400'..'\u04FF' }
+        val latin = text.count { it.isLetter() && it !in '\u0400'..'\u04FF' }
+        return when {
+            cyrillic > latin -> "ru"
+            latin > 0 -> "en"
+            else -> "unknown"
+        }
+    }
+
+    private fun isCanonicalKnowledge(relativePath: String): Boolean {
+        return !relativePath.contains("/support/") &&
+            !relativePath.contains("/fixtures/") &&
+            !relativePath.contains("/notes/") &&
+            !relativePath.endsWith("README.md")
     }
 }

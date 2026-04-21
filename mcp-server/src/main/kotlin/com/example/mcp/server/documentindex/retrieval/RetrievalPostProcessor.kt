@@ -2,6 +2,7 @@ package com.example.mcp.server.documentindex.retrieval
 
 import com.example.mcp.server.documentindex.model.RetrievalPipelineConfig
 import com.example.mcp.server.documentindex.model.RetrievalPostProcessingMode
+import com.example.mcp.server.documentindex.model.RetrievalRerankFallbackPolicy
 import com.example.mcp.server.documentindex.model.RetrievedContextChunk
 import com.example.mcp.server.documentindex.model.SearchResultChunk
 
@@ -15,7 +16,10 @@ interface RetrievalPostProcessor {
     ): PostProcessingResult
 }
 
-class DefaultRetrievalPostProcessor : RetrievalPostProcessor {
+class DefaultRetrievalPostProcessor(
+    private val heuristicReranker: Reranker = HeuristicReranker(),
+    private val modelReranker: Reranker = ModelReranker()
+) : RetrievalPostProcessor {
 
     override fun process(
         originalQuery: String,
@@ -24,29 +28,58 @@ class DefaultRetrievalPostProcessor : RetrievalPostProcessor {
         candidates: List<SearchResultChunk>,
         config: RetrievalPipelineConfig
     ): PostProcessingResult {
-        val mode = if (config.postProcessingEnabled) {
-            config.postProcessingMode
-        } else {
-            RetrievalPostProcessingMode.NONE
+        val mode = if (config.postProcessingEnabled) config.postProcessingMode else RetrievalPostProcessingMode.NONE
+        val rerankResult = when (mode) {
+            RetrievalPostProcessingMode.MODEL_RERANK,
+            RetrievalPostProcessingMode.THRESHOLD_PLUS_MODEL_RERANK -> {
+                val primary = modelReranker.rerank(originalQuery, rewrittenQuery, effectiveQuery, candidates, config)
+                if (primary.applied) {
+                    primary
+                } else if (config.rerankFallbackPolicy == RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL) {
+                    heuristicReranker.rerank(originalQuery, rewrittenQuery, effectiveQuery, candidates, config).copy(
+                        fallbackUsed = true,
+                        fallbackReason = primary.fallbackReason ?: "model_rerank_unavailable"
+                    )
+                } else {
+                    primary
+                }
+            }
+
+            RetrievalPostProcessingMode.HEURISTIC_RERANK,
+            RetrievalPostProcessingMode.THRESHOLD_PLUS_RERANK -> heuristicReranker.rerank(
+                originalQuery,
+                rewrittenQuery,
+                effectiveQuery,
+                candidates,
+                config
+            )
+
+            RetrievalPostProcessingMode.NONE,
+            RetrievalPostProcessingMode.THRESHOLD_ONLY -> RerankResult(emptyMap(), applied = false)
         }
 
-        val rerankScores = candidates.associate { candidate ->
-            candidate.chunkId to heuristicRerankScore(candidate, originalQuery, rewrittenQuery, effectiveQuery)
-        }
         val rerankInfo = RerankExecutionInfo(
-            provider = if (mode == RetrievalPostProcessingMode.NONE || mode == RetrievalPostProcessingMode.THRESHOLD_ONLY) null else "heuristic",
-            model = null,
-            applied = mode != RetrievalPostProcessingMode.NONE && mode != RetrievalPostProcessingMode.THRESHOLD_ONLY,
+            provider = when {
+                rerankResult.applied && mode in modelModes -> modelReranker.provider
+                rerankResult.applied -> heuristicReranker.provider
+                else -> null
+            },
+            model = when {
+                rerankResult.applied && mode in modelModes -> modelReranker.model
+                else -> null
+            },
+            applied = rerankResult.applied,
             inputCount = candidates.size,
             outputCount = candidates.size.coerceAtMost(config.finalTopK.coerceAtLeast(1)),
             scoreThreshold = config.rerankScoreThreshold ?: config.similarityThreshold,
             timeoutMs = config.rerankTimeoutMs,
-            fallbackUsed = false,
-            fallbackReason = null
+            fallbackUsed = rerankResult.fallbackUsed,
+            fallbackReason = rerankResult.fallbackReason
         )
 
         val scored = candidates.map { candidate ->
-            val rerankScore = rerankScores.getValue(candidate.chunkId)
+            val rerankScore = rerankResult.scoresByChunkId[candidate.chunkId]
+                ?: heuristicRerankScore(candidate, originalQuery, rewrittenQuery, effectiveQuery)
             ProcessedCandidate(
                 chunk = candidate,
                 rerankScore = rerankScore,
@@ -54,18 +87,14 @@ class DefaultRetrievalPostProcessor : RetrievalPostProcessor {
             )
         }
 
-        val thresholded = scored.filter { candidate ->
-            thresholdReason(candidate, mode, config) == null
-        }
-
+        val thresholded = scored.filter { candidate -> thresholdReason(candidate, mode, config) == null }
         val ranked = when (mode) {
             RetrievalPostProcessingMode.HEURISTIC_RERANK,
             RetrievalPostProcessingMode.THRESHOLD_PLUS_RERANK,
             RetrievalPostProcessingMode.MODEL_RERANK,
             RetrievalPostProcessingMode.THRESHOLD_PLUS_MODEL_RERANK -> thresholded.sortedByDescending { it.rerankScore }
-
             RetrievalPostProcessingMode.NONE,
-            RetrievalPostProcessingMode.THRESHOLD_ONLY -> thresholded.sortedByDescending { it.chunk.score }
+            RetrievalPostProcessingMode.THRESHOLD_ONLY -> thresholded.sortedByDescending { it.chunk.fusionScore }
         }
 
         val selected = ranked.take(config.finalTopK.coerceAtLeast(1))
@@ -117,22 +146,11 @@ class DefaultRetrievalPostProcessor : RetrievalPostProcessor {
         }
 
         val fallback = candidates
-            .sortedByDescending { rerankScores[it.chunkId] ?: it.score }
+            .sortedByDescending { rerankResult.scoresByChunkId[it.chunkId] ?: it.fusionScore }
             .take(config.finalTopK.coerceAtLeast(1))
             .mapIndexed { index, candidate ->
-                RetrievedContextChunk(
-                    chunkId = candidate.chunkId,
-                    source = candidate.relativePath.substringBefore('/').ifBlank { candidate.relativePath },
-                    title = candidate.title,
-                    relativePath = candidate.relativePath,
-                    section = candidate.section,
+                candidate.toRetrievedChunk(
                     finalRank = index + 1,
-                    score = candidate.score,
-                    semanticScore = candidate.semanticScore,
-                    keywordScore = candidate.keywordScore,
-                    rerankScore = rerankScores[candidate.chunkId],
-                    excerpt = candidate.text.take(280),
-                    fullText = candidate.text,
                     filteredOut = false,
                     filterReason = "fallback_restored",
                     explanation = "Restored from initial candidates because post-processing removed every result."
@@ -146,7 +164,7 @@ class DefaultRetrievalPostProcessor : RetrievalPostProcessor {
             fallbackReason = "post_processing_removed_all_candidates",
             rerankExecution = rerankInfo.copy(
                 fallbackUsed = true,
-                fallbackReason = "post_processing_removed_all_candidates"
+                fallbackReason = rerankInfo.fallbackReason ?: "post_processing_removed_all_candidates"
             )
         )
     }
@@ -159,7 +177,7 @@ class DefaultRetrievalPostProcessor : RetrievalPostProcessor {
         return when (mode) {
             RetrievalPostProcessingMode.THRESHOLD_ONLY -> {
                 val threshold = config.similarityThreshold ?: return null
-                if (candidate.chunk.semanticScore < threshold) "below_similarity_threshold" else null
+                if (candidate.chunk.vectorScore < threshold) "below_similarity_threshold" else null
             }
 
             RetrievalPostProcessingMode.THRESHOLD_PLUS_RERANK,
@@ -174,52 +192,39 @@ class DefaultRetrievalPostProcessor : RetrievalPostProcessor {
         }
     }
 
-    private fun heuristicRerankScore(
-        candidate: SearchResultChunk,
-        originalQuery: String,
-        rewrittenQuery: String?,
-        effectiveQuery: String
-    ): Double {
-        val originalTerms = tokenize(originalQuery)
-        val rewrittenTerms = tokenize(rewrittenQuery.orEmpty())
-        val effectiveTerms = tokenize(effectiveQuery)
-        val combinedTerms = (originalTerms + rewrittenTerms + effectiveTerms).toSet()
-        val haystack = buildString {
-            append(candidate.title.lowercase())
-            append(' ')
-            append(candidate.section.lowercase())
-            append(' ')
-            append(candidate.relativePath.lowercase())
-            append(' ')
-            append(candidate.text.lowercase())
-        }
-
-        val overlap = if (combinedTerms.isEmpty()) {
-            0.0
-        } else {
-            combinedTerms.count { haystack.contains(it) }.toDouble() / combinedTerms.size.toDouble()
-        }
-        val titleSectionBonus = combinedTerms.count {
-            candidate.title.lowercase().contains(it) || candidate.section.lowercase().contains(it)
-        } * 0.08
-        val weakOverlapPenalty = if (overlap < 0.15) 0.12 else 0.0
-
-        return (candidate.semanticScore * 0.7) +
-            (candidate.keywordScore * 0.2) +
-            (overlap * 0.25) +
-            titleSectionBonus -
-            weakOverlapPenalty
-    }
-
     private fun buildExplanation(candidate: SearchResultChunk, rerankScore: Double): String {
-        return "semantic=${"%.3f".format(candidate.semanticScore)}, keyword=${"%.3f".format(candidate.keywordScore)}, rerank=${"%.3f".format(rerankScore)}"
+        return "lexical=${"%.3f".format(candidate.lexicalScore)}, vector=${"%.3f".format(candidate.vectorScore)}, fusion=${"%.3f".format(candidate.fusionScore)}, rerank=${"%.3f".format(rerankScore)}"
     }
 
-    private fun tokenize(text: String): Set<String> = text
-        .lowercase()
-        .split(Regex("[^\\p{L}\\p{N}_]+"))
-        .filter { it.length >= 3 }
-        .toSet()
+    private fun SearchResultChunk.toRetrievedChunk(
+        finalRank: Int?,
+        filteredOut: Boolean,
+        filterReason: String?,
+        explanation: String?
+    ): RetrievedContextChunk {
+        return RetrievedContextChunk(
+            chunkId = chunkId,
+            source = relativePath.substringBefore('/').ifBlank { relativePath },
+            title = title,
+            relativePath = relativePath,
+            section = section,
+            finalRank = finalRank,
+            score = fusionScore,
+            semanticScore = semanticScore,
+            keywordScore = keywordScore,
+            lexicalScore = lexicalScore,
+            vectorScore = vectorScore,
+            fusionScore = fusionScore,
+            candidateSource = candidateSource,
+            rerankScore = null,
+            excerpt = text.take(280),
+            fullText = text,
+            filteredOut = filteredOut,
+            filterReason = filterReason,
+            explanation = explanation,
+            metadata = metadata
+        )
+    }
 
     private fun ProcessedCandidate.toRetrievedChunk(
         finalRank: Int?,
@@ -227,23 +232,12 @@ class DefaultRetrievalPostProcessor : RetrievalPostProcessor {
         filterReason: String?,
         explanation: String?
     ): RetrievedContextChunk {
-        return RetrievedContextChunk(
-            chunkId = chunk.chunkId,
-            source = chunk.relativePath.substringBefore('/').ifBlank { chunk.relativePath },
-            title = chunk.title,
-            relativePath = chunk.relativePath,
-            section = chunk.section,
+        return chunk.toRetrievedChunk(
             finalRank = finalRank,
-            score = chunk.score,
-            semanticScore = chunk.semanticScore,
-            keywordScore = chunk.keywordScore,
-            rerankScore = rerankScore,
-            excerpt = chunk.text.take(280),
-            fullText = chunk.text,
             filteredOut = filteredOut,
             filterReason = filterReason,
             explanation = explanation
-        )
+        ).copy(rerankScore = rerankScore)
     }
 
     private data class ProcessedCandidate(
@@ -251,6 +245,13 @@ class DefaultRetrievalPostProcessor : RetrievalPostProcessor {
         val rerankScore: Double,
         val explanation: String
     )
+
+    private companion object {
+        val modelModes = setOf(
+            RetrievalPostProcessingMode.MODEL_RERANK,
+            RetrievalPostProcessingMode.THRESHOLD_PLUS_MODEL_RERANK
+        )
+    }
 }
 
 data class PostProcessingResult(

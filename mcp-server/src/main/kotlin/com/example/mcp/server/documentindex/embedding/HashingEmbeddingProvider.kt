@@ -1,13 +1,20 @@
 package com.example.mcp.server.documentindex.embedding
 
 import com.example.mcp.server.documentindex.model.EmbeddingVector
+import com.example.mcp.server.documentindex.model.EmbeddingProviderMetadata
 import kotlin.math.sqrt
 
 class HashingEmbeddingProvider(
     override val dimensions: Int = 256
 ) : EmbeddingProvider {
 
-    override val providerId: String = "local_hashing_v1"
+    override val metadata: EmbeddingProviderMetadata = EmbeddingProviderMetadata(
+        providerId = "local_hashing_v1",
+        model = "hashing",
+        version = "v1",
+        dimensions = dimensions,
+        supportsBatch = true
+    )
 
     override fun embed(text: String): EmbeddingVector {
         val vector = FloatArray(dimensions)
@@ -24,7 +31,9 @@ class HashingEmbeddingProvider(
         return EmbeddingVector(
             providerId = providerId,
             dimensions = dimensions,
-            values = vector.toList()
+            values = vector.toList(),
+            model = model,
+            version = version
         )
     }
 

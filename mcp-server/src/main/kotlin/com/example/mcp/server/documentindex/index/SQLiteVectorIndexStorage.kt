@@ -5,6 +5,7 @@ import com.example.mcp.server.documentindex.model.IndexedChunk
 import com.example.mcp.server.documentindex.model.IndexedDocumentSummary
 import com.example.mcp.server.documentindex.model.MetadataCoverage
 import com.example.mcp.server.documentindex.model.ChunkMetadata
+import com.example.mcp.server.documentindex.model.SearchResultChunk
 import com.example.mcp.server.documentindex.model.StoredIndexedChunk
 import com.example.mcp.server.documentindex.model.StrategyIndexingSummary
 import kotlinx.serialization.encodeToString
@@ -39,6 +40,8 @@ class SQLiteVectorIndexStorage(
                         page_number INTEGER,
                         text_content TEXT NOT NULL,
                         embedding_provider TEXT NOT NULL,
+                        embedding_model TEXT,
+                        embedding_version TEXT NOT NULL DEFAULT 'v1',
                         embedding_dimensions INTEGER NOT NULL,
                         embedding_json TEXT NOT NULL,
                         metadata_json TEXT NOT NULL
@@ -74,7 +77,24 @@ class SQLiteVectorIndexStorage(
                     ON indexed_chunks(source, document_id)
                     """.trimIndent()
                 )
+                statement.executeUpdate(
+                    """
+                    CREATE VIRTUAL TABLE IF NOT EXISTS indexed_chunks_fts USING fts5(
+                        chunk_id UNINDEXED,
+                        source UNINDEXED,
+                        chunking_strategy UNINDEXED,
+                        document_type UNINDEXED,
+                        relative_path UNINDEXED,
+                        section,
+                        title,
+                        text_content
+                    )
+                    """.trimIndent()
+                )
             }
+            ensureColumn(connection, "indexed_chunks", "embedding_model", "TEXT")
+            ensureColumn(connection, "indexed_chunks", "embedding_version", "TEXT NOT NULL DEFAULT 'v1'")
+            rebuildFtsIndex(connection)
         }
     }
 
@@ -108,8 +128,9 @@ class SQLiteVectorIndexStorage(
                     INSERT INTO indexed_chunks (
                         chunk_id, document_id, source, title, file_path, relative_path, section,
                         chunking_strategy, document_type, position_start, position_end, page_number,
-                        text_content, embedding_provider, embedding_dimensions, embedding_json, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        text_content, embedding_provider, embedding_model, embedding_version,
+                        embedding_dimensions, embedding_json, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """.trimIndent()
                 ).use { statement ->
                     chunks.forEach { indexedChunk ->
@@ -128,9 +149,11 @@ class SQLiteVectorIndexStorage(
                         statement.setObject(12, metadata.pageNumber)
                         statement.setString(13, indexedChunk.chunk.text)
                         statement.setString(14, indexedChunk.embedding.providerId)
-                        statement.setInt(15, indexedChunk.embedding.dimensions)
-                        statement.setString(16, json.encodeToString(indexedChunk.embedding.values))
-                        statement.setString(17, json.encodeToString(metadata))
+                        statement.setString(15, indexedChunk.embedding.model)
+                        statement.setString(16, indexedChunk.embedding.version)
+                        statement.setInt(17, indexedChunk.embedding.dimensions)
+                        statement.setString(18, json.encodeToString(indexedChunk.embedding.values))
+                        statement.setString(19, json.encodeToString(metadata))
                         statement.addBatch()
                     }
                     statement.executeBatch()
@@ -158,6 +181,7 @@ class SQLiteVectorIndexStorage(
                 }
 
                 connection.commit()
+                rebuildFtsIndex(connection)
             } catch (error: Exception) {
                 connection.rollback()
                 throw error
@@ -180,6 +204,8 @@ class SQLiteVectorIndexStorage(
         )
         val strategies = mutableListOf<String>()
         var provider = ""
+        var model: String? = null
+        var version = "v1"
         var dimensions = 0
 
         withConnection { connection ->
@@ -195,12 +221,14 @@ class SQLiteVectorIndexStorage(
             }
 
             connection.prepareStatement(
-                "SELECT embedding_provider, embedding_dimensions FROM indexed_chunks WHERE source = ? LIMIT 1"
+                "SELECT embedding_provider, embedding_model, embedding_version, embedding_dimensions FROM indexed_chunks WHERE source = ? LIMIT 1"
             ).use { statement ->
                 statement.setString(1, source)
                 statement.executeQuery().use { resultSet ->
                     if (resultSet.next()) {
                         provider = resultSet.getString("embedding_provider")
+                        model = resultSet.getString("embedding_model")
+                        version = resultSet.getString("embedding_version") ?: "v1"
                         dimensions = resultSet.getInt("embedding_dimensions")
                     }
                 }
@@ -214,7 +242,10 @@ class SQLiteVectorIndexStorage(
             chunkCount = chunkCount,
             strategies = strategies,
             embeddingsProvider = provider,
+            embeddingModel = model,
+            embeddingVersion = version,
             dimensions = dimensions,
+            indexVersion = "v2",
             databasePath = file.absolutePath,
             databaseSizeBytes = if (file.exists()) file.length() else 0L
         )
@@ -284,7 +315,8 @@ class SQLiteVectorIndexStorage(
         source: String,
         strategy: String?,
         documentType: String?,
-        relativePathContains: String?
+        relativePathContains: String?,
+        canonicalOnly: Boolean
     ): List<StoredIndexedChunk> {
         initialize()
 
@@ -299,6 +331,7 @@ class SQLiteVectorIndexStorage(
             if (strategy != null) append(" AND chunking_strategy = ?")
             if (documentType != null) append(" AND document_type = ?")
             if (relativePathContains != null) append(" AND relative_path LIKE ?")
+            if (canonicalOnly) append(" AND json_extract(metadata_json, '$.isCanonicalKnowledge') = 1")
             append(" ORDER BY title, position_start")
         }
 
@@ -335,8 +368,89 @@ class SQLiteVectorIndexStorage(
                                     pageNumber = resultSet.getObject("page_number") as? Int,
                                     text = resultSet.getString("text_content"),
                                     embeddingProvider = resultSet.getString("embedding_provider"),
+                                    embeddingModel = resultSet.getString("embedding_model"),
+                                    embeddingVersion = resultSet.getString("embedding_version") ?: "v1",
                                     embeddingDimensions = resultSet.getInt("embedding_dimensions"),
                                     embeddingValues = embeddingValues,
+                                    metadata = metadata
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun searchLexicalChunks(
+        query: String,
+        source: String,
+        strategy: String?,
+        limit: Int,
+        documentType: String?,
+        relativePathContains: String?,
+        canonicalOnly: Boolean
+    ): List<SearchResultChunk> {
+        initialize()
+
+        val normalized = query
+            .split(Regex("[^\\p{L}\\p{N}_]+"))
+            .filter { it.length >= 2 }
+            .joinToString(" OR ")
+            .ifBlank { query }
+
+        val sql = buildString {
+            append(
+                """
+                SELECT c.*, bm25(indexed_chunks_fts) AS lexical_score
+                FROM indexed_chunks_fts
+                JOIN indexed_chunks c ON c.chunk_id = indexed_chunks_fts.chunk_id
+                WHERE indexed_chunks_fts MATCH ?
+                  AND c.source = ?
+                """.trimIndent()
+            )
+            if (strategy != null) append(" AND c.chunking_strategy = ?")
+            if (documentType != null) append(" AND c.document_type = ?")
+            if (relativePathContains != null) append(" AND c.relative_path LIKE ?")
+            if (canonicalOnly) append(" AND json_extract(c.metadata_json, '$.isCanonicalKnowledge') = 1")
+            append(" ORDER BY lexical_score ASC LIMIT ?")
+        }
+
+        return withConnection { connection ->
+            connection.prepareStatement(sql).use { statement ->
+                var index = 1
+                statement.setString(index++, normalized)
+                statement.setString(index++, source)
+                strategy?.let { statement.setString(index++, it) }
+                documentType?.let { statement.setString(index++, it.lowercase()) }
+                relativePathContains?.let { statement.setString(index++, "%$it%") }
+                statement.setInt(index, limit)
+
+                statement.executeQuery().use { resultSet ->
+                    buildList {
+                        while (resultSet.next()) {
+                            val metadata = json.decodeFromString<ChunkMetadata>(resultSet.getString("metadata_json"))
+                            val lexicalScore = 1.0 / (1.0 + resultSet.getDouble("lexical_score").coerceAtLeast(0.0))
+                            add(
+                                SearchResultChunk(
+                                    chunkId = resultSet.getString("chunk_id"),
+                                    documentId = resultSet.getString("document_id"),
+                                    title = resultSet.getString("title"),
+                                    relativePath = resultSet.getString("relative_path"),
+                                    section = resultSet.getString("section"),
+                                    chunkingStrategy = resultSet.getString("chunking_strategy"),
+                                    documentType = resultSet.getString("document_type"),
+                                    score = lexicalScore,
+                                    semanticScore = 0.0,
+                                    keywordScore = lexicalScore,
+                                    lexicalScore = lexicalScore,
+                                    vectorScore = 0.0,
+                                    fusionScore = lexicalScore,
+                                    candidateSource = "lexical",
+                                    text = resultSet.getString("text_content"),
+                                    positionStart = resultSet.getInt("position_start"),
+                                    positionEnd = resultSet.getInt("position_end"),
+                                    pageNumber = resultSet.getObject("page_number") as? Int,
                                     metadata = metadata
                                 )
                             )
@@ -379,5 +493,31 @@ class SQLiteVectorIndexStorage(
         val file = File(databasePath)
         file.parentFile?.mkdirs()
         return DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}").use(block)
+    }
+
+    private fun ensureColumn(connection: Connection, table: String, column: String, definition: String) {
+        connection.createStatement().use { statement ->
+            statement.executeQuery("PRAGMA table_info($table)").use { resultSet ->
+                while (resultSet.next()) {
+                    if (resultSet.getString("name") == column) return
+                }
+            }
+            statement.executeUpdate("ALTER TABLE $table ADD COLUMN $column $definition")
+        }
+    }
+
+    private fun rebuildFtsIndex(connection: Connection) {
+        connection.createStatement().use { statement ->
+            statement.executeUpdate("DELETE FROM indexed_chunks_fts")
+            statement.executeUpdate(
+                """
+                INSERT INTO indexed_chunks_fts (
+                    chunk_id, source, chunking_strategy, document_type, relative_path, section, title, text_content
+                )
+                SELECT chunk_id, source, chunking_strategy, document_type, relative_path, section, title, text_content
+                FROM indexed_chunks
+                """.trimIndent()
+            )
+        }
     }
 }

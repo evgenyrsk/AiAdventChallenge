@@ -80,6 +80,13 @@ data class ChunkMetadata(
     val positionStart: Int,
     val positionEnd: Int,
     val pageNumber: Int? = null,
+    val corpusSegment: String? = null,
+    val language: String? = null,
+    val headingPath: List<String> = emptyList(),
+    val parentSectionId: String? = null,
+    val tokenCount: Int = 0,
+    val charCount: Int = 0,
+    val isCanonicalKnowledge: Boolean = false,
     val extra: Map<String, String> = emptyMap()
 )
 
@@ -92,10 +99,22 @@ data class DocumentChunk(
 )
 
 @Serializable
+data class EmbeddingProviderMetadata(
+    val providerId: String,
+    val model: String? = null,
+    val version: String = "v1",
+    val dimensions: Int,
+    val supportsBatch: Boolean = false
+)
+
+@Serializable
 data class EmbeddingVector(
     val providerId: String,
     val dimensions: Int,
-    val values: List<Float>
+    val values: List<Float>,
+    val model: String? = null,
+    val version: String = "v1",
+    val indexedAtEpochMs: Long = System.currentTimeMillis()
 )
 
 @Serializable
@@ -194,7 +213,10 @@ data class IndexStats(
     val chunkCount: Int,
     val strategies: List<String>,
     val embeddingsProvider: String,
+    val embeddingModel: String? = null,
+    val embeddingVersion: String = "v1",
     val dimensions: Int,
+    val indexVersion: String = "v2",
     val databasePath: String,
     val databaseSizeBytes: Long,
     val exportedFiles: List<String> = emptyList()
@@ -206,9 +228,12 @@ data class SearchIndexRequest(
     val source: String = "local_docs",
     val strategy: String? = null,
     val topK: Int = 5,
+    val lexicalTopK: Int = (topK * 2).coerceAtLeast(5),
+    val semanticTopK: Int = (topK * 2).coerceAtLeast(5),
     val documentType: String? = null,
     val relativePathContains: String? = null,
-    val perDocumentLimit: Int = 2
+    val perDocumentLimit: Int = 2,
+    val canonicalOnly: Boolean = false
 )
 
 @Serializable
@@ -223,10 +248,15 @@ data class SearchResultChunk(
     val score: Double,
     val semanticScore: Double,
     val keywordScore: Double,
+    val lexicalScore: Double = keywordScore,
+    val vectorScore: Double = semanticScore,
+    val fusionScore: Double = score,
+    val candidateSource: String = "hybrid",
     val text: String,
     val positionStart: Int,
     val positionEnd: Int,
-    val pageNumber: Int? = null
+    val pageNumber: Int? = null,
+    val metadata: ChunkMetadata? = null
 )
 
 @Serializable
@@ -237,6 +267,8 @@ data class SearchIndexResult(
     val topK: Int,
     val returnedCount: Int,
     val embeddingProvider: String,
+    val embeddingModel: String? = null,
+    val embeddingVersion: String = "v1",
     val results: List<SearchResultChunk>
 )
 
@@ -257,12 +289,71 @@ enum class RetrievalRerankFallbackPolicy {
 }
 
 @Serializable
+enum class RetrievalConfidenceLevel {
+    ANSWERABLE_GROUNDED,
+    PARTIALLY_ANSWERABLE,
+    INSUFFICIENT_EVIDENCE,
+    OFF_TOPIC_RETRIEVAL
+}
+
+@Serializable
+data class RetrievalContextInput(
+    val userQuestion: String,
+    val conversationGoal: String? = null,
+    val constraints: List<String> = emptyList(),
+    val retrievalHints: List<String> = emptyList(),
+    val memorySummary: String? = null
+)
+
+@Serializable
+data class CandidatePoolStats(
+    val lexicalCount: Int = 0,
+    val semanticCount: Int = 0,
+    val fusedCount: Int = 0,
+    val selectedForRerank: Int = 0
+)
+
+@Serializable
+data class FusionDebugEntry(
+    val chunkId: String,
+    val lexicalRank: Int? = null,
+    val semanticRank: Int? = null,
+    val lexicalScore: Double? = null,
+    val vectorScore: Double? = null,
+    val fusionScore: Double,
+    val candidateSource: String
+)
+
+@Serializable
+data class EvidenceSpan(
+    val chunkId: String,
+    val relativePath: String? = null,
+    val section: String? = null,
+    val text: String,
+    val score: Double,
+    val originFinalRank: Int? = null
+)
+
+@Serializable
+data class GateDecision(
+    val confidenceLevel: RetrievalConfidenceLevel,
+    val reason: String? = null,
+    val coverageScore: Double = 0.0,
+    val consistencyScore: Double = 0.0,
+    val evidenceScore: Double = 0.0,
+    val offTopic: Boolean = false
+)
+
+@Serializable
 data class RetrievalPipelineConfig(
     val rewriteEnabled: Boolean = false,
     val postProcessingEnabled: Boolean = false,
     val postProcessingMode: RetrievalPostProcessingMode = RetrievalPostProcessingMode.NONE,
     val topKBeforeFilter: Int = 5,
     val finalTopK: Int = 5,
+    val lexicalTopK: Int = topKBeforeFilter,
+    val semanticTopK: Int = topKBeforeFilter,
+    val fusionK: Int = topKBeforeFilter,
     val similarityThreshold: Double? = null,
     val minAnswerableChunks: Int = 1,
     val allowAnswerWithRetrievalFallback: Boolean = false,
@@ -271,7 +362,10 @@ data class RetrievalPipelineConfig(
     val rerankScoreThreshold: Double? = null,
     val rerankTimeoutMs: Long = 3500,
     val rerankFallbackPolicy: RetrievalRerankFallbackPolicy = RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL,
-    val queryContext: String? = null
+    val queryContext: String? = null,
+    val canonicalOnly: Boolean = false,
+    val minimumCoverageScore: Double = 0.2,
+    val minimumEvidenceScore: Double = 0.15
 )
 
 @Serializable
@@ -296,6 +390,7 @@ data class RetrieveRelevantChunksRequest(
     val documentType: String? = null,
     val relativePathContains: String? = null,
     val perDocumentLimit: Int = 2,
+    val contextInput: RetrievalContextInput? = null,
     val rewriteDebug: RewriteDebugInfo? = null,
     val pipelineConfig: RetrievalPipelineConfig = RetrievalPipelineConfig(
         topKBeforeFilter = topK,
@@ -314,12 +409,17 @@ data class RetrievedContextChunk(
     val score: Double,
     val semanticScore: Double,
     val keywordScore: Double,
+    val lexicalScore: Double = keywordScore,
+    val vectorScore: Double = semanticScore,
+    val fusionScore: Double = score,
+    val candidateSource: String = "hybrid",
     val rerankScore: Double? = null,
     val excerpt: String,
     val fullText: String = "",
     val filteredOut: Boolean = false,
     val filterReason: String? = null,
-    val explanation: String? = null
+    val explanation: String? = null,
+    val metadata: ChunkMetadata? = null
 )
 
 @Serializable
@@ -357,7 +457,15 @@ data class RetrievalConfidenceSummary(
     val topRerankScore: Double? = null,
     val similarityThreshold: Double? = null,
     val rerankThreshold: Double? = null,
-    val retrievalFallbackApplied: Boolean = false
+    val retrievalFallbackApplied: Boolean = false,
+    val confidenceLevel: RetrievalConfidenceLevel = if (answerable) {
+        RetrievalConfidenceLevel.ANSWERABLE_GROUNDED
+    } else {
+        RetrievalConfidenceLevel.INSUFFICIENT_EVIDENCE
+    },
+    val coverageScore: Double = 0.0,
+    val consistencyScore: Double = 0.0,
+    val evidenceScore: Double = 0.0
 )
 
 @Serializable
@@ -376,6 +484,9 @@ data class RetrievalDebugInfo(
     val effectiveQuery: String,
     val topKBeforeFilter: Int,
     val finalTopK: Int,
+    val lexicalTopK: Int = topKBeforeFilter,
+    val semanticTopK: Int = topKBeforeFilter,
+    val fusionK: Int = topKBeforeFilter,
     val similarityThreshold: Double? = null,
     val postProcessingMode: RetrievalPostProcessingMode = RetrievalPostProcessingMode.NONE,
     val rewriteApplied: Boolean = false,
@@ -393,7 +504,8 @@ data class RetrievalDebugInfo(
     val rerankFallbackUsed: Boolean = false,
     val rerankFallbackReason: String? = null,
     val fallbackApplied: Boolean = false,
-    val fallbackReason: String? = null
+    val fallbackReason: String? = null,
+    val degradedMode: Boolean = false
 )
 
 @Serializable
@@ -412,6 +524,11 @@ data class RetrieveRelevantChunksResult(
     val initialCandidates: List<RetrievedContextChunk> = emptyList(),
     val finalCandidates: List<RetrievedContextChunk> = emptyList(),
     val filteredCandidates: List<RetrievedContextChunk> = emptyList(),
+    val candidatePoolStats: CandidatePoolStats = CandidatePoolStats(),
+    val fusionDebug: List<FusionDebugEntry> = emptyList(),
+    val gateDecision: GateDecision? = null,
+    val evidenceSpans: List<EvidenceSpan> = emptyList(),
+    val degradedMode: Boolean = false,
     val debug: RetrievalDebugInfo,
     val contextEnvelope: String,
     val grounding: RetrievalGrounding? = null
@@ -430,6 +547,7 @@ data class AnswerWithRetrievalRequest(
     val documentType: String? = null,
     val relativePathContains: String? = null,
     val perDocumentLimit: Int = 2,
+    val contextInput: RetrievalContextInput? = null,
     val rewriteDebug: RewriteDebugInfo? = null,
     val pipelineConfig: RetrievalPipelineConfig = RetrievalPipelineConfig(
         topKBeforeFilter = topK,
@@ -463,6 +581,8 @@ data class StoredIndexedChunk(
     val pageNumber: Int?,
     val text: String,
     val embeddingProvider: String,
+    val embeddingModel: String? = null,
+    val embeddingVersion: String = "v1",
     val embeddingDimensions: Int,
     val embeddingValues: List<Float>,
     val metadata: ChunkMetadata

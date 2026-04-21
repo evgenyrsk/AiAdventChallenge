@@ -36,7 +36,11 @@ object FitnessRagConfig {
             rerankScoreThreshold = null,
             rerankTimeoutMs = ENHANCED_RERANK_TIMEOUT_MS,
             rerankFallbackPolicy = RagRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL,
-            queryContext = null
+            queryContext = null,
+            lexicalTopK = DEFAULT_TOP_K * 2,
+            semanticTopK = DEFAULT_TOP_K * 2,
+            fusionK = DEFAULT_TOP_K,
+            canonicalOnly = true
         )
 
     val enhancedPipeline: RagPipelineConfig
@@ -58,6 +62,10 @@ object FitnessRagConfig {
             rerankScoreThreshold = ENHANCED_SIMILARITY_THRESHOLD,
             rerankTimeoutMs = ENHANCED_RERANK_TIMEOUT_MS,
             rerankFallbackPolicy = RagRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL,
-            queryContext = null
+            queryContext = null,
+            lexicalTopK = ENHANCED_TOP_K_BEFORE_FILTER,
+            semanticTopK = ENHANCED_TOP_K_BEFORE_FILTER,
+            fusionK = ENHANCED_TOP_K_BEFORE_FILTER,
+            canonicalOnly = true
         )
 }

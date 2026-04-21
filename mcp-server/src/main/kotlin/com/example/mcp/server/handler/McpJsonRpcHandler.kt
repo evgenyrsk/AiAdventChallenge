@@ -411,6 +411,9 @@ abstract class AbstractMcpJsonRpcHandler {
             val postProcessingEnabled = params["postProcessingEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
             val topKBeforeFilter = params["topKBeforeFilter"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
             val finalTopK = params["finalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
+            val lexicalTopK = params["lexicalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
+            val semanticTopK = params["semanticTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
+            val fusionK = params["fusionK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
             val similarityThreshold = params["similarityThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
             val minAnswerableChunks = params["minAnswerableChunks"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
             val allowAnswerWithRetrievalFallback = params["allowAnswerWithRetrievalFallback"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
@@ -425,12 +428,22 @@ abstract class AbstractMcpJsonRpcHandler {
                 }
                 ?: com.example.mcp.server.documentindex.model.RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL
             val queryContext = params["queryContext"]?.jsonPrimitive?.content
+            val canonicalOnly = params["canonicalOnly"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
             val postProcessingMode = params["postProcessingMode"]?.jsonPrimitive?.content
                 ?.let { value ->
                     runCatching { RetrievalPostProcessingMode.valueOf(value.uppercase()) }
                         .getOrDefault(RetrievalPostProcessingMode.NONE)
                 }
                 ?: RetrievalPostProcessingMode.NONE
+            val contextInput = params["contextInput"]?.jsonObject?.let { ctx ->
+                com.example.mcp.server.documentindex.model.RetrievalContextInput(
+                    userQuestion = ctx["userQuestion"]?.jsonPrimitive?.content ?: originalQuery,
+                    conversationGoal = ctx["conversationGoal"]?.jsonPrimitive?.content,
+                    constraints = ctx["constraints"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                    retrievalHints = ctx["retrievalHints"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                    memorySummary = ctx["memorySummary"]?.jsonPrimitive?.content
+                )
+            }
             val rewriteDebug = params["rewriteDebug"]?.jsonObject?.let { debug ->
                 RewriteDebugInfo(
                     rewriteApplied = debug["rewriteApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
@@ -453,6 +466,7 @@ abstract class AbstractMcpJsonRpcHandler {
                 documentType = documentType,
                 relativePathContains = relativePathContains,
                 perDocumentLimit = perDocumentLimit,
+                contextInput = contextInput,
                 rewriteDebug = rewriteDebug,
                 pipelineConfig = RetrievalPipelineConfig(
                     rewriteEnabled = rewriteEnabled,
@@ -460,6 +474,9 @@ abstract class AbstractMcpJsonRpcHandler {
                     postProcessingMode = postProcessingMode,
                     topKBeforeFilter = topKBeforeFilter,
                     finalTopK = finalTopK,
+                    lexicalTopK = lexicalTopK,
+                    semanticTopK = semanticTopK,
+                    fusionK = fusionK,
                     similarityThreshold = similarityThreshold,
                     minAnswerableChunks = minAnswerableChunks,
                     allowAnswerWithRetrievalFallback = allowAnswerWithRetrievalFallback,
@@ -468,7 +485,8 @@ abstract class AbstractMcpJsonRpcHandler {
                     rerankScoreThreshold = rerankScoreThreshold,
                     rerankTimeoutMs = rerankTimeoutMs,
                     rerankFallbackPolicy = rerankFallbackPolicy,
-                    queryContext = queryContext
+                    queryContext = queryContext,
+                    canonicalOnly = canonicalOnly
                 )
             )
             val resultJson = buildJsonObject {
@@ -503,6 +521,9 @@ abstract class AbstractMcpJsonRpcHandler {
             val postProcessingEnabled = params["postProcessingEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
             val topKBeforeFilter = params["topKBeforeFilter"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
             val finalTopK = params["finalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
+            val lexicalTopK = params["lexicalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
+            val semanticTopK = params["semanticTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
+            val fusionK = params["fusionK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
             val similarityThreshold = params["similarityThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
             val minAnswerableChunks = params["minAnswerableChunks"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
             val allowAnswerWithRetrievalFallback = params["allowAnswerWithRetrievalFallback"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
@@ -517,12 +538,22 @@ abstract class AbstractMcpJsonRpcHandler {
                 }
                 ?: com.example.mcp.server.documentindex.model.RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL
             val queryContext = params["queryContext"]?.jsonPrimitive?.content
+            val canonicalOnly = params["canonicalOnly"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
             val postProcessingMode = params["postProcessingMode"]?.jsonPrimitive?.content
                 ?.let { value ->
                     runCatching { RetrievalPostProcessingMode.valueOf(value.uppercase()) }
                         .getOrDefault(RetrievalPostProcessingMode.NONE)
                 }
                 ?: RetrievalPostProcessingMode.NONE
+            val contextInput = params["contextInput"]?.jsonObject?.let { ctx ->
+                com.example.mcp.server.documentindex.model.RetrievalContextInput(
+                    userQuestion = ctx["userQuestion"]?.jsonPrimitive?.content ?: originalQuery,
+                    conversationGoal = ctx["conversationGoal"]?.jsonPrimitive?.content,
+                    constraints = ctx["constraints"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                    retrievalHints = ctx["retrievalHints"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                    memorySummary = ctx["memorySummary"]?.jsonPrimitive?.content
+                )
+            }
             val rewriteDebug = params["rewriteDebug"]?.jsonObject?.let { debug ->
                 RewriteDebugInfo(
                     rewriteApplied = debug["rewriteApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
@@ -545,6 +576,7 @@ abstract class AbstractMcpJsonRpcHandler {
                 documentType = documentType,
                 relativePathContains = relativePathContains,
                 perDocumentLimit = perDocumentLimit,
+                contextInput = contextInput,
                 rewriteDebug = rewriteDebug,
                 pipelineConfig = RetrievalPipelineConfig(
                     rewriteEnabled = rewriteEnabled,
@@ -552,6 +584,9 @@ abstract class AbstractMcpJsonRpcHandler {
                     postProcessingMode = postProcessingMode,
                     topKBeforeFilter = topKBeforeFilter,
                     finalTopK = finalTopK,
+                    lexicalTopK = lexicalTopK,
+                    semanticTopK = semanticTopK,
+                    fusionK = fusionK,
                     similarityThreshold = similarityThreshold,
                     minAnswerableChunks = minAnswerableChunks,
                     allowAnswerWithRetrievalFallback = allowAnswerWithRetrievalFallback,
@@ -560,7 +595,8 @@ abstract class AbstractMcpJsonRpcHandler {
                     rerankScoreThreshold = rerankScoreThreshold,
                     rerankTimeoutMs = rerankTimeoutMs,
                     rerankFallbackPolicy = rerankFallbackPolicy,
-                    queryContext = queryContext
+                    queryContext = queryContext,
+                    canonicalOnly = canonicalOnly
                 )
             )
             val resultJson = buildJsonObject {

@@ -8,6 +8,7 @@ import com.example.mcp.server.documentindex.document.DocumentLoader
 import com.example.mcp.server.documentindex.document.DocumentParser
 import com.example.mcp.server.documentindex.embedding.EmbeddingProvider
 import com.example.mcp.server.documentindex.embedding.HashingEmbeddingProvider
+import com.example.mcp.server.documentindex.embedding.OpenAIEmbeddingProvider
 import com.example.mcp.server.documentindex.index.JsonIndexExporter
 import com.example.mcp.server.documentindex.index.SQLiteVectorIndexStorage
 import com.example.mcp.server.documentindex.index.VectorIndexStorage
@@ -29,7 +30,7 @@ import kotlin.system.measureTimeMillis
 class DocumentIndexingPipeline(
     private val documentLoader: DocumentLoader = DocumentLoader(),
     private val documentParser: DocumentParser = DocumentParser(),
-    private val embeddingProvider: EmbeddingProvider = HashingEmbeddingProvider(),
+    private val embeddingProvider: EmbeddingProvider = defaultEmbeddingProvider(),
     private val indexStorage: VectorIndexStorage = SQLiteVectorIndexStorage(defaultDatabasePath()),
     private val jsonIndexExporter: JsonIndexExporter = JsonIndexExporter(),
     private val comparisonService: ChunkingComparisonService = ChunkingComparisonService(),
@@ -83,10 +84,12 @@ class DocumentIndexingPipeline(
                     ?: throw IllegalArgumentException("Chunking strategy is not configured: $strategyType")
 
                 val indexedChunks = parsedDocuments.flatMap { parsedDocument ->
-                    strategy.chunk(parsedDocument, chunkingConfig).map { chunk ->
+                    val chunks = strategy.chunk(parsedDocument, chunkingConfig)
+                    val embeddings = embeddingProvider.embedBatch(chunks.map { it.text })
+                    chunks.zip(embeddings).map { (chunk, embedding) ->
                         IndexedChunk(
                             chunk = chunk,
-                            embedding = embeddingProvider.embed(chunk.text)
+                            embedding = embedding
                         )
                     }
                 }
@@ -232,6 +235,14 @@ class DocumentIndexingPipeline(
     }
 
     companion object {
+        fun defaultEmbeddingProvider(): EmbeddingProvider {
+            val mode = System.getenv("RAG_EMBEDDING_PROVIDER")?.lowercase()?.trim().orEmpty()
+            return when (mode) {
+                "openai" -> OpenAIEmbeddingProvider()
+                else -> HashingEmbeddingProvider()
+            }
+        }
+
         fun defaultDatabasePath(): String =
             File("output/document-index/document_index.db").absolutePath
 
