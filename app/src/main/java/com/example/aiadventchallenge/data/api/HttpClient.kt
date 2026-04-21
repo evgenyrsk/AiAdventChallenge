@@ -13,9 +13,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
-class HttpClient private constructor(
-    private val config: ApiConfig
-) {
+class HttpClient private constructor() {
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(120, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
@@ -23,17 +21,22 @@ class HttpClient private constructor(
         .retryOnConnectionFailure(true)
         .build()
 
-    suspend fun post(requestJson: String): Result<String> = suspendCancellableCoroutine { continuation ->
+    suspend fun post(
+        url: String,
+        requestJson: String,
+        headers: Map<String, String> = emptyMap()
+    ): Result<String> = suspendCancellableCoroutine { continuation ->
         val body = requestJson.toRequestBody("application/json".toMediaType())
 
-        val httpRequest = Request.Builder()
-            .url(config.baseUrl)
-            .addHeader("Authorization", "Bearer ${config.apiKey}")
-            .addHeader("Content-Type", "application/json")
-            .addHeader("HTTP-Referer", "https://example.com")
-            .addHeader("X-Title", "AiAdventChallenge")
+        val requestBuilder = Request.Builder()
+            .url(url)
             .post(body)
-            .build()
+
+        headers.forEach { (name, value) ->
+            requestBuilder.addHeader(name, value)
+        }
+
+        val httpRequest = requestBuilder.build()
 
         val call = client.newCall(httpRequest)
 
@@ -71,9 +74,9 @@ class HttpClient private constructor(
         @Volatile
         private var instance: HttpClient? = null
 
-        fun getInstance(config: ApiConfig): HttpClient {
+        fun getInstance(): HttpClient {
             return instance ?: synchronized(this) {
-                instance ?: HttpClient(config).also { instance = it }
+                instance ?: HttpClient().also { instance = it }
             }
         }
 

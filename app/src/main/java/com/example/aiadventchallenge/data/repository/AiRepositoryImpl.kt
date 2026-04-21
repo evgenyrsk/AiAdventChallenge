@@ -142,7 +142,11 @@ class AiRepositoryImpl(
     private suspend fun executeRequest(request: ChatRequest): ChatResult<Answer> {
         val requestJson = JsonConfig.json.encodeToString(request)
 
-        return httpClient.post(requestJson).fold(
+        return httpClient.post(
+            url = config.baseUrl,
+            requestJson = requestJson,
+            headers = defaultHeaders()
+        ).fold(
             onSuccess = { responseBody ->
                 val parsedContent = responseParser.parse(responseBody)
                 ChatResult.Success(Answer(content = parsedContent))
@@ -165,7 +169,11 @@ class AiRepositoryImpl(
     ): ChatResult<AnswerWithUsage> {
         val requestJson = JsonConfig.json.encodeToString(request)
 
-        return httpClient.post(requestJson).fold(
+        return httpClient.post(
+            url = config.baseUrl,
+            requestJson = requestJson,
+            headers = defaultHeaders()
+        ).fold(
             onSuccess = { responseBody ->
                 val parsed = responseParserWithUsage.parse(responseBody)
                 ChatResult.Success(AnswerWithUsage(
@@ -194,13 +202,17 @@ class AiRepositoryImpl(
     ): ChatResult<AnswerWithUsage> {
         val requestJson = JsonConfig.json.encodeToString(request)
 
-        return httpClient.post(requestJson).fold(
+        return httpClient.post(
+            url = config.baseUrl,
+            requestJson = requestJson,
+            headers = defaultHeaders()
+        ).fold(
             onSuccess = { responseBody ->
                 val parsed = responseParserWithUsage.parse(responseBody)
 
                 aiRequestRepository.recordRequest(
                     type = requestType,
-                    model = request.model,
+                    model = "REMOTE/${request.model}",
                     prompt = buildPromptText(messages),
                     response = parsed.content,
                     promptTokens = parsed.promptTokens,
@@ -224,6 +236,15 @@ class AiRepositoryImpl(
                     else -> ChatResult.Error(error.message ?: "Network error")
                 }
             }
+        )
+    }
+
+    private fun defaultHeaders(): Map<String, String> {
+        return mapOf(
+            "Authorization" to "Bearer ${config.apiKey}",
+            "Content-Type" to "application/json",
+            "HTTP-Referer" to "https://example.com",
+            "X-Title" to "AiAdventChallenge"
         )
     }
 

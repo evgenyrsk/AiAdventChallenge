@@ -1,6 +1,8 @@
 package com.example.aiadventchallenge.ui.screens.chat
 
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
+import com.example.aiadventchallenge.domain.model.AiBackendType
+import com.example.aiadventchallenge.domain.model.LocalLlmConfig
 import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.rag.memory.ConversationTaskState
@@ -27,6 +29,8 @@ data class ChatUiState(
     val branchesForMessage: List<BranchUiModel> = emptyList(),
 
     val fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE,
+    val selectedBackend: AiBackendType = AiBackendType.REMOTE,
+    val localLlmConfig: LocalLlmConfig = LocalLlmConfig(),
     val answerMode: AnswerMode = AnswerMode.PLAIN_LLM,
     val latestRetrievalSummary: RetrievalSummary? = null,
     val latestTaskState: ConversationTaskState? = null

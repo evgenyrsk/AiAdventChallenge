@@ -9,10 +9,14 @@ import com.example.aiadventchallenge.data.rag.McpRagRetriever
 import com.example.aiadventchallenge.data.repository.AiRepositoryImpl
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
 import com.example.aiadventchallenge.data.repository.InvariantRepositoryImpl
+import com.example.aiadventchallenge.data.repository.LocalOllamaRepository
+import com.example.aiadventchallenge.data.repository.RoutingAiRepository
 import com.example.aiadventchallenge.data.local.database.AppDatabase
 import com.example.aiadventchallenge.data.mcp.MultiServerRepository
 import com.example.aiadventchallenge.data.mcp.McpServerConfig
+import com.example.aiadventchallenge.data.repository.ChatSettingsRepository as DataChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.AiRepository
+import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.InvariantRepository
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
 import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
@@ -44,7 +48,7 @@ object AppDependencies {
     private val apiConfig: ApiConfig = ApiConfig()
 
     private val httpClient: HttpClient by lazy {
-        HttpClient.getInstance(config = apiConfig)
+        HttpClient.getInstance()
     }
 
     private val responseParser: ResponseParser by lazy {
@@ -61,12 +65,31 @@ object AppDependencies {
         )
     }
 
-    val repository: AiRepository by lazy {
+    val chatSettingsRepository: ChatSettingsRepository by lazy {
+        DataChatSettingsRepository(database.chatSettingsDao())
+    }
+
+    private val remoteRepository: AiRepository by lazy {
         AiRepositoryImpl(
             httpClient = httpClient,
             config = apiConfig,
             responseParser = responseParser,
             aiRequestRepository = aiRequestRepository
+        )
+    }
+
+    private val localOllamaRepository: LocalOllamaRepository by lazy {
+        LocalOllamaRepository(
+            httpClient = httpClient,
+            aiRequestRepository = aiRequestRepository
+        )
+    }
+
+    val repository: AiRepository by lazy {
+        RoutingAiRepository(
+            chatSettingsRepository = chatSettingsRepository,
+            remoteRepository = remoteRepository,
+            localOllamaRepository = localOllamaRepository
         )
     }
 

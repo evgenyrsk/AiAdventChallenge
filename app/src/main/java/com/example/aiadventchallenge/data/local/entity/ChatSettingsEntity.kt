@@ -10,5 +10,9 @@ data class ChatSettingsEntity(
     val strategyType: String,
     val windowSize: Int,
     val settingsJson: String? = null,
-    val fitnessProfile: String? = null
+    val fitnessProfile: String? = null,
+    val selectedBackend: String = "REMOTE",
+    val localHost: String = "10.0.2.2",
+    val localPort: Int = 11434,
+    val localModel: String = "qwen2.5:3b-instruct"
 )

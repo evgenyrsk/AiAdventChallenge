@@ -11,7 +11,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import com.example.aiadventchallenge.data.local.database.AppDatabase
 import com.example.aiadventchallenge.data.repository.ChatRepository
-import com.example.aiadventchallenge.data.repository.ChatSettingsRepository as DataChatSettingsRepository
 import com.example.aiadventchallenge.data.repository.FactRepositoryImpl
 import com.example.aiadventchallenge.data.repository.BranchRepositoryImpl
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
@@ -24,8 +23,6 @@ import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
 import com.example.aiadventchallenge.domain.context.FactExtractor
 import com.example.aiadventchallenge.domain.repository.FactRepository
 import com.example.aiadventchallenge.domain.repository.BranchRepository
-import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
-import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.repository.TaskStateRepository
 import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
@@ -41,7 +38,7 @@ class MainActivity : ComponentActivity() {
 
     private val database by lazy { AppDatabase.getDatabase(this) }
     private val chatRepository by lazy { ChatRepository(database.chatMessageDao(), database.branchDao(), database.factDao()) }
-    private val chatSettingsRepository by lazy { DataChatSettingsRepository(database.chatSettingsDao()) }
+    private val chatSettingsRepository by lazy { AppDependencies.chatSettingsRepository }
     private val factRepository by lazy { FactRepositoryImpl(database.factDao()) }
     private val branchRepository by lazy { BranchRepositoryImpl(database.branchDao()) }
     private val taskStateRepository by lazy { TaskStateRepositoryImpl(database.conversationTaskStateDao()) }
