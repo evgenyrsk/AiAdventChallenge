@@ -39,16 +39,7 @@ object TaskMemoryRagSupport {
         rewrittenQuery: String?,
         retrievalHints: List<String>
     ): String {
-        val base = rewrittenQuery ?: question
-        val hints = retrievalHints
-            .filterNot { hint -> base.contains(hint, ignoreCase = true) }
-            .take(3)
-
-        return if (hints.isEmpty()) {
-            base
-        } else {
-            "$base | dialog context: ${hints.joinToString("; ")}"
-        }
+        return rewrittenQuery ?: question
     }
 
     fun buildPromptBlock(context: RagConversationContext?): String? {

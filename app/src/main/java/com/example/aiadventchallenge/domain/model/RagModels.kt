@@ -46,7 +46,11 @@ data class RagPipelineConfig(
     val rerankScoreThreshold: Double? = null,
     val rerankTimeoutMs: Long = 3500,
     val rerankFallbackPolicy: RagRerankFallbackPolicy = RagRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL,
-    val queryContext: String? = null
+    val queryContext: String? = null,
+    val lexicalTopK: Int = retrievalTopKBeforeFilter,
+    val semanticTopK: Int = retrievalTopKBeforeFilter,
+    val fusionK: Int = retrievalTopKBeforeFilter,
+    val canonicalOnly: Boolean = false
 )
 
 data class RagContextChunk(
@@ -59,11 +63,23 @@ data class RagContextChunk(
     val score: Double,
     val semanticScore: Double,
     val keywordScore: Double,
+    val lexicalScore: Double = keywordScore,
+    val vectorScore: Double = semanticScore,
+    val fusionScore: Double = score,
+    val candidateSource: String = "hybrid",
     val rerankScore: Double? = null,
     val text: String,
     val filteredOut: Boolean = false,
     val filterReason: String? = null,
     val explanation: String? = null
+)
+
+data class RagRetrievalContextInput(
+    val userQuestion: String,
+    val conversationGoal: String? = null,
+    val constraints: List<String> = emptyList(),
+    val retrievalHints: List<String> = emptyList(),
+    val memorySummary: String? = null
 )
 
 data class RagRetrievalRequest(
@@ -74,12 +90,16 @@ data class RagRetrievalRequest(
     val config: RagPipelineConfig,
     val conversationGoal: String? = null,
     val retrievalHints: List<String> = emptyList(),
-    val memorySummary: String? = null
+    val memorySummary: String? = null,
+    val contextInput: RagRetrievalContextInput? = null
 )
 
 data class RagRetrievalDebug(
     val topKBeforeFilter: Int,
     val finalTopK: Int,
+    val lexicalTopK: Int = topKBeforeFilter,
+    val semanticTopK: Int = topKBeforeFilter,
+    val fusionK: Int = topKBeforeFilter,
     val similarityThreshold: Double? = null,
     val postProcessingMode: RagPostProcessingMode,
     val rewriteApplied: Boolean = false,
@@ -97,7 +117,8 @@ data class RagRetrievalDebug(
     val rerankFallbackUsed: Boolean = false,
     val rerankFallbackReason: String? = null,
     val fallbackApplied: Boolean,
-    val fallbackReason: String? = null
+    val fallbackReason: String? = null,
+    val degradedMode: Boolean = false
 )
 
 data class GroundedSource(
@@ -132,7 +153,11 @@ data class RagConfidenceSummary(
     val topRerankScore: Double? = null,
     val similarityThreshold: Double? = null,
     val rerankThreshold: Double? = null,
-    val retrievalFallbackApplied: Boolean = false
+    val retrievalFallbackApplied: Boolean = false,
+    val confidenceLevel: String? = null,
+    val coverageScore: Double = 0.0,
+    val consistencyScore: Double = 0.0,
+    val evidenceScore: Double = 0.0
 )
 
 data class RagGrounding(
@@ -168,6 +193,7 @@ data class RagRetrievalResult(
     val initialCandidates: List<RagContextChunk> = emptyList(),
     val finalCandidates: List<RagContextChunk> = emptyList(),
     val filteredCandidates: List<RagContextChunk> = emptyList(),
+    val degradedMode: Boolean = false,
     val debug: RagRetrievalDebug,
     val contextEnvelope: String,
     val grounding: RagGrounding? = null

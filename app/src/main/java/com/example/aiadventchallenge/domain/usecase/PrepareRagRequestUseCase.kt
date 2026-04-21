@@ -5,6 +5,7 @@ import com.example.aiadventchallenge.data.mcp.FitnessRagConfig
 import com.example.aiadventchallenge.domain.model.PreparedRagRequest
 import com.example.aiadventchallenge.domain.model.RagAnswerPolicy
 import com.example.aiadventchallenge.domain.model.RagPipelineConfig
+import com.example.aiadventchallenge.domain.model.RagRetrievalContextInput
 import com.example.aiadventchallenge.domain.model.RagRetrievalRequest
 import com.example.aiadventchallenge.domain.rag.RagPromptBuilder
 import com.example.aiadventchallenge.domain.rag.RagRetriever
@@ -50,7 +51,14 @@ class PrepareRagRequestUseCase(
                 config = config,
                 conversationGoal = conversationContext?.taskState?.dialogGoal,
                 retrievalHints = retrievalHints,
-                memorySummary = conversationContext?.taskState?.latestSummary
+                memorySummary = conversationContext?.taskState?.latestSummary,
+                contextInput = RagRetrievalContextInput(
+                    userQuestion = question,
+                    conversationGoal = conversationContext?.taskState?.dialogGoal,
+                    constraints = conversationContext?.taskState?.resolvedConstraints.orEmpty(),
+                    retrievalHints = retrievalHints,
+                    memorySummary = conversationContext?.taskState?.latestSummary
+                )
             )
         )
 

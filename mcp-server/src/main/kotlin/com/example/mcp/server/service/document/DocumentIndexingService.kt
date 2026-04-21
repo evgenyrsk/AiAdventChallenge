@@ -9,6 +9,7 @@ import com.example.mcp.server.documentindex.model.IndexingRequest
 import com.example.mcp.server.documentindex.model.AnswerWithRetrievalRequest
 import com.example.mcp.server.documentindex.model.AnswerWithRetrievalResult
 import com.example.mcp.server.documentindex.model.RetrievalPipelineConfig
+import com.example.mcp.server.documentindex.model.RetrievalContextInput
 import com.example.mcp.server.documentindex.model.RewriteDebugInfo
 import com.example.mcp.server.documentindex.model.RetrieveRelevantChunksRequest
 import com.example.mcp.server.documentindex.model.RetrieveRelevantChunksResult
@@ -104,6 +105,7 @@ class DocumentIndexingService(
         documentType: String? = null,
         relativePathContains: String? = null,
         perDocumentLimit: Int = 2,
+        contextInput: RetrievalContextInput? = null,
         rewriteDebug: RewriteDebugInfo? = null,
         pipelineConfig: RetrievalPipelineConfig = RetrievalPipelineConfig(
             topKBeforeFilter = topK,
@@ -123,6 +125,7 @@ class DocumentIndexingService(
                 documentType = documentType,
                 relativePathContains = relativePathContains,
                 perDocumentLimit = perDocumentLimit,
+                contextInput = contextInput,
                 rewriteDebug = rewriteDebug,
                 pipelineConfig = pipelineConfig
             )
@@ -141,6 +144,7 @@ class DocumentIndexingService(
         documentType: String? = null,
         relativePathContains: String? = null,
         perDocumentLimit: Int = 2,
+        contextInput: RetrievalContextInput? = null,
         rewriteDebug: RewriteDebugInfo? = null,
         pipelineConfig: RetrievalPipelineConfig = RetrievalPipelineConfig(
             topKBeforeFilter = topK,
@@ -160,6 +164,7 @@ class DocumentIndexingService(
                 documentType = documentType,
                 relativePathContains = relativePathContains,
                 perDocumentLimit = perDocumentLimit,
+                contextInput = contextInput,
                 rewriteDebug = rewriteDebug,
                 pipelineConfig = pipelineConfig
             )

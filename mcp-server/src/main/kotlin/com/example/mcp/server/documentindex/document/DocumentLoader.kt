@@ -8,6 +8,7 @@ import java.security.MessageDigest
 class DocumentLoader(
     private val supportedExtensions: Set<String> = DEFAULT_EXTENSIONS,
     private val ignoredDirectories: Set<String> = DEFAULT_IGNORED_DIRECTORIES,
+    private val excludedPathPatterns: List<Regex> = DEFAULT_EXCLUDED_PATH_PATTERNS,
     private val pathResolver: DocumentPathResolver = DocumentPathResolver()
 ) {
 
@@ -18,6 +19,7 @@ class DocumentLoader(
             .onEnter { file -> file.name !in ignoredDirectories }
             .filter { it.isFile }
             .filter { extensionOf(it) in supportedExtensions }
+            .filterNot { shouldExclude(root, it) }
             .toList()
 
         return files.sortedBy { it.absolutePath }.map { file ->
@@ -77,5 +79,24 @@ class DocumentLoader(
         private val DEFAULT_IGNORED_DIRECTORIES = setOf(
             ".git", ".gradle", ".idea", "build", ".kotlin", "output", "node_modules", ".opencode"
         )
+
+        private val DEFAULT_EXCLUDED_PATH_PATTERNS = listOf(
+            Regex("(^|/)fixtures(/|$)"),
+            Regex("(^|/)support(/|$)"),
+            Regex("(^|/)notes(/|$)"),
+            Regex("(^|/)README\\.md$", RegexOption.IGNORE_CASE),
+            Regex("(^|/)SEED_MANIFEST\\.md$", RegexOption.IGNORE_CASE)
+        )
+    }
+
+    private fun shouldExclude(root: File, file: File): Boolean {
+        val applyStrictCorpusHygiene = root.invariantSeparatorsPath.contains("fitness-knowledge-corpus")
+        val normalizedPath = if (root.isDirectory) {
+            file.relativeTo(root).invariantSeparatorsPath
+        } else {
+            file.name
+        }
+
+        return applyStrictCorpusHygiene && excludedPathPatterns.any { it.containsMatchIn(normalizedPath) }
     }
 }
