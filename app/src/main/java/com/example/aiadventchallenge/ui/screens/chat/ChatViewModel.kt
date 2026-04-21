@@ -7,7 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
+import com.example.aiadventchallenge.domain.model.AiBackendSettings
 import com.example.aiadventchallenge.domain.model.ChatMessage
+import com.example.aiadventchallenge.domain.model.ChatSettingsPayload
 import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
@@ -92,6 +94,7 @@ class ChatViewModel(
         loadDialogStats()
         loadAllTimeStats()
         loadStrategyConfig()
+        loadAiBackendSettings()
         loadBranchState()
         loadFitnessProfile()
         loadTaskStateForActiveBranch()
@@ -117,6 +120,12 @@ class ChatViewModel(
         viewModelScope.launch {
             _activeStrategyConfig.value = chatSettingsRepository.getSettings()
             updateBranchingStrategyState()
+        }
+    }
+
+    private fun loadAiBackendSettings() {
+        viewModelScope.launch {
+            syncSettingsState()
         }
     }
 
@@ -458,7 +467,7 @@ class ChatViewModel(
     fun setWindowSize(windowSize: Int) {
         viewModelScope.launch {
             chatSettingsRepository.updateWindowSize(windowSize)
-            _activeStrategyConfig.value = chatSettingsRepository.getSettings()
+            syncSettingsState()
         }
     }
 
@@ -615,9 +624,70 @@ class ChatViewModel(
     fun setFitnessProfile(profile: FitnessProfileType) {
         viewModelScope.launch {
             fitnessProfileManager.setActiveProfile(profile)
-            _chatUiState.value = _chatUiState.value.copy(
-                fitnessProfile = profile
-            )
+            syncSettingsState()
+        }
+    }
+
+    fun updateAiBackendSettings(settings: AiBackendSettings) {
+        viewModelScope.launch {
+            chatSettingsRepository.updateAiBackendSettings(settings)
+            syncSettingsState()
+        }
+    }
+
+    fun applyChatSettings(payload: ChatSettingsPayload, resetConversation: Boolean = false) {
+        viewModelScope.launch {
+            chatSettingsRepository.applyChatSettings(payload)
+            fitnessProfileManager.setActiveProfile(payload.fitnessProfile)
+            syncSettingsState()
+
+            if (resetConversation) {
+                applyStrategyReset(payload.strategyType)
+            }
+        }
+    }
+
+    private suspend fun syncSettingsState() {
+        val settings = chatSettingsRepository.getSettings()
+        val backendSettings = chatSettingsRepository.getAiBackendSettings()
+        val fitnessProfile = chatSettingsRepository.getFitnessProfile()
+
+        _activeStrategyConfig.value = settings
+        _chatUiState.value = _chatUiState.value.copy(
+            isBranchingStrategy = settings.type == ContextStrategyType.BRANCHING,
+            fitnessProfile = fitnessProfile,
+            selectedBackend = backendSettings.selectedBackend,
+            localLlmConfig = backendSettings.localConfig
+        )
+    }
+
+    private suspend fun applyStrategyReset(type: ContextStrategyType) {
+        val isBranching = type == ContextStrategyType.BRANCHING
+
+        _chatUiState.value = _chatUiState.value.copy(
+            isBranchingStrategy = isBranching,
+            activeBranchId = null,
+            activeBranchName = null,
+            currentBranchCheckpointMessageId = null,
+            availableBranches = emptyList(),
+            latestRetrievalSummary = null,
+            latestTaskState = null
+        )
+
+        branchRepository.clearAllBranches()
+        chatRepository.deleteMessagesByBranch("main")
+
+        chatRepository.deleteAllMessages()
+        taskStateRepository.clearAll()
+        aiRequestRepository.clearAllRequests()
+        _dialogStats.value = DialogTokenStats()
+        _allTimeStats.value = DialogTokenStats()
+        _lastRequestTokens.value = null
+        _requestLogs.value = emptyList()
+        _messages.value = emptyList()
+
+        if (isBranching) {
+            contextStrategyFactory.create(chatSettingsRepository.getSettings())
         }
     }
 }

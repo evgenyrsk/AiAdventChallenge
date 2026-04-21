@@ -8,8 +8,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.aiadventchallenge.domain.model.AiBackendSettings
+import com.example.aiadventchallenge.domain.model.AiBackendType
+import com.example.aiadventchallenge.domain.model.ChatSettingsPayload
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
+import com.example.aiadventchallenge.domain.model.LocalLlmConfig
 import com.example.aiadventchallenge.ui.components.FitnessProfileSelector
 import kotlin.math.roundToInt
 
@@ -18,15 +22,19 @@ fun StrategySettingsBottomSheet(
     currentStrategy: ContextStrategyType,
     currentWindowSize: Int,
     currentFitnessProfile: FitnessProfileType,
-    onStrategyChange: (ContextStrategyType) -> Unit,
-    onWindowSizeChange: (Int) -> Unit,
-    onFitnessProfileChange: (FitnessProfileType) -> Unit,
+    currentBackend: AiBackendType,
+    currentLocalConfig: LocalLlmConfig,
+    onApplySettings: (ChatSettingsPayload) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedStrategy by remember { mutableStateOf(currentStrategy) }
     var windowSize by remember { mutableIntStateOf(currentWindowSize) }
     var selectedFitnessProfile by remember { mutableStateOf(currentFitnessProfile) }
+    var selectedBackend by remember { mutableStateOf(currentBackend) }
+    var localHost by remember { mutableStateOf(currentLocalConfig.host) }
+    var localPort by remember { mutableStateOf(currentLocalConfig.port.toString()) }
+    var localModel by remember { mutableStateOf(currentLocalConfig.model) }
 
     Column(
         modifier = modifier
@@ -137,11 +145,93 @@ fun StrategySettingsBottomSheet(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
+        HorizontalDivider()
+
+        Text(
+            text = "AI Backend:",
+            style = MaterialTheme.typography.labelLarge
+        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AiBackendType.entries.forEach { backend ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = selectedBackend == backend,
+                        onClick = { selectedBackend = backend }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = when (backend) {
+                                AiBackendType.REMOTE -> "Remote"
+                                AiBackendType.LOCAL_OLLAMA -> "Local Ollama"
+                            }
+                        )
+                        Text(
+                            text = when (backend) {
+                                AiBackendType.REMOTE -> "Использовать существующий облачный backend"
+                                AiBackendType.LOCAL_OLLAMA -> "Отправлять запросы в локальную модель через Ollama"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        if (selectedBackend == AiBackendType.LOCAL_OLLAMA) {
+            OutlinedTextField(
+                value = localHost,
+                onValueChange = { localHost = it },
+                label = { Text("Host") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = localPort,
+                onValueChange = { value ->
+                    localPort = value.filter { it.isDigit() }
+                },
+                label = { Text("Port") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = localModel,
+                onValueChange = { localModel = it },
+                label = { Text("Model") },
+                placeholder = { Text("qwen2.5:3b-instruct") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Text(
+                text = "Для Android эмулятора localhost и 127.0.0.1 будут использоваться как 10.0.2.2. Имя модели должно совпадать с 'ollama list', включая tag после ':'.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
         Button(
             onClick = {
-                onStrategyChange(selectedStrategy)
-                onWindowSizeChange(windowSize)
-                onFitnessProfileChange(selectedFitnessProfile)
+                onApplySettings(
+                    ChatSettingsPayload(
+                        strategyType = selectedStrategy,
+                        windowSize = windowSize,
+                        fitnessProfile = selectedFitnessProfile,
+                        backendSettings = AiBackendSettings(
+                            selectedBackend = selectedBackend,
+                            localConfig = LocalLlmConfig(
+                                host = localHost.trim().ifBlank { currentLocalConfig.host },
+                                port = localPort.toIntOrNull() ?: currentLocalConfig.port,
+                                model = localModel.trim().ifBlank { currentLocalConfig.model }
+                            )
+                        )
+                    )
+                )
                 onClose()
             },
             modifier = Modifier.fillMaxWidth()

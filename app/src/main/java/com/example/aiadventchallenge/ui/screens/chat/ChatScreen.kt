@@ -65,8 +65,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel as viewModelCompose
 import com.example.aiadventchallenge.domain.mcp.RetrievalSourceCard
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
+import com.example.aiadventchallenge.domain.model.AiBackendType
 import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.model.ChatMessage
+import com.example.aiadventchallenge.domain.model.ChatSettingsPayload
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestLog
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
@@ -117,7 +119,7 @@ fun ChatScreen(
     var showStrategySettings by remember { mutableStateOf(false) }
     var showClearChatDialog by remember { mutableStateOf(false) }
     var showRetrievalDetails by remember { mutableStateOf(false) }
-    var pendingStrategyChange by remember { mutableStateOf<ContextStrategyType?>(null) }
+    var pendingSettingsPayload by remember { mutableStateOf<ChatSettingsPayload?>(null) }
 
     LaunchedEffect(chatUiState.latestRetrievalSummary) {
         if (chatUiState.latestRetrievalSummary == null) {
@@ -153,6 +155,14 @@ fun ChatScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                            Text(
+                                text = getBackendDisplayName(
+                                    backend = chatUiState.selectedBackend,
+                                    model = chatUiState.localLlmConfig.model
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     },
                     actions = {
@@ -418,14 +428,16 @@ fun ChatScreen(
                         currentStrategy = config.type,
                         currentWindowSize = config.windowSize,
                         currentFitnessProfile = chatUiState.fitnessProfile,
-                        onStrategyChange = { type ->
-                            if (type != config.type) {
-                                pendingStrategyChange = type
+                        currentBackend = chatUiState.selectedBackend,
+                        currentLocalConfig = chatUiState.localLlmConfig,
+                        onApplySettings = { payload ->
+                            if (payload.strategyType != config.type) {
+                                pendingSettingsPayload = payload
                                 showClearChatDialog = true
+                            } else {
+                                viewModel.applyChatSettings(payload)
                             }
                         },
-                        onWindowSizeChange = { size -> viewModel.setWindowSize(size) },
-                        onFitnessProfileChange = { profile -> viewModel.setFitnessProfile(profile) },
                         onClose = { showStrategySettings = false },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -453,22 +465,21 @@ fun ChatScreen(
             AlertDialog(
                 onDismissRequest = {
                     showClearChatDialog = false
-                    pendingStrategyChange = null
+                    pendingSettingsPayload = null
                 },
                 title = { Text("Сменить стратегию?") },
                 text = {
                     Text(
                         "При смене стратегии текущий чат будет очищен. " +
-                                "Вы хотите сменить стратегию на ${pendingStrategyChange?.let { getStrategyDisplayName(it) }}?"
+                                "Вы хотите сменить стратегию на ${pendingSettingsPayload?.strategyType?.let { getStrategyDisplayName(it) }}?"
                     )
                 },
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            pendingStrategyChange?.let { viewModel.setStrategyType(it) }
-                            viewModel.clearChat()
+                            pendingSettingsPayload?.let { viewModel.applyChatSettings(it, resetConversation = true) }
                             showClearChatDialog = false
-                            pendingStrategyChange = null
+                            pendingSettingsPayload = null
                             showStrategySettings = false
                         }
                     ) {
@@ -479,7 +490,7 @@ fun ChatScreen(
                     TextButton(
                         onClick = {
                             showClearChatDialog = false
-                            pendingStrategyChange = null
+                            pendingSettingsPayload = null
                         }
                     ) {
                         Text("Отмена")
@@ -1124,5 +1135,12 @@ private fun getStrategyDisplayName(type: ContextStrategyType): String {
         ContextStrategyType.STICKY_FACTS -> "Sticky Facts"
         ContextStrategyType.BRANCHING -> "Branching"
         ContextStrategyType.MEMORY_BASED -> "Memory Based"
+    }
+}
+
+private fun getBackendDisplayName(backend: AiBackendType, model: String): String {
+    return when (backend) {
+        AiBackendType.REMOTE -> "Backend: Remote"
+        AiBackendType.LOCAL_OLLAMA -> "Backend: Local Ollama ($model)"
     }
 }
