@@ -16,6 +16,8 @@ import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.GroundedSource
 import com.example.aiadventchallenge.domain.model.GroundedAnswerPayload
+import com.example.aiadventchallenge.domain.model.AiBackendSettings
+import com.example.aiadventchallenge.domain.model.AiBackendType
 import com.example.aiadventchallenge.domain.model.RagAnswerMode
 import com.example.aiadventchallenge.domain.model.RagConfidenceSummary
 import com.example.aiadventchallenge.domain.model.RagPostProcessingMode
@@ -62,6 +64,9 @@ class ChatMessageHandlerImplTest {
         every { Log.d(any(), any()) } returns 0
         every { Log.e(any(), any()) } returns 0
         every { Log.e(any(), any(), any()) } returns 0
+        coEvery { chatSettingsRepository.getAiBackendSettings() } returns AiBackendSettings(
+            selectedBackend = AiBackendType.REMOTE
+        )
     }
 
     @After
@@ -143,6 +148,9 @@ class ChatMessageHandlerImplTest {
 
         coEvery { chatRepository.getMessagesByBranch("main") } returns activeMessages
         coEvery { chatSettingsRepository.getSettings() } returns ContextStrategyConfig(ContextStrategyType.SLIDING_WINDOW)
+        coEvery { chatSettingsRepository.getAiBackendSettings() } returns AiBackendSettings(
+            selectedBackend = AiBackendType.LOCAL_OLLAMA
+        )
         every { contextStrategyFactory.create(any()) } returns contextStrategy
         coEvery { contextStrategy.buildContext(null, any(), any()) } returns listOf(
             Message(MessageRole.SYSTEM, "system"),
@@ -203,6 +211,8 @@ class ChatMessageHandlerImplTest {
         assertEquals("Ответ", ragResult.aiResponse)
         assertFalse(ragResult.aiResponse.contains("Источники:"))
         assertTrue(ragResult.retrievalSummary?.groundedAnswer?.sources?.isNotEmpty() == true)
+        assertEquals(AiBackendType.LOCAL_OLLAMA, ragResult.executionInfo?.backend)
+        assertEquals("aiMessage must carry source preview", 1, ragResult.answerPresentation?.sources?.size)
     }
 
     @Test
@@ -230,6 +240,9 @@ class ChatMessageHandlerImplTest {
 
         coEvery { chatRepository.getMessagesByBranch("main") } returns activeMessages
         coEvery { chatSettingsRepository.getSettings() } returns ContextStrategyConfig(ContextStrategyType.SLIDING_WINDOW)
+        coEvery { chatSettingsRepository.getAiBackendSettings() } returns AiBackendSettings(
+            selectedBackend = AiBackendType.REMOTE
+        )
         every { contextStrategyFactory.create(any()) } returns contextStrategy
         coEvery { contextStrategy.buildContext(null, any(), any()) } returns listOf(
             Message(MessageRole.SYSTEM, "system"),

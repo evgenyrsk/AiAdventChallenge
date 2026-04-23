@@ -46,6 +46,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,7 +70,10 @@ import com.example.aiadventchallenge.domain.mcp.RetrievalSourceCard
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
 import com.example.aiadventchallenge.domain.model.AiBackendType
 import com.example.aiadventchallenge.domain.model.AnswerMode
+import com.example.aiadventchallenge.domain.model.ChatAnswerPresentation
+import com.example.aiadventchallenge.domain.model.ChatExecutionInfo
 import com.example.aiadventchallenge.domain.model.ChatMessage
+import com.example.aiadventchallenge.domain.model.ChatSourcePreview
 import com.example.aiadventchallenge.domain.model.ChatSettingsPayload
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.RequestLog
@@ -277,6 +283,8 @@ fun ChatScreen(
                                     message = message.content,
                                     isFromUser = message.isFromUser,
                                     isSystemMessage = message.isSystemMessage,
+                                    answerPresentation = chatUiState.latestAnswerPresentation
+                                        ?.takeIf { it.messageId == message.id },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .combinedClickable(
@@ -453,6 +461,12 @@ fun ChatScreen(
                 RetrievalDetailsSheet(
                     summary = chatUiState.latestRetrievalSummary!!,
                     taskState = chatUiState.latestTaskState,
+                    latestComparisonResult = chatUiState.latestComparisonResult,
+                    latestEvaluationResult = chatUiState.latestEvaluationResult,
+                    isComparisonRunning = chatUiState.isComparisonRunning,
+                    isEvaluationRunning = chatUiState.isEvaluationRunning,
+                    onRunComparison = viewModel::runLatestRagComparison,
+                    onRunEvaluation = viewModel::runRagEvaluation,
                     onClose = { showRetrievalDetails = false },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -526,42 +540,133 @@ fun MessageBubble(
     message: String,
     isFromUser: Boolean,
     isSystemMessage: Boolean = false,
+    answerPresentation: ChatAnswerPresentation? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = if (isFromUser) Arrangement.End else Arrangement.Start
     ) {
-        Card(
+        Column(
             modifier = Modifier.fillMaxWidth(if (isSystemMessage) 1.0f else 0.8f),
-            shape = RoundedCornerShape(
-                topStart = if (isFromUser) 12.dp else 4.dp,
-                topEnd = if (isFromUser) 4.dp else 12.dp,
-                bottomStart = if (isFromUser || isSystemMessage) 4.dp else 12.dp,
-                bottomEnd = if (isFromUser || isSystemMessage) 12.dp else 4.dp
-            ),
-            colors = CardDefaults.cardColors(
-                containerColor = when {
-                    isSystemMessage -> MaterialTheme.colorScheme.surfaceContainerHighest
-                    isFromUser -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.surfaceVariant
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Card(
+                shape = RoundedCornerShape(
+                    topStart = if (isFromUser) 12.dp else 4.dp,
+                    topEnd = if (isFromUser) 4.dp else 12.dp,
+                    bottomStart = if (isFromUser || isSystemMessage) 4.dp else 12.dp,
+                    bottomEnd = if (isFromUser || isSystemMessage) 12.dp else 4.dp
+                ),
+                colors = CardDefaults.cardColors(
+                    containerColor = when {
+                        isSystemMessage -> MaterialTheme.colorScheme.surfaceContainerHighest
+                        isFromUser -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = message,
+                        color = when {
+                            isSystemMessage -> MaterialTheme.colorScheme.onSurfaceVariant
+                            isFromUser -> MaterialTheme.colorScheme.onPrimary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        style = if (isSystemMessage) {
+                            MaterialTheme.typography.bodySmall
+                        } else {
+                            MaterialTheme.typography.bodyMedium
+                        }
+                    )
+                    if (!isFromUser && !isSystemMessage && answerPresentation != null) {
+                        AnswerExecutionRow(answerPresentation.executionInfo)
+                    }
                 }
+            }
+
+            if (!isFromUser && !isSystemMessage && answerPresentation?.sources?.isNotEmpty() == true) {
+                SourcesPreviewCard(answerPresentation.sources)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnswerExecutionRow(executionInfo: ChatExecutionInfo) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AssistChip(
+            onClick = {},
+            enabled = false,
+            label = {
+                Text(
+                    text = buildBackendBadgeLabel(executionInfo),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            },
+            colors = AssistChipDefaults.assistChipColors(
+                disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                disabledLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
             )
+        )
+        Text(
+            text = "${executionInfo.latencyMs} ms",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun buildBackendBadgeLabel(executionInfo: ChatExecutionInfo): String {
+    val backendLabel = when (executionInfo.backend) {
+        AiBackendType.REMOTE -> "Cloud"
+        AiBackendType.LOCAL_OLLAMA -> "Ollama"
+    }
+    return if (executionInfo.ragEnabled) {
+        "$backendLabel RAG"
+    } else {
+        backendLabel
+    }
+}
+
+@Composable
+private fun SourcesPreviewCard(sources: List<ChatSourcePreview>) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = message,
-                modifier = Modifier.padding(12.dp),
-                color = when {
-                    isSystemMessage -> MaterialTheme.colorScheme.onSurfaceVariant
-                    isFromUser -> MaterialTheme.colorScheme.onPrimary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                style = if (isSystemMessage) {
-                    MaterialTheme.typography.bodySmall
-                } else {
-                    MaterialTheme.typography.bodyMedium
-                }
+                text = "Источники",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
             )
+            sources.forEach { source ->
+                Text(
+                    text = buildString {
+                        append(source.title)
+                        if (source.subtitle.isNotBlank()) {
+                            append(" • ")
+                            append(source.subtitle)
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
         }
     }
 }
@@ -679,6 +784,12 @@ private fun buildRetrievalPreviewText(summary: RetrievalSummary): String {
 private fun RetrievalDetailsSheet(
     summary: RetrievalSummary,
     taskState: ConversationTaskState?,
+    latestComparisonResult: com.example.aiadventchallenge.domain.model.RagComparisonResult?,
+    latestEvaluationResult: com.example.aiadventchallenge.domain.model.RagEvaluationRunResult?,
+    isComparisonRunning: Boolean,
+    isEvaluationRunning: Boolean,
+    onRunComparison: () -> Unit,
+    onRunEvaluation: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -700,6 +811,38 @@ private fun RetrievalDetailsSheet(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Закрыть"
                 )
+            }
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(
+                onClick = onRunComparison,
+                enabled = !isComparisonRunning && !isEvaluationRunning
+            ) {
+                if (isComparisonRunning) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text("Compare local vs cloud")
+            }
+            TextButton(
+                onClick = onRunEvaluation,
+                enabled = !isComparisonRunning && !isEvaluationRunning
+            ) {
+                if (isEvaluationRunning) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text("Run benchmark")
             }
         }
 
@@ -841,6 +984,42 @@ private fun RetrievalDetailsSheet(
             } else {
                 summary.filteredCandidates.forEach { chunk ->
                     RetrievalSourceRow(chunk = chunk, detailed = true)
+                }
+            }
+        }
+
+        latestComparisonResult?.let { comparison ->
+            RetrievalDetailsSection(title = "Local vs Cloud") {
+                RetrievalDetailText("Question: ${comparison.question}")
+                RetrievalDetailText(
+                    "Local: ${if (comparison.localRun.success) "ok" else "error"} • ${comparison.localRun.latencyMs} ms • ${comparison.localRun.modelLabel}"
+                )
+                if (comparison.localRun.errorMessage != null) {
+                    RetrievalDetailText("Local error: ${comparison.localRun.errorMessage}")
+                } else {
+                    RetrievalDetailText("Local answer: ${comparison.localRun.answer}")
+                }
+                RetrievalDetailText(
+                    "Cloud: ${if (comparison.cloudRun.success) "ok" else "error"} • ${comparison.cloudRun.latencyMs} ms"
+                )
+                if (comparison.cloudRun.errorMessage != null) {
+                    RetrievalDetailText("Cloud error: ${comparison.cloudRun.errorMessage}")
+                } else {
+                    RetrievalDetailText("Cloud answer: ${comparison.cloudRun.answer}")
+                }
+            }
+        }
+
+        latestEvaluationResult?.let { evaluation ->
+            RetrievalDetailsSection(title = "Benchmark Summary") {
+                RetrievalDetailText("Samples: ${evaluation.totalCount}")
+                RetrievalDetailText("Both succeeded: ${evaluation.successCount}")
+                RetrievalDetailText("Avg local latency: ${evaluation.averageLocalLatencyMs} ms")
+                RetrievalDetailText("Avg cloud latency: ${evaluation.averageCloudLatencyMs} ms")
+                evaluation.entries.forEach { entry ->
+                    RetrievalDetailText(
+                        "${entry.sample.label}: local=${entry.comparison.localRun.latencyMs} ms, cloud=${entry.comparison.cloudRun.latencyMs} ms"
+                    )
                 }
             }
         }

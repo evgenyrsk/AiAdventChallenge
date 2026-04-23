@@ -1,6 +1,8 @@
 package com.example.aiadventchallenge.domain.chat
 
 import com.example.aiadventchallenge.domain.model.ChatMessage
+import com.example.aiadventchallenge.domain.model.ChatAnswerPresentation
+import com.example.aiadventchallenge.domain.model.ChatExecutionInfo
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.AnswerMode
@@ -62,7 +64,9 @@ sealed class ChatMessageResult {
         val aiMessage: ChatMessage?,
         val aiResponse: String,
         val retrievalSummary: RetrievalSummary? = null,
-        val taskStateSnapshot: ConversationTaskState? = null
+        val taskStateSnapshot: ConversationTaskState? = null,
+        val executionInfo: ChatExecutionInfo? = null,
+        val answerPresentation: ChatAnswerPresentation? = null
     ) : ChatMessageResult()
     
     data class Error(

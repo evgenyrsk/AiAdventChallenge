@@ -9,13 +9,17 @@ import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.GroundedAnswerPayload
-
 import com.example.aiadventchallenge.domain.model.PreparedRagRequest
 import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
 import com.example.aiadventchallenge.domain.model.AnswerMode
+import com.example.aiadventchallenge.domain.model.AiBackendSettings
+import com.example.aiadventchallenge.domain.model.ChatAnswerPresentation
+import com.example.aiadventchallenge.domain.model.ChatExecutionInfo
+import com.example.aiadventchallenge.domain.model.ChatFailureCategory
+import com.example.aiadventchallenge.domain.model.ChatSourcePreview
 import com.example.aiadventchallenge.domain.model.RagAnswerMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import com.example.aiadventchallenge.domain.usecase.PrepareRagRequestUseCase
 import com.example.aiadventchallenge.data.model.Message
+import kotlin.system.measureTimeMillis
 
 class ChatMessageHandlerImpl(
     private val chatRepository: ChatRepository,
@@ -169,6 +174,7 @@ class ChatMessageHandlerImpl(
         answerMode: AnswerMode,
         preparedRagRequest: PreparedRagRequest?
     ): ChatMessageResult {
+        val backendSettings = chatSettingsRepository.getAiBackendSettings()
         val activeMessages = chatRepository.getMessagesByBranch(activeBranchId)
 
         var config = agent.buildRequestConfigWithProfile(fitnessProfile)
@@ -250,20 +256,38 @@ class ChatMessageHandlerImpl(
                 }
             }
 
+            val executionInfo = buildExecutionInfo(
+                backendSettings = backendSettings,
+                answerMode = answerMode,
+                latencyMs = 0L,
+                retrievalSummary = updatedSummary,
+                messageId = aiMessage.id
+            )
             return ChatMessageResult.Success(
                 userMessage = null,
                 aiMessage = aiMessage,
                 aiResponse = fallbackText,
-                retrievalSummary = updatedSummary
+                retrievalSummary = updatedSummary,
+                executionInfo = executionInfo,
+                answerPresentation = buildAnswerPresentation(
+                    aiMessage = aiMessage,
+                    executionInfo = executionInfo,
+                    retrievalSummary = updatedSummary
+                )
             )
         }
 
-        return when (val result = agent.processRequestWithContextAndUsage(
-            messages = apiMessages,
-            config = config,
-            userInput = userInput,
-            taskContext = null
-        )) {
+        var llmResult: ChatResult<com.example.aiadventchallenge.domain.model.AnswerWithUsage>? = null
+        val latencyMs = measureTimeMillis {
+            llmResult = agent.processRequestWithContextAndUsage(
+                messages = apiMessages,
+                config = config,
+                userInput = userInput,
+                taskContext = null
+            )
+        }
+
+        return when (val result = llmResult) {
             is ChatResult.Success -> {
                 val answerWithUsage = result.data
                 val aiResponseText = sanitizeAnswerTextForDisplay(answerWithUsage.content.trim())
@@ -318,18 +342,120 @@ class ChatMessageHandlerImpl(
                         summary
                     }
                 }
+                val executionInfo = buildExecutionInfo(
+                    backendSettings = backendSettings,
+                    answerMode = answerMode,
+                    latencyMs = latencyMs,
+                    retrievalSummary = updatedSummary,
+                    messageId = aiMessage.id
+                )
                 
                 ChatMessageResult.Success(
                     userMessage = null,
                     aiMessage = aiMessage,
                     aiResponse = aiResponseText,
-                    retrievalSummary = updatedSummary
+                    retrievalSummary = updatedSummary,
+                    executionInfo = executionInfo,
+                    answerPresentation = buildAnswerPresentation(
+                        aiMessage = aiMessage,
+                        executionInfo = executionInfo,
+                        retrievalSummary = updatedSummary
+                    )
                 )
             }
             is ChatResult.Error -> {
                 Log.e(TAG, "❌ AI response error: ${result.message}")
                 ChatMessageResult.Error(result.message, null)
             }
+            null -> ChatMessageResult.Error("Не удалось получить ответ от модели.", null)
+        }
+    }
+
+    private fun buildExecutionInfo(
+        backendSettings: AiBackendSettings,
+        answerMode: AnswerMode,
+        latencyMs: Long,
+        retrievalSummary: com.example.aiadventchallenge.domain.mcp.RetrievalSummary?,
+        messageId: String? = null,
+        errorMessage: String? = null
+    ): ChatExecutionInfo {
+        return ChatExecutionInfo(
+            messageId = messageId,
+            backend = backendSettings.selectedBackend,
+            answerMode = answerMode,
+            ragEnabled = answerMode != AnswerMode.PLAIN_LLM,
+            latencyMs = latencyMs,
+            selectedSourceCount = retrievalSummary?.chunks?.size ?: 0,
+            errorCategory = errorMessage?.let {
+                inferFailureCategory(
+                    message = it,
+                    backendSettings = backendSettings,
+                    retrievalSummary = retrievalSummary
+                )
+            },
+            errorMessage = errorMessage
+        )
+    }
+
+    private fun buildAnswerPresentation(
+        aiMessage: ChatMessage,
+        executionInfo: ChatExecutionInfo,
+        retrievalSummary: com.example.aiadventchallenge.domain.mcp.RetrievalSummary?
+    ): ChatAnswerPresentation {
+        val sources = retrievalSummary
+            ?.groundedAnswer
+            ?.sources
+            ?.take(3)
+            ?.map { source ->
+                ChatSourcePreview(
+                    title = source.title ?: source.relativePath ?: source.source ?: "Источник",
+                    subtitle = listOfNotNull(source.section, source.relativePath).joinToString(" • "),
+                    score = source.similarityScore ?: source.rerankScore
+                )
+            }
+            ?.takeIf { it.isNotEmpty() }
+            ?: retrievalSummary
+                ?.chunks
+                ?.take(3)
+                ?.map { chunk ->
+                    ChatSourcePreview(
+                        title = chunk.title.ifBlank { chunk.relativePath },
+                        subtitle = listOf(chunk.section, chunk.relativePath)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" • "),
+                        score = chunk.rerankScore ?: chunk.score
+                    )
+                }
+                .orEmpty()
+
+        return ChatAnswerPresentation(
+            messageId = aiMessage.id,
+            executionInfo = executionInfo,
+            sources = sources,
+            retrievalSummary = retrievalSummary
+        )
+    }
+
+    private fun inferFailureCategory(
+        message: String,
+        backendSettings: AiBackendSettings,
+        retrievalSummary: com.example.aiadventchallenge.domain.mcp.RetrievalSummary?
+    ): ChatFailureCategory {
+        val normalized = message.lowercase()
+        return when {
+            normalized.contains("timeout") || normalized.contains("вовремя") -> ChatFailureCategory.TIMEOUT
+            normalized.contains("unexpected") || normalized.contains("неожиданном формате") || normalized.contains("malformed") ->
+                ChatFailureCategory.MALFORMED_RESPONSE
+            normalized.contains("пуст") -> ChatFailureCategory.EMPTY_RESPONSE
+            normalized.contains("retrieval") || normalized.contains("mcp") || normalized.contains("index") ->
+                ChatFailureCategory.RETRIEVAL_UNAVAILABLE
+            backendSettings.selectedBackend == com.example.aiadventchallenge.domain.model.AiBackendType.LOCAL_OLLAMA &&
+                (normalized.contains("ollama") || normalized.contains("локальн")) ->
+                ChatFailureCategory.LOCAL_MODEL_UNAVAILABLE
+            backendSettings.selectedBackend == com.example.aiadventchallenge.domain.model.AiBackendType.REMOTE ->
+                ChatFailureCategory.REMOTE_MODEL_UNAVAILABLE
+            retrievalSummary != null && retrievalSummary.chunks.isEmpty() -> ChatFailureCategory.RETRIEVAL_EMPTY
+            else -> ChatFailureCategory.UNKNOWN
         }
     }
 

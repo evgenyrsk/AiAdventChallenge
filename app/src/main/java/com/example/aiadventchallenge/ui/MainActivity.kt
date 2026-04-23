@@ -90,6 +90,8 @@ class MainActivity : ComponentActivity() {
             branchOrchestrator,
             mcpToolOrchestrator,
             processChatTurnUseCase,
+            AppDependencies.compareRagAnswersUseCase,
+            AppDependencies.runRagEvaluationUseCase,
         )
     }
 
