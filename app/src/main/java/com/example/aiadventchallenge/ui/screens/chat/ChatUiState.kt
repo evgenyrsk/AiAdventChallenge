@@ -2,9 +2,13 @@ package com.example.aiadventchallenge.ui.screens.chat
 
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
 import com.example.aiadventchallenge.domain.model.AiBackendType
+import com.example.aiadventchallenge.domain.model.ChatAnswerPresentation
+import com.example.aiadventchallenge.domain.model.ChatExecutionInfo
 import com.example.aiadventchallenge.domain.model.LocalLlmConfig
 import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
+import com.example.aiadventchallenge.domain.model.RagComparisonResult
+import com.example.aiadventchallenge.domain.model.RagEvaluationRunResult
 import com.example.aiadventchallenge.rag.memory.ConversationTaskState
 
 data class ChatUiState(
@@ -33,7 +37,13 @@ data class ChatUiState(
     val localLlmConfig: LocalLlmConfig = LocalLlmConfig(),
     val answerMode: AnswerMode = AnswerMode.PLAIN_LLM,
     val latestRetrievalSummary: RetrievalSummary? = null,
-    val latestTaskState: ConversationTaskState? = null
+    val latestTaskState: ConversationTaskState? = null,
+    val latestExecutionInfo: ChatExecutionInfo? = null,
+    val latestAnswerPresentation: ChatAnswerPresentation? = null,
+    val latestComparisonResult: RagComparisonResult? = null,
+    val latestEvaluationResult: RagEvaluationRunResult? = null,
+    val isComparisonRunning: Boolean = false,
+    val isEvaluationRunning: Boolean = false
 ) {
     val hasMultipleBranches: Boolean
         get() = availableBranches.size > 1

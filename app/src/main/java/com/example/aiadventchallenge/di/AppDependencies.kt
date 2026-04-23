@@ -22,8 +22,10 @@ import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
 import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
 import com.example.aiadventchallenge.domain.usecase.AskModelUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
+import com.example.aiadventchallenge.domain.usecase.CompareRagAnswersUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareTemperatureResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.PrepareRagRequestUseCase
+import com.example.aiadventchallenge.domain.usecase.RunRagEvaluationUseCase
 import com.example.aiadventchallenge.domain.usecase.TemperatureUseCase
 import com.example.aiadventchallenge.domain.usecase.CreateSummaryUseCase
 
@@ -69,7 +71,7 @@ object AppDependencies {
         DataChatSettingsRepository(database.chatSettingsDao())
     }
 
-    private val remoteRepository: AiRepository by lazy {
+    val remoteRepository: AiRepository by lazy {
         AiRepositoryImpl(
             httpClient = httpClient,
             config = apiConfig,
@@ -78,7 +80,7 @@ object AppDependencies {
         )
     }
 
-    private val localOllamaRepository: LocalOllamaRepository by lazy {
+    val localOllamaRepository: LocalOllamaRepository by lazy {
         LocalOllamaRepository(
             httpClient = httpClient,
             aiRequestRepository = aiRequestRepository
@@ -165,6 +167,20 @@ object AppDependencies {
             ragPromptBuilder = ragPromptBuilder,
             rewriteQueryUseCase = rewriteQueryUseCase
         )
+    }
+
+    val compareRagAnswersUseCase: CompareRagAnswersUseCase by lazy {
+        CompareRagAnswersUseCase(
+            prepareRagRequestUseCase = prepareRagRequestUseCase,
+            chatAgent = chatAgent,
+            remoteRepository = remoteRepository,
+            localOllamaRepository = localOllamaRepository,
+            chatSettingsRepository = chatSettingsRepository
+        )
+    }
+
+    val runRagEvaluationUseCase: RunRagEvaluationUseCase by lazy {
+        RunRagEvaluationUseCase(compareRagAnswersUseCase)
     }
 
     val multiServerOrchestrator: MultiServerOrchestrator by lazy {

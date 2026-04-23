@@ -30,6 +30,8 @@ import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.ToolExecutionResult
 import com.example.aiadventchallenge.domain.model.mcp.McpConnectionStatus
 import com.example.aiadventchallenge.domain.usecase.ProcessChatTurnUseCase
+import com.example.aiadventchallenge.domain.usecase.CompareRagAnswersUseCase
+import com.example.aiadventchallenge.domain.usecase.RunRagEvaluationUseCase
 import com.example.aiadventchallenge.di.AppDependencies
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,7 +51,9 @@ class ChatViewModel(
     private val chatMessageHandler: ChatMessageHandler,
     private val branchOrchestrator: BranchOrchestrator,
     private val mcpToolOrchestrator: McpToolOrchestrator,
-    private val processChatTurnUseCase: ProcessChatTurnUseCase
+    private val processChatTurnUseCase: ProcessChatTurnUseCase,
+    private val compareRagAnswersUseCase: CompareRagAnswersUseCase,
+    private val runRagEvaluationUseCase: RunRagEvaluationUseCase
 ) : ViewModel() {
 
     private val TAG = "ChatViewModel"
@@ -292,15 +296,27 @@ class ChatViewModel(
                         is ChatMessageResult.Success -> {
                             _chatUiState.value = _chatUiState.value.copy(
                                 latestRetrievalSummary = result.retrievalSummary ?: mcpToolResult.retrievalSummary,
-                                latestTaskState = processedTurn.taskState
+                                latestTaskState = processedTurn.taskState,
+                                latestExecutionInfo = result.executionInfo,
+                                latestAnswerPresentation = result.answerPresentation,
+                                latestComparisonResult = null,
+                                latestEvaluationResult = null
                             )
                             _isLoading.value = false
                         }
                         is ChatMessageResult.Error -> {
+                            _chatUiState.value = _chatUiState.value.copy(
+                                latestExecutionInfo = null,
+                                latestAnswerPresentation = null
+                            )
                             addSystemMessage("Ошибка: ${result.errorMessage}")
                             _isLoading.value = false
                         }
                         is ChatMessageResult.EmptyResponse -> {
+                            _chatUiState.value = _chatUiState.value.copy(
+                                latestExecutionInfo = null,
+                                latestAnswerPresentation = null
+                            )
                             addSystemMessage(result.errorMessage)
                             _isLoading.value = false
                         }
@@ -323,15 +339,27 @@ class ChatViewModel(
                         is ChatMessageResult.Success -> {
                             _chatUiState.value = _chatUiState.value.copy(
                                 latestRetrievalSummary = result.retrievalSummary,
-                                latestTaskState = processedTurn.taskState
+                                latestTaskState = processedTurn.taskState,
+                                latestExecutionInfo = result.executionInfo,
+                                latestAnswerPresentation = result.answerPresentation,
+                                latestComparisonResult = null,
+                                latestEvaluationResult = null
                             )
                             _isLoading.value = false
                         }
                         is ChatMessageResult.Error -> {
+                            _chatUiState.value = _chatUiState.value.copy(
+                                latestExecutionInfo = null,
+                                latestAnswerPresentation = null
+                            )
                             addSystemMessage("Ошибка: ${result.errorMessage}")
                             _isLoading.value = false
                         }
                         is ChatMessageResult.EmptyResponse -> {
+                            _chatUiState.value = _chatUiState.value.copy(
+                                latestExecutionInfo = null,
+                                latestAnswerPresentation = null
+                            )
                             addSystemMessage(result.errorMessage)
                             _isLoading.value = false
                         }
@@ -339,7 +367,9 @@ class ChatViewModel(
                 }
                 is ToolExecutionResult.Error -> {
                     _chatUiState.value = _chatUiState.value.copy(
-                        latestRetrievalSummary = null
+                        latestRetrievalSummary = null,
+                        latestExecutionInfo = null,
+                        latestAnswerPresentation = null
                     )
                     chatMessageHandler.saveUserMessage(
                         userInput = userInput,
@@ -354,7 +384,9 @@ class ChatViewModel(
                 }
                 is ToolExecutionResult.MissingParameters -> {
                     _chatUiState.value = _chatUiState.value.copy(
-                        latestRetrievalSummary = null
+                        latestRetrievalSummary = null,
+                        latestExecutionInfo = null,
+                        latestAnswerPresentation = null
                     )
                     val userMessage = chatMessageHandler.saveUserMessage(
                         userInput = userInput,
@@ -427,15 +459,75 @@ class ChatViewModel(
                 activeBranchName = null,
                 currentBranchCheckpointMessageId = null,
                 latestRetrievalSummary = null,
-                latestTaskState = null
+                latestTaskState = null,
+                latestExecutionInfo = null,
+                latestAnswerPresentation = null,
+                latestComparisonResult = null,
+                latestEvaluationResult = null
             )
         }
     }
 
     fun setAnswerMode(answerMode: AnswerMode) {
         _chatUiState.value = _chatUiState.value.copy(
-            answerMode = answerMode
+            answerMode = answerMode,
+            latestComparisonResult = null,
+            latestEvaluationResult = null
         )
+    }
+
+    fun runLatestRagComparison() {
+        val summary = _chatUiState.value.latestRetrievalSummary ?: return
+        viewModelScope.launch {
+            _chatUiState.value = _chatUiState.value.copy(
+                isComparisonRunning = true,
+                latestComparisonResult = null
+            )
+            runCatching {
+                compareRagAnswersUseCase(
+                    question = summary.originalQuery.ifBlank { summary.query },
+                    fitnessProfile = _chatUiState.value.fitnessProfile,
+                    answerMode = _chatUiState.value.answerMode
+                )
+            }.onSuccess { result ->
+                _chatUiState.value = _chatUiState.value.copy(
+                    isComparisonRunning = false,
+                    latestComparisonResult = result
+                )
+            }.onFailure { error ->
+                Log.e(TAG, "❌ Failed to compare RAG answers", error)
+                _chatUiState.value = _chatUiState.value.copy(
+                    isComparisonRunning = false
+                )
+                addSystemMessage("Не удалось сравнить local и cloud ответы: ${error.message}")
+            }
+        }
+    }
+
+    fun runRagEvaluation() {
+        viewModelScope.launch {
+            _chatUiState.value = _chatUiState.value.copy(
+                isEvaluationRunning = true,
+                latestEvaluationResult = null
+            )
+            runCatching {
+                runRagEvaluationUseCase(
+                    fitnessProfile = _chatUiState.value.fitnessProfile,
+                    answerMode = _chatUiState.value.answerMode
+                )
+            }.onSuccess { result ->
+                _chatUiState.value = _chatUiState.value.copy(
+                    isEvaluationRunning = false,
+                    latestEvaluationResult = result
+                )
+            }.onFailure { error ->
+                Log.e(TAG, "❌ Failed to run RAG evaluation", error)
+                _chatUiState.value = _chatUiState.value.copy(
+                    isEvaluationRunning = false
+                )
+                addSystemMessage("Не удалось выполнить evaluation: ${error.message}")
+            }
+        }
     }
 
     fun setStrategyType(type: ContextStrategyType) {
@@ -450,7 +542,11 @@ class ChatViewModel(
                 activeBranchName = null,
                 currentBranchCheckpointMessageId = null,
                 availableBranches = emptyList(),
-                latestRetrievalSummary = null
+                latestRetrievalSummary = null,
+                latestExecutionInfo = null,
+                latestAnswerPresentation = null,
+                latestComparisonResult = null,
+                latestEvaluationResult = null
             )
 
             branchRepository.clearAllBranches()
@@ -671,7 +767,11 @@ class ChatViewModel(
             currentBranchCheckpointMessageId = null,
             availableBranches = emptyList(),
             latestRetrievalSummary = null,
-            latestTaskState = null
+            latestTaskState = null,
+            latestExecutionInfo = null,
+            latestAnswerPresentation = null,
+            latestComparisonResult = null,
+            latestEvaluationResult = null
         )
 
         branchRepository.clearAllBranches()
