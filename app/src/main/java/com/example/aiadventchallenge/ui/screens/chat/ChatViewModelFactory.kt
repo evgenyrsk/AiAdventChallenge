@@ -12,7 +12,7 @@ import com.example.aiadventchallenge.domain.profile.FitnessProfileManager
 import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
 import com.example.aiadventchallenge.domain.branch.BranchOrchestrator
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
-import com.example.aiadventchallenge.domain.usecase.CompareRagAnswersUseCase
+import com.example.aiadventchallenge.domain.usecase.CompareLocalOptimizationUseCase
 import com.example.aiadventchallenge.domain.usecase.ProcessChatTurnUseCase
 import com.example.aiadventchallenge.domain.usecase.RunRagEvaluationUseCase
 
@@ -28,7 +28,7 @@ class ChatViewModelFactory(
     private val branchOrchestrator: BranchOrchestrator,
     private val mcpToolOrchestrator: McpToolOrchestrator,
     private val processChatTurnUseCase: ProcessChatTurnUseCase,
-    private val compareRagAnswersUseCase: CompareRagAnswersUseCase,
+    private val compareLocalOptimizationUseCase: CompareLocalOptimizationUseCase,
     private val runRagEvaluationUseCase: RunRagEvaluationUseCase,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -46,7 +46,7 @@ class ChatViewModelFactory(
                 branchOrchestrator,
                 mcpToolOrchestrator,
                 processChatTurnUseCase,
-                compareRagAnswersUseCase,
+                compareLocalOptimizationUseCase,
                 runRagEvaluationUseCase,
             ) as T
         }

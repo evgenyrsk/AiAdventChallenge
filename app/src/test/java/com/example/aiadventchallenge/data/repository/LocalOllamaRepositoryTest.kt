@@ -8,6 +8,8 @@ import com.example.aiadventchallenge.domain.model.AiBackendSettings
 import com.example.aiadventchallenge.domain.model.AnswerWithUsage
 import com.example.aiadventchallenge.domain.model.ChatResult
 import com.example.aiadventchallenge.domain.model.LocalLlmConfig
+import com.example.aiadventchallenge.domain.model.LocalLlmProfile
+import com.example.aiadventchallenge.domain.model.LocalLlmRuntimeOptions
 import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.domain.model.RequestType
 import io.mockk.coEvery
@@ -73,7 +75,8 @@ class LocalOllamaRepositoryTest {
                 localConfig = LocalLlmConfig(
                     host = "localhost",
                     port = 11434,
-                    model = "qwen2.5:3b-instruct"
+                    model = "qwen2.5:3b-instruct",
+                    profile = LocalLlmProfile.OPTIMIZED_CHAT
                 )
             )
         )
@@ -84,7 +87,54 @@ class LocalOllamaRepositoryTest {
         assertEquals(8, success.data.completionTokens)
         assertEquals(20, success.data.totalTokens)
         assertTrue(requestJsonSlot.captured.contains(""""stream":false"""))
+        assertTrue(requestJsonSlot.captured.contains(""""keep_alive":"5m"""").not())
         coVerify { aiRequestRepository.recordRequest(RequestType.CHAT, "LOCAL_OLLAMA/qwen2.5:3b-instruct", any(), "Локальный ответ", 12, 8, 20) }
+    }
+
+    @Test
+    fun `askWithContext serializes extended runtime options`() = runTest {
+        val requestJsonSlot = slot<String>()
+        coEvery {
+            httpClient.post(
+                url = any(),
+                requestJson = capture(requestJsonSlot),
+                headers = any()
+            )
+        } returns Result.success(
+            """
+            {"message":{"role":"assistant","content":"ok"},"prompt_eval_count":10,"eval_count":5}
+            """.trimIndent()
+        )
+
+        repository.askWithContext(
+            messages = listOf(Message(MessageRole.USER, "Привет")),
+            config = RequestConfig(
+                temperature = 0.2,
+                maxTokens = 280,
+                numCtx = 6144,
+                topK = 30,
+                topP = 0.85,
+                repeatPenalty = 1.15,
+                seed = 42,
+                stop = listOf("END"),
+                keepAlive = "5m"
+            ),
+            requestType = RequestType.CHAT,
+            backendSettings = AiBackendSettings(
+                localConfig = LocalLlmConfig(
+                    model = "qwen2.5:3b-instruct",
+                    runtimeOptions = LocalLlmRuntimeOptions(numCtx = 6144)
+                )
+            )
+        )
+
+        val requestJson = requestJsonSlot.captured
+        assertTrue(requestJson.contains(""""num_ctx":6144"""))
+        assertTrue(requestJson.contains(""""top_k":30"""))
+        assertTrue(requestJson.contains(""""top_p":0.85"""))
+        assertTrue(requestJson.contains(""""repeat_penalty":1.15"""))
+        assertTrue(requestJson.contains(""""seed":42"""))
+        assertTrue(requestJson.contains(""""keep_alive":"5m""""))
     }
 
     @Test

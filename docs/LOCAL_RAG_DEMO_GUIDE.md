@@ -1,24 +1,43 @@
 # Local RAG Demo Guide
 
-Практическая инструкция для демонстрации реализованного сценария:
+Практическая инструкция для демонстрации текущего локального RAG/LLM-сценария в Android приложении.
 
+В этом demo показывается:
+
+- existing chat flow без отдельного RAG-экрана
 - локальный retrieval через existing document-index MCP server
-- генерация ответа через `LOCAL_OLLAMA`
-- отображение источников прямо в existing chat UI
-- сравнение `local vs cloud`
-- запуск минимального benchmark/evaluation сценария
+- локальная генерация ответа через `LOCAL_OLLAMA`
+- configurable optimization profiles для локальной модели
+- optional runtime options поверх profile defaults
+- compare `Baseline vs Optimized`
+- demo-friendly benchmark/evaluation summary
 
 ## Что демонстрируем
 
 К концу demo должно быть видно, что приложение умеет:
 
-- отвечать в existing Android chat flow без отдельного RAG-экрана
+- отвечать в existing Android chat flow без отдельного local-RAG чата
 - использовать existing индекс `fitness_knowledge`
 - выполнять retrieval локально через existing document-index runtime
 - генерировать ответ через Ollama
 - показывать compact sources рядом с ответом ассистента
 - показывать retrieval/debug details в bottom sheet
-- сравнивать один и тот же RAG context для `LOCAL_OLLAMA` и cloud backend
+- переключать optimization profile:
+  - `BASELINE`
+  - `OPTIMIZED_CHAT`
+  - `OPTIMIZED_RAG`
+- принимать runtime options:
+  - `temperature`
+  - `num_predict`
+  - `num_ctx`
+  - `top_k`
+  - `top_p`
+  - `repeat_penalty`
+  - `seed`
+  - `stop`
+  - `keep_alive`
+- сравнивать `Baseline vs Optimized` на одном и том же сценарии
+- показывать lightweight quality summary, latency breakdown, tokens/chars
 - запускать быстрый benchmark по нескольким фиксированным вопросам
 
 ## Prerequisites
@@ -91,14 +110,15 @@ ls mcp-server/output/document-index/export
 ollama list
 ```
 
-Для demo удобно использовать компактную instruct-модель, имя которой совпадает с тем, что указано в приложении, например:
+Для demo удобно использовать компактную instruct-модель, например:
 
 - `qwen2.5:3b-instruct`
-- или другая уже скачанная модель
+- или другой уже доступный Ollama tag
 
 Важно:
 
 - для Android эмулятора `localhost` и `127.0.0.1` в приложении транслируются в `10.0.2.2`
+- поле `Model` в приложении можно использовать и для обычной модели, и для quantized/model variant tag из `ollama list`
 - если модель не найдена, приложение вернет понятную ошибку от `LocalOllamaRepository`
 
 ## Шаг 4. Установить и открыть Android приложение
@@ -118,19 +138,63 @@ ollama list
    - `Host`: обычно `10.0.2.2`, `localhost` или `127.0.0.1`
    - `Port`: обычно `11434`
    - `Model`: точное имя из `ollama list`
-5. Примените настройки
+5. Перейдите к секции `Optimization profile`
+6. Для основного RAG demo выберите:
+   - `RAG Enhanced`
+   - `OPTIMIZED_RAG`
+7. Для короткого plain-chat demo можно отдельно выбрать:
+   - `Обычный`
+   - `OPTIMIZED_CHAT`
+
+Runtime options работают как optional override поверх profile defaults. Для основного demo можно оставить их пустыми, а для усиленного показа вручную задать, например:
+
+- `temperature`
+- `num_predict`
+- `num_ctx`
+
+Если нужен честный baseline, переключите profile в `BASELINE` без дополнительных override.
+
+## Optimization profiles
+
+В текущем demo доступны три профиля:
+
+- `BASELINE`
+  - максимально близок к текущему поведению без дополнительного тюнинга
+- `OPTIMIZED_CHAT`
+  - короче, стабильнее и удобнее для обычных chat-ответов
+- `OPTIMIZED_RAG`
+  - строже к groundedness, короче и лучше подходит для retrieval-based answering
+
+Рекомендуемый demo preset:
+
+- основной end-to-end путь:
+  - `Local Ollama`
+  - `RAG Enhanced`
+  - `OPTIMIZED_RAG`
+- дополнительный короткий plain-chat путь:
+  - `Local Ollama`
+  - `Обычный`
+  - `OPTIMIZED_CHAT`
+
+Практичный сценарий показа:
+
+1. Один и тот же вопрос показать в `BASELINE`
+2. Затем повторить его в `OPTIMIZED_RAG`
+3. Если нужно, отдельно показать `OPTIMIZED_CHAT` на plain mode
 
 ## Шаг 5. Включить local RAG
 
 На экране чата:
 
 1. Выберите режим `RAG Enhanced`
-2. Убедитесь, что backend в заголовке показывает локальную модель
+2. Убедитесь, что выбран backend `Local Ollama`
+3. Убедитесь, что selected profile — `OPTIMIZED_RAG`
 
 Именно в этом сценарии демонстрируется:
 
 - retrieval через local document-index runtime
 - generation через `LOCAL_OLLAMA`
+- prompt/runtime optimization под grounded answering
 - grounded answer с compact sources
 
 ## Шаг 6. Задать канонический вопрос
@@ -152,9 +216,25 @@ ollama list
 После ответа ассистента проверьте, что в existing chat flow появились:
 
 - обычный assistant message bubble
-- компактный badge вида `Ollama RAG`
+- компактный badge вида `Ollama` или `Ollama RAG`
 - latency в миллисекундах
 - блок `Источники` под assistant message
+- execution line c метаданными:
+  - `Profile`
+  - `Prompt`
+  - `Model`
+  - `Retrieval`
+  - `Generation`
+  - `Tokens`
+  - `Chars`
+
+Как это интерпретировать на demo:
+
+- `Profile` = tuning profile локальной модели
+- `Prompt` = prompt strategy profile
+- `Model` = Ollama tag, включая quantized/model variant при наличии
+- `Retrieval` = время retrieval части пайплайна
+- `Generation` = время генерации локальной моделью
 
 Ожидаемое поведение:
 
@@ -186,36 +266,48 @@ ollama list
 - rewrite и post-processing применились
 - источники связаны с retrieved chunks, а не выдуманы моделью
 
-## Шаг 9. Показать compare flow
+## Шаг 9. Показать compare optimization flow
 
-В том же details sheet нажмите:
+В том же details sheet запустите compare scenario.
 
-```text
-Compare local vs cloud
-```
+Это основной демонстрационный compare flow для текущей реализации.
 
 Что делает этот сценарий:
 
 - берет тот же `question`
-- готовит один `PreparedRagRequest`
-- использует один и тот же retrieval context
-- отдельно прогоняет generation через:
-  - `LOCAL_OLLAMA`
-  - `REMOTE`
+- для RAG использует сопоставимый retrieval сценарий
+- отдельно прогоняет ответ через:
+  - `BASELINE`
+  - `OPTIMIZED_CHAT` или `OPTIMIZED_RAG` в зависимости от answer mode
 
 Что должно появиться в details sheet:
 
-- секция `Local vs Cloud`
-- latency для local и cloud
-- статусы `ok/error`
-- текст local ответа
-- текст cloud ответа
+- секция `Baseline vs Optimized`
+- статус `ok/error` для обоих прогонов
+- latency для baseline и optimized
+- baseline answer
+- optimized answer
+- quality summary
+- при наличии:
+  - `retrieval`
+  - `generation`
+  - `tokens`
+  - `chars`
 
-Это и есть основной практический compare flow для demo.
+Что проговорить:
+
+- сравнивается не другой экран и не другой pipeline, а та же архитектура с разными optimization profiles
+- compare показывает practical difference between baseline and optimized
+- качество оценивается lightweight heuristic summary, а не сложной research framework
+
+Historical note:
+
+- в проекте раньше был сценарий `local vs cloud`
+- сейчас он не является основным демонстрационным compare flow
 
 ## Шаг 10. Показать benchmark / evaluation flow
 
-В том же details sheet нажмите:
+В том же details sheet запустите benchmark:
 
 ```text
 Run benchmark
@@ -224,34 +316,49 @@ Run benchmark
 Что делает benchmark:
 
 - прогоняет несколько фиксированных RAG-вопросов
-- для каждого вопроса вызывает compare flow
+- для каждого вопроса вызывает compare `baseline vs optimized`
 - считает:
-  - сколько кейсов успешно прошло у обоих backends
-  - среднюю latency local
-  - среднюю latency cloud
+  - число samples
+  - число кейсов, где оба профиля успешны
+  - `Avg baseline latency`
+  - `Avg optimized latency`
+  - краткие per-sample результаты
 
 Что должно появиться:
 
 - секция `Benchmark Summary`
 - `Samples`
 - `Both succeeded`
-- `Avg local latency`
-- `Avg cloud latency`
+- `Avg baseline latency`
+- `Avg optimized latency`
 - список коротких результатов по вопросам
+
+Важно проговорить ограничения:
+
+- это demo-friendly benchmark
+- это не полноценный low-level profiler CPU/RAM
+- resource usage в текущем scope трактуется как:
+  - latency
+  - tokens
+  - chars
+  - success/failure
+  - profile
+  - model
+  - `num_ctx`
 
 Это не research framework, а демонстрационный practical benchmark.
 
 ## Что говорить на demo
 
-Короткий narrativе удобно строить так:
+Короткий narrative удобно строить так:
 
 1. "У нас сохранен existing chat flow, отдельный RAG-чат не создавался."
 2. "Retrieval использует уже существующий индекс `fitness_knowledge`."
-3. "Контекст собирается через текущий RAG pipeline, включая rewrite и filtering/reranking."
-4. "Ответ генерируется локальной моделью через Ollama."
-5. "Источники показываются прямо в основном чате, а полные детали доступны в debug sheet."
-6. "Для сопоставления local и cloud мы используем один и тот же prepared retrieval context."
-7. "Benchmark показывает базовую оценку latency и стабильности без усложнения архитектуры."
+3. "RAG pipeline не переписывался с нуля: он по-прежнему делает rewrite, retrieval и post-processing."
+4. "Локальная модель теперь управляется optimization profiles и runtime options."
+5. "Optimized prompt/runtime уменьшают hallucination risk и делают ответы стабильнее по длине."
+6. "Compare flow показывает difference between baseline and optimized на том же пользовательском сценарии."
+7. "Benchmark нужен для practical reproducible demo, а не для научного бенчмаркинга."
 
 ## Demo checklist
 
@@ -259,12 +366,19 @@ Run benchmark
 - индекс `fitness_knowledge` существует
 - Ollama запущена
 - в приложении выбран `Local Ollama`
-- выбран `RAG Enhanced`
-- assistant message показывает `Ollama RAG`
+- выбран корректный `Optimization profile`
+- при необходимости заданы runtime overrides
+- для основного demo выбран `RAG Enhanced`
+- assistant message показывает `Ollama` или `Ollama RAG`
+- в execution line видны:
+  - profile
+  - prompt
+  - model
+  - latency breakdown
 - под ответом виден блок `Источники`
 - в details sheet видны grounded sources и quotes
-- `Compare local vs cloud` возвращает оба ответа
-- `Run benchmark` показывает summary
+- compare section показывает `Baseline vs Optimized`
+- benchmark summary показывает baseline/optimized averages
 
 ## Troubleshooting
 
@@ -284,13 +398,21 @@ Run benchmark
 - правильный ли host/port указан в приложении
 - существует ли модель из настроек
 
-### Local ответ не приходит, а cloud приходит
+### Local ответ не приходит
 
 Обычно это означает:
 
 - модель не скачана в Ollama
 - неверное имя модели
 - Ollama не принимает соединения с хоста эмулятора
+
+### Compare не показывает разницу
+
+Проверьте:
+
+- выбран ли `BASELINE` для честной отправной точки
+- выбран ли `OPTIMIZED_RAG` или `OPTIMIZED_CHAT` для второго сценария
+- не заданы ли одинаковые runtime overrides, которые фактически уравнивают два профиля
 
 ### Источники пустые
 

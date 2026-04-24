@@ -3,12 +3,16 @@ package com.example.aiadventchallenge.domain.usecase
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
 import com.example.aiadventchallenge.domain.chat.ChatMessageResult
+import com.example.aiadventchallenge.domain.llm.LocalLlmProfileResolver
 import com.example.aiadventchallenge.domain.model.AnswerMode
+import com.example.aiadventchallenge.domain.model.AiBackendSettings
+import com.example.aiadventchallenge.domain.model.AiBackendType
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.PreparedRagRequest
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
 import com.example.aiadventchallenge.domain.repository.BranchRepository
+import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.TaskStateRepository
 import com.example.aiadventchallenge.rag.memory.ConversationTaskState
 import com.example.aiadventchallenge.rag.memory.TaskStateUpdater
@@ -26,6 +30,7 @@ class ProcessChatTurnUseCaseTest {
     private val chatRepository = mockk<ChatRepository>(relaxed = true)
     private val branchRepository = mockk<BranchRepository>(relaxed = true)
     private val taskStateRepository = mockk<TaskStateRepository>(relaxed = true)
+    private val chatSettingsRepository = mockk<ChatSettingsRepository>()
     private val taskStateUpdater = mockk<TaskStateUpdater>()
     private val chatMessageHandler = mockk<ChatMessageHandler>()
     private val prepareRagRequestUseCase = mockk<PrepareRagRequestUseCase>()
@@ -34,9 +39,11 @@ class ProcessChatTurnUseCaseTest {
         chatRepository = chatRepository,
         branchRepository = branchRepository,
         taskStateRepository = taskStateRepository,
+        chatSettingsRepository = chatSettingsRepository,
         taskStateUpdater = taskStateUpdater,
         chatMessageHandler = chatMessageHandler,
-        prepareRagRequestUseCase = prepareRagRequestUseCase
+        prepareRagRequestUseCase = prepareRagRequestUseCase,
+        localLlmProfileResolver = LocalLlmProfileResolver()
     )
 
     @Test
@@ -67,9 +74,12 @@ class ProcessChatTurnUseCaseTest {
 
         coEvery { chatRepository.getMessagesByBranch("main") } returns emptyList()
         coEvery { taskStateRepository.getTaskState("main") } returns null
+        coEvery { chatSettingsRepository.getAiBackendSettings() } returns AiBackendSettings(
+            selectedBackend = AiBackendType.LOCAL_OLLAMA
+        )
         every { taskStateUpdater.update(any(), any(), any()) } returns taskState
         coEvery { chatMessageHandler.saveUserMessage(any(), any(), any()) } returns userMessage
-        coEvery { prepareRagRequestUseCase.invoke(any(), any(), any(), any()) } returns prepared
+        coEvery { prepareRagRequestUseCase.invoke(any(), any(), any(), any(), any()) } returns prepared
         coEvery {
             chatMessageHandler.generateAiResponse(
                 userInput = any(),
@@ -100,6 +110,6 @@ class ProcessChatTurnUseCaseTest {
         assertEquals("fitness_knowledge", result.retrievalSummary?.source)
         assertTrue(result.result is ChatMessageResult.Success)
         coVerify { taskStateRepository.upsertTaskState("main", taskState) }
-        coVerify { prepareRagRequestUseCase.invoke(any(), any(), any(), any()) }
+        coVerify { prepareRagRequestUseCase.invoke(any(), any(), any(), any(), any()) }
     }
 }

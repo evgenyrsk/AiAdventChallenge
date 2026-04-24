@@ -188,7 +188,22 @@ fun RequestLogItem(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
+                            text = "Profile: ${log.requestConfig.localProfile}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Prompt Profile: ${log.requestConfig.promptProfile}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
                             text = "Max Tokens: ${log.requestConfig.maxTokens}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Context Window: ${log.requestConfig.numCtx}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )

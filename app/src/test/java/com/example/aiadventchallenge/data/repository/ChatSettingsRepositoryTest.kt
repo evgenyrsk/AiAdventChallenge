@@ -8,6 +8,8 @@ import com.example.aiadventchallenge.domain.model.ChatSettingsPayload
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.LocalLlmConfig
+import com.example.aiadventchallenge.domain.model.LocalLlmProfile
+import com.example.aiadventchallenge.domain.model.LocalLlmRuntimeOptions
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -29,7 +31,10 @@ class ChatSettingsRepositoryTest {
             selectedBackend = "LOCAL_OLLAMA",
             localHost = "localhost",
             localPort = 11434,
-            localModel = "qwen2.5"
+            localModel = "qwen2.5",
+            localProfile = "OPTIMIZED_CHAT",
+            localTemperature = 0.2,
+            localNumCtx = 4096
         )
 
         val settings = repository.getAiBackendSettings()
@@ -38,6 +43,9 @@ class ChatSettingsRepositoryTest {
         assertEquals("localhost", settings.localConfig.host)
         assertEquals(11434, settings.localConfig.port)
         assertEquals("qwen2.5", settings.localConfig.model)
+        assertEquals(LocalLlmProfile.OPTIMIZED_CHAT, settings.localConfig.profile)
+        assertEquals(0.2, settings.localConfig.runtimeOptions.temperature)
+        assertEquals(4096, settings.localConfig.runtimeOptions.numCtx)
     }
 
     @Test
@@ -55,7 +63,13 @@ class ChatSettingsRepositoryTest {
                 localConfig = LocalLlmConfig(
                     host = "localhost",
                     port = 11434,
-                    model = "qwen2.5:3b-instruct"
+                    model = "qwen2.5:3b-instruct",
+                    profile = LocalLlmProfile.OPTIMIZED_RAG,
+                    runtimeOptions = LocalLlmRuntimeOptions(
+                        temperature = 0.1,
+                        numPredict = 280,
+                        numCtx = 6144
+                    )
                 )
             )
         )
@@ -69,7 +83,11 @@ class ChatSettingsRepositoryTest {
                         it.selectedBackend == "LOCAL_OLLAMA" &&
                         it.localHost == "localhost" &&
                         it.localPort == 11434 &&
-                        it.localModel == "qwen2.5:3b-instruct"
+                        it.localModel == "qwen2.5:3b-instruct" &&
+                        it.localProfile == "OPTIMIZED_RAG" &&
+                        it.localTemperature == 0.1 &&
+                        it.localNumPredict == 280 &&
+                        it.localNumCtx == 6144
                 }
             )
         }
@@ -95,7 +113,13 @@ class ChatSettingsRepositoryTest {
                     localConfig = LocalLlmConfig(
                         host = "localhost",
                         port = 11434,
-                        model = "qwen2.5:3b-instruct"
+                        model = "qwen2.5:3b-instruct",
+                        profile = LocalLlmProfile.OPTIMIZED_CHAT,
+                        runtimeOptions = LocalLlmRuntimeOptions(
+                            temperature = 0.2,
+                            topK = 40,
+                            stop = listOf("END")
+                        )
                     )
                 )
             )
@@ -110,7 +134,11 @@ class ChatSettingsRepositoryTest {
                         it.selectedBackend == "LOCAL_OLLAMA" &&
                         it.localHost == "localhost" &&
                         it.localPort == 11434 &&
-                        it.localModel == "qwen2.5:3b-instruct"
+                        it.localModel == "qwen2.5:3b-instruct" &&
+                        it.localProfile == "OPTIMIZED_CHAT" &&
+                        it.localTemperature == 0.2 &&
+                        it.localTopK == 40 &&
+                        it.localStopTokens == "END"
                 }
             )
         }

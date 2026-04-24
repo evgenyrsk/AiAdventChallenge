@@ -30,7 +30,7 @@ import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.ToolExecutionResult
 import com.example.aiadventchallenge.domain.model.mcp.McpConnectionStatus
 import com.example.aiadventchallenge.domain.usecase.ProcessChatTurnUseCase
-import com.example.aiadventchallenge.domain.usecase.CompareRagAnswersUseCase
+import com.example.aiadventchallenge.domain.usecase.CompareLocalOptimizationUseCase
 import com.example.aiadventchallenge.domain.usecase.RunRagEvaluationUseCase
 import com.example.aiadventchallenge.di.AppDependencies
 import kotlinx.coroutines.Dispatchers
@@ -52,7 +52,7 @@ class ChatViewModel(
     private val branchOrchestrator: BranchOrchestrator,
     private val mcpToolOrchestrator: McpToolOrchestrator,
     private val processChatTurnUseCase: ProcessChatTurnUseCase,
-    private val compareRagAnswersUseCase: CompareRagAnswersUseCase,
+    private val compareLocalOptimizationUseCase: CompareLocalOptimizationUseCase,
     private val runRagEvaluationUseCase: RunRagEvaluationUseCase
 ) : ViewModel() {
 
@@ -484,7 +484,7 @@ class ChatViewModel(
                 latestComparisonResult = null
             )
             runCatching {
-                compareRagAnswersUseCase(
+                compareLocalOptimizationUseCase(
                     question = summary.originalQuery.ifBlank { summary.query },
                     fitnessProfile = _chatUiState.value.fitnessProfile,
                     answerMode = _chatUiState.value.answerMode
@@ -495,11 +495,11 @@ class ChatViewModel(
                     latestComparisonResult = result
                 )
             }.onFailure { error ->
-                Log.e(TAG, "❌ Failed to compare RAG answers", error)
+                Log.e(TAG, "❌ Failed to compare baseline and optimized answers", error)
                 _chatUiState.value = _chatUiState.value.copy(
                     isComparisonRunning = false
                 )
-                addSystemMessage("Не удалось сравнить local и cloud ответы: ${error.message}")
+                addSystemMessage("Не удалось сравнить baseline и optimized ответы: ${error.message}")
             }
         }
     }

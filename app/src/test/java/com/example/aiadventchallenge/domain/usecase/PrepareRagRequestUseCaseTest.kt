@@ -8,6 +8,7 @@ import com.example.aiadventchallenge.domain.model.RagContextChunk
 import com.example.aiadventchallenge.domain.model.RagRetrievalDebug
 import com.example.aiadventchallenge.domain.model.RagRetrievalRequest
 import com.example.aiadventchallenge.domain.model.RagRetrievalResult
+import com.example.aiadventchallenge.domain.model.PromptProfile
 import com.example.aiadventchallenge.domain.rag.DefaultQueryRewriter
 import com.example.aiadventchallenge.domain.rag.RagPromptBuilder
 import com.example.aiadventchallenge.domain.rag.RagRetriever
@@ -99,6 +100,7 @@ class PrepareRagRequestUseCaseTest {
         assertTrue(result.userPrompt.contains("Белок 1.6-2.2 г/кг"))
         assertEquals("fitness_knowledge", result.retrievalSummary.source)
         assertEquals(1, result.retrievalSummary.selectedCount)
+        assertTrue(result.retrievalLatencyMs != null)
     }
 
     @Test
@@ -220,5 +222,53 @@ class PrepareRagRequestUseCaseTest {
         assertTrue(capturedRequest?.retrievalHints?.isNotEmpty() == true)
         assertTrue(result.userPrompt.contains("Conversation Task State"))
         assertTrue(result.userPrompt.contains("Снижение веса"))
+    }
+
+    @Test
+    fun `optimized rag prompt asks to avoid hallucinations and stay concise`() = runTest {
+        val fakeRetriever = object : RagRetriever {
+            override suspend fun retrieve(request: RagRetrievalRequest): RagRetrievalResult {
+                return RagRetrievalResult(
+                    query = request.effectiveQuery,
+                    originalQuery = request.originalQuery,
+                    rewrittenQuery = request.rewrittenQuery,
+                    effectiveQuery = request.effectiveQuery,
+                    source = request.config.source,
+                    strategy = request.config.strategy,
+                    selectedCount = 1,
+                    totalChars = 64,
+                    contextText = "Контекст по восстановлению сна",
+                    chunks = emptyList(),
+                    initialCandidates = emptyList(),
+                    finalCandidates = emptyList(),
+                    filteredCandidates = emptyList(),
+                    debug = RagRetrievalDebug(
+                        topKBeforeFilter = request.config.retrievalTopKBeforeFilter,
+                        finalTopK = request.config.retrievalTopKAfterFilter,
+                        similarityThreshold = request.config.similarityThreshold,
+                        postProcessingMode = request.config.postProcessingMode,
+                        fallbackApplied = false,
+                        fallbackReason = null
+                    ),
+                    contextEnvelope = "Envelope"
+                )
+            }
+        }
+
+        val useCase = PrepareRagRequestUseCase(
+            ragRetriever = fakeRetriever,
+            ragPromptBuilder = RagPromptBuilder(),
+            rewriteQueryUseCase = RewriteQueryUseCase(DefaultQueryRewriter())
+        )
+
+        val result = useCase(
+            question = "Почему сон важен?",
+            config = FitnessRagConfig.enhancedPipeline,
+            promptProfile = PromptProfile.OPTIMIZED_RAG
+        )
+
+        assertTrue(result.systemPromptSuffix.contains("Если данных недостаточно"))
+        assertTrue(result.systemPromptSuffix.contains("Сделай ответ компактным"))
+        assertEquals(PromptProfile.OPTIMIZED_RAG, result.promptProfile)
     }
 }

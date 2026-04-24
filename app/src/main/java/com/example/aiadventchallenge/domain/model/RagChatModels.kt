@@ -19,6 +19,14 @@ data class ChatExecutionInfo(
     val answerMode: AnswerMode,
     val ragEnabled: Boolean,
     val latencyMs: Long,
+    val retrievalLatencyMs: Long? = null,
+    val generationLatencyMs: Long? = null,
+    val model: String? = null,
+    val profile: LocalLlmProfile = LocalLlmProfile.BASELINE,
+    val promptProfile: PromptProfile = PromptProfile.BASELINE,
+    val responseChars: Int? = null,
+    val totalTokens: Int? = null,
+    val numCtx: Int? = null,
     val selectedSourceCount: Int = 0,
     val errorCategory: ChatFailureCategory? = null,
     val errorMessage: String? = null
@@ -38,22 +46,27 @@ data class ChatAnswerPresentation(
 )
 
 data class ModelRunDiagnostics(
-    val backend: AiBackendType,
+    val profile: LocalLlmProfile,
+    val promptProfile: PromptProfile,
     val modelLabel: String,
     val answer: String,
     val latencyMs: Long,
+    val retrievalLatencyMs: Long? = null,
+    val generationLatencyMs: Long? = null,
     val success: Boolean,
     val errorMessage: String? = null,
     val promptTokens: Int? = null,
     val completionTokens: Int? = null,
-    val totalTokens: Int? = null
+    val totalTokens: Int? = null,
+    val responseChars: Int = answer.length,
+    val quality: QualityEvaluation? = null
 )
 
 data class RagComparisonResult(
     val question: String,
     val retrievalSummary: RetrievalSummary,
-    val localRun: ModelRunDiagnostics,
-    val cloudRun: ModelRunDiagnostics,
+    val baselineRun: ModelRunDiagnostics,
+    val optimizedRun: ModelRunDiagnostics,
     val comparedAt: Long = System.currentTimeMillis()
 )
 
@@ -76,11 +89,11 @@ data class RagEvaluationRunResult(
         get() = entries.size
 
     val successCount: Int
-        get() = entries.count { it.comparison.localRun.success && it.comparison.cloudRun.success }
+        get() = entries.count { it.comparison.baselineRun.success && it.comparison.optimizedRun.success }
 
-    val averageLocalLatencyMs: Long
-        get() = entries.map { it.comparison.localRun.latencyMs }.average().toLong()
+    val averageBaselineLatencyMs: Long
+        get() = entries.map { it.comparison.baselineRun.latencyMs }.average().toLong()
 
-    val averageCloudLatencyMs: Long
-        get() = entries.map { it.comparison.cloudRun.latencyMs }.average().toLong()
+    val averageOptimizedLatencyMs: Long
+        get() = entries.map { it.comparison.optimizedRun.latencyMs }.average().toLong()
 }
