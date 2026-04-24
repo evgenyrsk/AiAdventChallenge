@@ -14,6 +14,8 @@ import com.example.aiadventchallenge.domain.model.ChatSettingsPayload
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.LocalLlmConfig
+import com.example.aiadventchallenge.domain.model.LocalLlmProfile
+import com.example.aiadventchallenge.domain.model.LocalLlmRuntimeOptions
 import com.example.aiadventchallenge.ui.components.FitnessProfileSelector
 import kotlin.math.roundToInt
 
@@ -35,6 +37,16 @@ fun StrategySettingsBottomSheet(
     var localHost by remember { mutableStateOf(currentLocalConfig.host) }
     var localPort by remember { mutableStateOf(currentLocalConfig.port.toString()) }
     var localModel by remember { mutableStateOf(currentLocalConfig.model) }
+    var localProfile by remember { mutableStateOf(currentLocalConfig.profile) }
+    var temperature by remember { mutableStateOf(currentLocalConfig.runtimeOptions.temperature?.toString().orEmpty()) }
+    var numPredict by remember { mutableStateOf(currentLocalConfig.runtimeOptions.numPredict?.toString().orEmpty()) }
+    var numCtx by remember { mutableStateOf(currentLocalConfig.runtimeOptions.numCtx?.toString().orEmpty()) }
+    var topK by remember { mutableStateOf(currentLocalConfig.runtimeOptions.topK?.toString().orEmpty()) }
+    var topP by remember { mutableStateOf(currentLocalConfig.runtimeOptions.topP?.toString().orEmpty()) }
+    var repeatPenalty by remember { mutableStateOf(currentLocalConfig.runtimeOptions.repeatPenalty?.toString().orEmpty()) }
+    var seed by remember { mutableStateOf(currentLocalConfig.runtimeOptions.seed?.toString().orEmpty()) }
+    var stopTokens by remember { mutableStateOf(currentLocalConfig.runtimeOptions.stop?.joinToString(", ").orEmpty()) }
+    var keepAlive by remember { mutableStateOf(currentLocalConfig.runtimeOptions.keepAlive.orEmpty()) }
 
     Column(
         modifier = modifier
@@ -213,6 +225,112 @@ fun StrategySettingsBottomSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            HorizontalDivider()
+            Text(
+                text = "Optimization profile:",
+                style = MaterialTheme.typography.labelLarge
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LocalLlmProfile.entries.forEach { profile ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = localProfile == profile,
+                            onClick = { localProfile = profile }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = when (profile) {
+                                    LocalLlmProfile.BASELINE -> "Baseline"
+                                    LocalLlmProfile.OPTIMIZED_CHAT -> "Optimized Chat"
+                                    LocalLlmProfile.OPTIMIZED_RAG -> "Optimized RAG"
+                                }
+                            )
+                            Text(
+                                text = when (profile) {
+                                    LocalLlmProfile.BASELINE -> "Текущее поведение без дополнительного тюнинга"
+                                    LocalLlmProfile.OPTIMIZED_CHAT -> "Короткие и стабильные chat-ответы"
+                                    LocalLlmProfile.OPTIMIZED_RAG -> "Более grounded ответы для retrieval сценариев"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider()
+            Text(
+                text = "Runtime options:",
+                style = MaterialTheme.typography.labelLarge
+            )
+            OutlinedTextField(
+                value = temperature,
+                onValueChange = { temperature = it },
+                label = { Text("Temperature") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = numPredict,
+                onValueChange = { numPredict = it.filter { ch -> ch.isDigit() } },
+                label = { Text("Num predict") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = numCtx,
+                onValueChange = { numCtx = it.filter { ch -> ch.isDigit() } },
+                label = { Text("Context window (num_ctx)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = topK,
+                onValueChange = { topK = it.filter { ch -> ch.isDigit() } },
+                label = { Text("Top K") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = topP,
+                onValueChange = { topP = it },
+                label = { Text("Top P") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = repeatPenalty,
+                onValueChange = { repeatPenalty = it },
+                label = { Text("Repeat penalty") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = seed,
+                onValueChange = { seed = it.filter { ch -> ch.isDigit() || ch == '-' } },
+                label = { Text("Seed") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = stopTokens,
+                onValueChange = { stopTokens = it },
+                label = { Text("Stop tokens (comma separated)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = keepAlive,
+                onValueChange = { keepAlive = it },
+                label = { Text("Keep alive") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
         }
 
         Button(
@@ -227,7 +345,22 @@ fun StrategySettingsBottomSheet(
                             localConfig = LocalLlmConfig(
                                 host = localHost.trim().ifBlank { currentLocalConfig.host },
                                 port = localPort.toIntOrNull() ?: currentLocalConfig.port,
-                                model = localModel.trim().ifBlank { currentLocalConfig.model }
+                                model = localModel.trim().ifBlank { currentLocalConfig.model },
+                                profile = localProfile,
+                                runtimeOptions = LocalLlmRuntimeOptions(
+                                    temperature = temperature.toDoubleOrNull(),
+                                    numPredict = numPredict.toIntOrNull(),
+                                    numCtx = numCtx.toIntOrNull(),
+                                    topK = topK.toIntOrNull(),
+                                    topP = topP.toDoubleOrNull(),
+                                    repeatPenalty = repeatPenalty.toDoubleOrNull(),
+                                    seed = seed.toIntOrNull(),
+                                    stop = stopTokens.split(',')
+                                        .map { it.trim() }
+                                        .filter { it.isNotBlank() }
+                                        .takeIf { it.isNotEmpty() },
+                                    keepAlive = keepAlive.trim().ifBlank { null }
+                                )
                             )
                         )
                     )

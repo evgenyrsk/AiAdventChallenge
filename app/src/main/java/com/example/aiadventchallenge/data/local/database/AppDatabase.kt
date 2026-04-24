@@ -30,7 +30,7 @@ import com.example.aiadventchallenge.data.local.entity.ConversationTaskStateEnti
         AiRequestEntity::class,
         ConversationTaskStateEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -116,6 +116,41 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE chat_settings ADD COLUMN localProfile TEXT NOT NULL DEFAULT 'BASELINE'"
+                )
+                database.execSQL(
+                    "ALTER TABLE chat_settings ADD COLUMN localTemperature REAL"
+                )
+                database.execSQL(
+                    "ALTER TABLE chat_settings ADD COLUMN localNumPredict INTEGER"
+                )
+                database.execSQL(
+                    "ALTER TABLE chat_settings ADD COLUMN localNumCtx INTEGER"
+                )
+                database.execSQL(
+                    "ALTER TABLE chat_settings ADD COLUMN localTopK INTEGER"
+                )
+                database.execSQL(
+                    "ALTER TABLE chat_settings ADD COLUMN localTopP REAL"
+                )
+                database.execSQL(
+                    "ALTER TABLE chat_settings ADD COLUMN localRepeatPenalty REAL"
+                )
+                database.execSQL(
+                    "ALTER TABLE chat_settings ADD COLUMN localSeed INTEGER"
+                )
+                database.execSQL(
+                    "ALTER TABLE chat_settings ADD COLUMN localStopTokens TEXT"
+                )
+                database.execSQL(
+                    "ALTER TABLE chat_settings ADD COLUMN localKeepAlive TEXT"
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -131,7 +166,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                     MIGRATION_7_8,
-                    MIGRATION_8_9
+                    MIGRATION_8_9,
+                    MIGRATION_9_10
                 )
                 .fallbackToDestructiveMigration()
                 .build()

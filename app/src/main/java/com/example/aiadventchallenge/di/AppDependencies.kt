@@ -18,11 +18,12 @@ import com.example.aiadventchallenge.data.repository.ChatSettingsRepository as D
 import com.example.aiadventchallenge.domain.repository.AiRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.InvariantRepository
+import com.example.aiadventchallenge.domain.llm.LocalLlmProfileResolver
 import com.example.aiadventchallenge.domain.usecase.AskAiUseCase
 import com.example.aiadventchallenge.domain.usecase.AskWithPromptModeUseCase
 import com.example.aiadventchallenge.domain.usecase.AskModelUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareResultsUseCase
-import com.example.aiadventchallenge.domain.usecase.CompareRagAnswersUseCase
+import com.example.aiadventchallenge.domain.usecase.CompareLocalOptimizationUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareTemperatureResultsUseCase
 import com.example.aiadventchallenge.domain.usecase.PrepareRagRequestUseCase
 import com.example.aiadventchallenge.domain.usecase.RunRagEvaluationUseCase
@@ -85,6 +86,10 @@ object AppDependencies {
             httpClient = httpClient,
             aiRequestRepository = aiRequestRepository
         )
+    }
+
+    val localLlmProfileResolver: LocalLlmProfileResolver by lazy {
+        LocalLlmProfileResolver()
     }
 
     val repository: AiRepository by lazy {
@@ -169,18 +174,18 @@ object AppDependencies {
         )
     }
 
-    val compareRagAnswersUseCase: CompareRagAnswersUseCase by lazy {
-        CompareRagAnswersUseCase(
+    val compareLocalOptimizationUseCase: CompareLocalOptimizationUseCase by lazy {
+        CompareLocalOptimizationUseCase(
             prepareRagRequestUseCase = prepareRagRequestUseCase,
             chatAgent = chatAgent,
-            remoteRepository = remoteRepository,
             localOllamaRepository = localOllamaRepository,
-            chatSettingsRepository = chatSettingsRepository
+            chatSettingsRepository = chatSettingsRepository,
+            localLlmProfileResolver = localLlmProfileResolver
         )
     }
 
     val runRagEvaluationUseCase: RunRagEvaluationUseCase by lazy {
-        RunRagEvaluationUseCase(compareRagAnswersUseCase)
+        RunRagEvaluationUseCase(compareLocalOptimizationUseCase)
     }
 
     val multiServerOrchestrator: MultiServerOrchestrator by lazy {

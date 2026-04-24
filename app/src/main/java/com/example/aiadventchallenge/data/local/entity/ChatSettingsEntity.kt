@@ -14,5 +14,15 @@ data class ChatSettingsEntity(
     val selectedBackend: String = "REMOTE",
     val localHost: String = "10.0.2.2",
     val localPort: Int = 11434,
-    val localModel: String = "qwen2.5:3b-instruct"
+    val localModel: String = "qwen2.5:3b-instruct",
+    val localProfile: String = "BASELINE",
+    val localTemperature: Double? = null,
+    val localNumPredict: Int? = null,
+    val localNumCtx: Int? = null,
+    val localTopK: Int? = null,
+    val localTopP: Double? = null,
+    val localRepeatPenalty: Double? = null,
+    val localSeed: Int? = null,
+    val localStopTokens: String? = null,
+    val localKeepAlive: String? = null
 )

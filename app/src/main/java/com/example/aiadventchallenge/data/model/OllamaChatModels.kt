@@ -8,7 +8,9 @@ data class OllamaChatRequest(
     val model: String,
     val messages: List<OllamaMessage>,
     val stream: Boolean = false,
-    val options: OllamaOptions? = null
+    val options: OllamaOptions? = null,
+    @SerialName("keep_alive")
+    val keepAlive: String? = null
 )
 
 @Serializable
@@ -16,6 +18,15 @@ data class OllamaOptions(
     val temperature: Double? = null,
     @SerialName("num_predict")
     val numPredict: Int? = null,
+    @SerialName("num_ctx")
+    val numCtx: Int? = null,
+    @SerialName("top_k")
+    val topK: Int? = null,
+    @SerialName("top_p")
+    val topP: Double? = null,
+    @SerialName("repeat_penalty")
+    val repeatPenalty: Double? = null,
+    val seed: Int? = null,
     val stop: List<String>? = null
 )
 

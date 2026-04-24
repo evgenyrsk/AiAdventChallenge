@@ -17,8 +17,11 @@ data class RequestLog(
 
 data class RequestConfigDebug(
     val model: String?,
+    val localProfile: LocalLlmProfile = LocalLlmProfile.BASELINE,
+    val promptProfile: PromptProfile = PromptProfile.BASELINE,
     val temperature: Double?,
     val maxTokens: Int?,
+    val numCtx: Int? = null,
     val systemPrompt: String
 )
 

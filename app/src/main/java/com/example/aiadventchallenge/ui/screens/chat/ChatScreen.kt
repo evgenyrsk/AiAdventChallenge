@@ -598,26 +598,43 @@ fun MessageBubble(
 
 @Composable
 private fun AnswerExecutionRow(executionInfo: ChatExecutionInfo) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        AssistChip(
-            onClick = {},
-            enabled = false,
-            label = {
-                Text(
-                    text = buildBackendBadgeLabel(executionInfo),
-                    style = MaterialTheme.typography.labelSmall
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AssistChip(
+                onClick = {},
+                enabled = false,
+                label = {
+                    Text(
+                        text = buildBackendBadgeLabel(executionInfo),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                },
+                colors = AssistChipDefaults.assistChipColors(
+                    disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    disabledLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
                 )
-            },
-            colors = AssistChipDefaults.assistChipColors(
-                disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                disabledLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
             )
-        )
+            Text(
+                text = "${executionInfo.latencyMs} ms",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Text(
-            text = "${executionInfo.latencyMs} ms",
+            text = buildString {
+                append("Profile: ${executionInfo.profile}")
+                executionInfo.promptProfile.let { append(" • Prompt: $it") }
+                executionInfo.model?.let { append(" • Model: $it") }
+                executionInfo.retrievalLatencyMs?.let { append(" • Retrieval: ${it} ms") }
+                executionInfo.generationLatencyMs?.let { append(" • Generation: ${it} ms") }
+                executionInfo.totalTokens?.let { append(" • Tokens: $it") }
+                executionInfo.responseChars?.let { append(" • Chars: $it") }
+            },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -829,7 +846,7 @@ private fun RetrievalDetailsSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text("Compare local vs cloud")
+                Text("Compare baseline vs optimized")
             }
             TextButton(
                 onClick = onRunEvaluation,
@@ -989,23 +1006,29 @@ private fun RetrievalDetailsSheet(
         }
 
         latestComparisonResult?.let { comparison ->
-            RetrievalDetailsSection(title = "Local vs Cloud") {
+            RetrievalDetailsSection(title = "Baseline vs Optimized") {
                 RetrievalDetailText("Question: ${comparison.question}")
                 RetrievalDetailText(
-                    "Local: ${if (comparison.localRun.success) "ok" else "error"} • ${comparison.localRun.latencyMs} ms • ${comparison.localRun.modelLabel}"
+                    "Baseline: ${if (comparison.baselineRun.success) "ok" else "error"} • ${comparison.baselineRun.latencyMs} ms • ${comparison.baselineRun.modelLabel}"
                 )
-                if (comparison.localRun.errorMessage != null) {
-                    RetrievalDetailText("Local error: ${comparison.localRun.errorMessage}")
+                if (comparison.baselineRun.errorMessage != null) {
+                    RetrievalDetailText("Baseline error: ${comparison.baselineRun.errorMessage}")
                 } else {
-                    RetrievalDetailText("Local answer: ${comparison.localRun.answer}")
+                    RetrievalDetailText("Baseline answer: ${comparison.baselineRun.answer}")
+                    comparison.baselineRun.quality?.let {
+                        RetrievalDetailText("Baseline quality: ${it.summary}")
+                    }
                 }
                 RetrievalDetailText(
-                    "Cloud: ${if (comparison.cloudRun.success) "ok" else "error"} • ${comparison.cloudRun.latencyMs} ms"
+                    "Optimized: ${if (comparison.optimizedRun.success) "ok" else "error"} • ${comparison.optimizedRun.latencyMs} ms • ${comparison.optimizedRun.modelLabel}"
                 )
-                if (comparison.cloudRun.errorMessage != null) {
-                    RetrievalDetailText("Cloud error: ${comparison.cloudRun.errorMessage}")
+                if (comparison.optimizedRun.errorMessage != null) {
+                    RetrievalDetailText("Optimized error: ${comparison.optimizedRun.errorMessage}")
                 } else {
-                    RetrievalDetailText("Cloud answer: ${comparison.cloudRun.answer}")
+                    RetrievalDetailText("Optimized answer: ${comparison.optimizedRun.answer}")
+                    comparison.optimizedRun.quality?.let {
+                        RetrievalDetailText("Optimized quality: ${it.summary}")
+                    }
                 }
             }
         }
@@ -1014,11 +1037,11 @@ private fun RetrievalDetailsSheet(
             RetrievalDetailsSection(title = "Benchmark Summary") {
                 RetrievalDetailText("Samples: ${evaluation.totalCount}")
                 RetrievalDetailText("Both succeeded: ${evaluation.successCount}")
-                RetrievalDetailText("Avg local latency: ${evaluation.averageLocalLatencyMs} ms")
-                RetrievalDetailText("Avg cloud latency: ${evaluation.averageCloudLatencyMs} ms")
+                RetrievalDetailText("Avg baseline latency: ${evaluation.averageBaselineLatencyMs} ms")
+                RetrievalDetailText("Avg optimized latency: ${evaluation.averageOptimizedLatencyMs} ms")
                 evaluation.entries.forEach { entry ->
                     RetrievalDetailText(
-                        "${entry.sample.label}: local=${entry.comparison.localRun.latencyMs} ms, cloud=${entry.comparison.cloudRun.latencyMs} ms"
+                        "${entry.sample.label}: baseline=${entry.comparison.baselineRun.latencyMs} ms, optimized=${entry.comparison.optimizedRun.latencyMs} ms"
                     )
                 }
             }

@@ -7,7 +7,7 @@ import com.example.aiadventchallenge.domain.model.RagEvaluationRunResult
 import com.example.aiadventchallenge.domain.model.RagEvaluationSample
 
 class RunRagEvaluationUseCase(
-    private val compareRagAnswersUseCase: CompareRagAnswersUseCase
+    private val compareLocalOptimizationUseCase: CompareLocalOptimizationUseCase
 ) {
 
     suspend operator fun invoke(
@@ -18,7 +18,7 @@ class RunRagEvaluationUseCase(
         val entries = samples.map { sample ->
             RagEvaluationEntry(
                 sample = sample,
-                comparison = compareRagAnswersUseCase(
+                comparison = compareLocalOptimizationUseCase(
                     question = sample.question,
                     fitnessProfile = fitnessProfile,
                     answerMode = answerMode

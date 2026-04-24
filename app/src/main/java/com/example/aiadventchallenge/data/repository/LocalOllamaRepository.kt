@@ -102,11 +102,23 @@ class LocalOllamaRepository(
             options = com.example.aiadventchallenge.data.model.OllamaOptions(
                 temperature = config.temperature,
                 numPredict = config.maxTokens,
+                numCtx = config.numCtx,
+                topK = config.topK,
+                topP = config.topP,
+                repeatPenalty = config.repeatPenalty,
+                seed = config.seed,
                 stop = config.stop
-            )
+            ),
+            keepAlive = config.keepAlive
         )
 
-        Log.d(TAG, "Using LOCAL_OLLAMA backend: endpoint=$baseUrl/api/chat, model=$model, stream=false")
+        Log.d(
+            TAG,
+            "Using LOCAL_OLLAMA backend: endpoint=$baseUrl/api/chat, model=$model, " +
+                "profile=${localConfig.profile}, promptProfile=${config.promptProfile}, " +
+                "temperature=${config.temperature}, numPredict=${config.maxTokens}, numCtx=${config.numCtx}, " +
+                "topK=${config.topK}, topP=${config.topP}, repeatPenalty=${config.repeatPenalty}, seed=${config.seed}"
+        )
 
         val requestJson = ollamaJson.encodeToString(request)
         return httpClient.post(

@@ -7,6 +7,7 @@ import com.example.aiadventchallenge.data.model.MessageRole
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.context.ContextStrategy
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
+import com.example.aiadventchallenge.domain.llm.LocalLlmProfileResolver
 import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.model.AnswerWithUsage
 import com.example.aiadventchallenge.domain.model.ChatMessage
@@ -55,7 +56,8 @@ class ChatMessageHandlerImplTest {
         agent = agent,
         contextStrategyFactory = contextStrategyFactory,
         chatSettingsRepository = chatSettingsRepository,
-        prepareRagRequestUseCase = prepareRagRequestUseCase
+        prepareRagRequestUseCase = prepareRagRequestUseCase,
+        localLlmProfileResolver = LocalLlmProfileResolver()
     )
 
     @Before
@@ -157,7 +159,7 @@ class ChatMessageHandlerImplTest {
             Message(MessageRole.USER, userInput)
         )
         every { agent.buildRequestConfigWithProfile(any()) } returns RequestConfig(systemPrompt = "system")
-        coEvery { prepareRagRequestUseCase.invoke(any(), any(), any(), any()) } returns preparedRagRequest
+        coEvery { prepareRagRequestUseCase.invoke(any(), any(), any(), any(), any()) } returns preparedRagRequest
 
         val capturedMessages = mutableListOf<List<Message>>()
         val capturedContextMessages = mutableListOf<List<ChatMessage>>()
@@ -197,7 +199,7 @@ class ChatMessageHandlerImplTest {
         ) as ChatMessageResult.Success
 
         coVerify(exactly = 1) {
-            prepareRagRequestUseCase.invoke(any(), any(), any(), any())
+            prepareRagRequestUseCase.invoke(any(), any(), any(), any(), any())
         }
 
         assertEquals("Предыдущий ответ", capturedContextMessages[0].first().content)
@@ -346,7 +348,7 @@ class ChatMessageHandlerImplTest {
             Message(MessageRole.USER, userInput)
         )
         every { agent.buildRequestConfigWithProfile(any()) } returns RequestConfig(systemPrompt = "system")
-        coEvery { prepareRagRequestUseCase.invoke(any(), any(), any(), any()) } returns preparedRagRequest
+        coEvery { prepareRagRequestUseCase.invoke(any(), any(), any(), any(), any()) } returns preparedRagRequest
         coEvery { contextStrategy.buildContext(null, any(), any()) } returns baseMessages
         coEvery {
             agent.processRequestWithContextAndUsage(
@@ -439,7 +441,7 @@ class ChatMessageHandlerImplTest {
         coEvery { chatSettingsRepository.getSettings() } returns ContextStrategyConfig(ContextStrategyType.SLIDING_WINDOW)
         every { contextStrategyFactory.create(any()) } returns contextStrategy
         every { agent.buildRequestConfigWithProfile(any()) } returns RequestConfig(systemPrompt = "system")
-        coEvery { prepareRagRequestUseCase.invoke(any(), any(), any(), any()) } returns preparedRagRequest
+        coEvery { prepareRagRequestUseCase.invoke(any(), any(), any(), any(), any()) } returns preparedRagRequest
         coEvery { contextStrategy.buildContext(null, any(), any()) } returns baseMessages
         coEvery {
             agent.processRequestWithContextAndUsage(

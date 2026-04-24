@@ -14,6 +14,7 @@ import com.example.aiadventchallenge.domain.model.RequestConfig
 import com.example.aiadventchallenge.data.repository.ChatRepository
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.context.ContextStrategyFactory
+import com.example.aiadventchallenge.domain.llm.LocalLlmProfileResolver
 import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.model.AiBackendSettings
 import com.example.aiadventchallenge.domain.model.ChatAnswerPresentation
@@ -34,7 +35,8 @@ class ChatMessageHandlerImpl(
     private val agent: ChatAgent,
     private val contextStrategyFactory: ContextStrategyFactory,
     private val chatSettingsRepository: ChatSettingsRepository,
-    private val prepareRagRequestUseCase: PrepareRagRequestUseCase
+    private val prepareRagRequestUseCase: PrepareRagRequestUseCase,
+    private val localLlmProfileResolver: LocalLlmProfileResolver
 ) : ChatMessageHandler {
 
     private val TAG = "ChatMessageHandler"
@@ -77,9 +79,15 @@ class ChatMessageHandlerImpl(
         chatRepository.insertMessage(userMessage, activeBranchId, parentMessageId)
         
         val activeMessages = chatRepository.getMessagesByBranch(activeBranchId)
-        
-        var config = agent.buildRequestConfigWithProfile(
-            fitnessProfile = fitnessProfile
+        val backendSettings = chatSettingsRepository.getAiBackendSettings()
+        val executionSettings = localLlmProfileResolver.resolveExecutionSettings(
+            localConfig = backendSettings.localConfig,
+            answerMode = answerMode
+        )
+        var config = localLlmProfileResolver.applyToRequestConfig(
+            baseConfig = agent.buildRequestConfigWithProfile(fitnessProfile = fitnessProfile),
+            fitnessProfile = fitnessProfile,
+            executionSettings = executionSettings
         )
         
         if (mcpContext != null) {
@@ -176,8 +184,15 @@ class ChatMessageHandlerImpl(
     ): ChatMessageResult {
         val backendSettings = chatSettingsRepository.getAiBackendSettings()
         val activeMessages = chatRepository.getMessagesByBranch(activeBranchId)
-
-        var config = agent.buildRequestConfigWithProfile(fitnessProfile)
+        val executionSettings = localLlmProfileResolver.resolveExecutionSettings(
+            localConfig = backendSettings.localConfig,
+            answerMode = answerMode
+        )
+        var config = localLlmProfileResolver.applyToRequestConfig(
+            baseConfig = agent.buildRequestConfigWithProfile(fitnessProfile),
+            fitnessProfile = fitnessProfile,
+            executionSettings = executionSettings
+        )
 
         if (mcpContext != null) {
             Log.d(TAG, "🔧 Adding MCP context to system prompt (length=${mcpContext.length})")
@@ -191,10 +206,12 @@ class ChatMessageHandlerImpl(
         var apiMessages = strategy.buildContext(null, sanitizedMessages, config.systemPrompt)
         var retrievalSummary: com.example.aiadventchallenge.domain.mcp.RetrievalSummary? = null
         var fallbackAnswerText: String? = null
+        var retrievalLatencyMs: Long? = preparedRagRequest?.retrievalLatencyMs
 
         if (preparedRagRequest != null) {
             retrievalSummary = preparedRagRequest.retrievalSummary
             fallbackAnswerText = preparedRagRequest.fallbackAnswerText
+            retrievalLatencyMs = preparedRagRequest.retrievalLatencyMs
             config = config.copy(
                 systemPrompt = config.systemPrompt + "\n\n" + preparedRagRequest.systemPromptSuffix
             )
@@ -208,11 +225,13 @@ class ChatMessageHandlerImpl(
             runCatching {
                 prepareRagRequestUseCase(
                     question = userInput,
-                    config = requireNotNull(ragConfig)
+                    config = requireNotNull(ragConfig),
+                    promptProfile = executionSettings.promptProfile
                 )
             }.onSuccess { preparedRagRequest ->
                 retrievalSummary = preparedRagRequest.retrievalSummary
                 fallbackAnswerText = preparedRagRequest.fallbackAnswerText
+                retrievalLatencyMs = preparedRagRequest.retrievalLatencyMs
                 config = config.copy(
                     systemPrompt = config.systemPrompt + "\n\n" + preparedRagRequest.systemPromptSuffix
                 )
@@ -260,8 +279,13 @@ class ChatMessageHandlerImpl(
                 backendSettings = backendSettings,
                 answerMode = answerMode,
                 latencyMs = 0L,
+                retrievalLatencyMs = retrievalLatencyMs,
+                generationLatencyMs = 0L,
                 retrievalSummary = updatedSummary,
-                messageId = aiMessage.id
+                messageId = aiMessage.id,
+                requestConfig = config,
+                responseChars = fallbackText.length,
+                totalTokens = 0
             )
             return ChatMessageResult.Success(
                 userMessage = null,
@@ -346,8 +370,13 @@ class ChatMessageHandlerImpl(
                     backendSettings = backendSettings,
                     answerMode = answerMode,
                     latencyMs = latencyMs,
+                    retrievalLatencyMs = retrievalLatencyMs,
+                    generationLatencyMs = latencyMs,
                     retrievalSummary = updatedSummary,
-                    messageId = aiMessage.id
+                    messageId = aiMessage.id,
+                    requestConfig = config,
+                    responseChars = aiResponseText.length,
+                    totalTokens = answerWithUsage.totalTokens
                 )
                 
                 ChatMessageResult.Success(
@@ -375,9 +404,14 @@ class ChatMessageHandlerImpl(
         backendSettings: AiBackendSettings,
         answerMode: AnswerMode,
         latencyMs: Long,
+        retrievalLatencyMs: Long? = null,
+        generationLatencyMs: Long? = null,
         retrievalSummary: com.example.aiadventchallenge.domain.mcp.RetrievalSummary?,
         messageId: String? = null,
-        errorMessage: String? = null
+        errorMessage: String? = null,
+        requestConfig: RequestConfig,
+        responseChars: Int? = null,
+        totalTokens: Int? = null
     ): ChatExecutionInfo {
         return ChatExecutionInfo(
             messageId = messageId,
@@ -385,6 +419,18 @@ class ChatMessageHandlerImpl(
             answerMode = answerMode,
             ragEnabled = answerMode != AnswerMode.PLAIN_LLM,
             latencyMs = latencyMs,
+            retrievalLatencyMs = retrievalLatencyMs,
+            generationLatencyMs = generationLatencyMs,
+            model = if (backendSettings.selectedBackend == com.example.aiadventchallenge.domain.model.AiBackendType.LOCAL_OLLAMA) {
+                backendSettings.localConfig.model
+            } else {
+                requestConfig.modelId
+            },
+            profile = requestConfig.localLlmProfile,
+            promptProfile = requestConfig.promptProfile,
+            responseChars = responseChars,
+            totalTokens = totalTokens,
+            numCtx = requestConfig.numCtx,
             selectedSourceCount = retrievalSummary?.chunks?.size ?: 0,
             errorCategory = errorMessage?.let {
                 inferFailureCategory(

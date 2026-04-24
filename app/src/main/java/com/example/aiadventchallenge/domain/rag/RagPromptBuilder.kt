@@ -4,6 +4,7 @@ import com.example.aiadventchallenge.domain.mcp.RetrievalSourceCard
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
 import com.example.aiadventchallenge.domain.model.GroundedAnswerPayload
 import com.example.aiadventchallenge.domain.model.PreparedRagRequest
+import com.example.aiadventchallenge.domain.model.PromptProfile
 import com.example.aiadventchallenge.domain.model.RagAnswerMode
 import com.example.aiadventchallenge.domain.model.RagAnswerPolicy
 import com.example.aiadventchallenge.domain.model.RagRetrievalResult
@@ -19,7 +20,8 @@ class RagPromptBuilder {
         question: String,
         retrieval: RagRetrievalResult,
         policy: RagAnswerPolicy = RagAnswerPolicy.STRICT,
-        conversationContext: RagConversationContext? = null
+        conversationContext: RagConversationContext? = null,
+        promptProfile: PromptProfile = PromptProfile.BASELINE
     ): PreparedRagRequest {
         val conversationTaskBlock = TaskMemoryRagSupport.buildPromptBlock(conversationContext)
 
@@ -32,14 +34,29 @@ class RagPromptBuilder {
             }
         }
 
+        val profileInstructions = when (promptProfile) {
+            PromptProfile.BASELINE -> listOf(
+                "Отвечай только по найденному контексту.",
+                "Не придумывай источники, секции, цитаты или факты вне retrieved context.",
+                "Task memory помогает понять цель и ограничения диалога, но не является доказательной базой.",
+                "Приложение само прикрепит sources и quotes детерминированно, поэтому сгенерируй только answerText."
+            )
+            PromptProfile.OPTIMIZED_CHAT,
+            PromptProfile.OPTIMIZED_RAG -> listOf(
+                "Используй только retrieved context как доказательную базу ответа.",
+                "Если данных недостаточно, честно скажи об этом одним явным предложением.",
+                "Не выдумывай факты, источники, цитаты, дозировки, цифры или рекомендации вне retrieved context.",
+                "Сделай ответ компактным и практичным: сначала вывод, затем 2-4 коротких уточнения.",
+                "Если в retrieved context нет подтверждения, не делай категоричных утверждений.",
+                "Приложение само прикрепит sources и quotes детерминированно, поэтому сгенерируй только answerText."
+            )
+        }
+
         val systemPromptSuffix = buildString {
             appendLine()
             appendLine("RAG MODE")
             appendLine(policyInstruction)
-            appendLine("Отвечай только по найденному контексту.")
-            appendLine("Не придумывай источники, секции, цитаты или факты вне retrieved context.")
-            appendLine("Task memory помогает понять цель и ограничения диалога, но не является доказательной базой.")
-            appendLine("Приложение само прикрепит sources и quotes детерминированно, поэтому сгенерируй только answerText.")
+            profileInstructions.forEach(::appendLine)
         }.trim()
 
         val userPrompt = buildString {
@@ -121,7 +138,8 @@ class RagPromptBuilder {
                 }
             ),
             fallbackAnswerText = fallbackAnswerText,
-            conversationContextBlock = conversationTaskBlock
+            conversationContextBlock = conversationTaskBlock,
+            promptProfile = promptProfile
         )
     }
 

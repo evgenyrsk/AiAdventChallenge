@@ -9,6 +9,8 @@ import com.example.aiadventchallenge.domain.model.ContextStrategyConfig
 import com.example.aiadventchallenge.domain.model.ContextStrategyType
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.LocalLlmConfig
+import com.example.aiadventchallenge.domain.model.LocalLlmProfile
+import com.example.aiadventchallenge.domain.model.LocalLlmRuntimeOptions
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 
 class ChatSettingsRepository(
@@ -120,6 +122,24 @@ class ChatSettingsRepository(
                 model = normalizeLocalModel(
                     selectedBackend = selectedBackend,
                     model = entity.localModel
+                ),
+                profile = runCatching {
+                    LocalLlmProfile.valueOf(entity.localProfile)
+                }.getOrDefault(LocalLlmProfile.BASELINE),
+                runtimeOptions = LocalLlmRuntimeOptions(
+                    temperature = entity.localTemperature,
+                    numPredict = entity.localNumPredict,
+                    numCtx = entity.localNumCtx,
+                    topK = entity.localTopK,
+                    topP = entity.localTopP,
+                    repeatPenalty = entity.localRepeatPenalty,
+                    seed = entity.localSeed,
+                    stop = entity.localStopTokens
+                        ?.split('\n')
+                        ?.map(String::trim)
+                        ?.filter(String::isNotBlank)
+                        ?.takeIf { it.isNotEmpty() },
+                    keepAlive = entity.localKeepAlive
                 )
             )
         )
@@ -131,7 +151,17 @@ class ChatSettingsRepository(
             selectedBackend = settings.selectedBackend.name,
             localHost = settings.localConfig.host,
             localPort = settings.localConfig.port,
-            localModel = settings.localConfig.model
+            localModel = settings.localConfig.model,
+            localProfile = settings.localConfig.profile.name,
+            localTemperature = settings.localConfig.runtimeOptions.temperature,
+            localNumPredict = settings.localConfig.runtimeOptions.numPredict,
+            localNumCtx = settings.localConfig.runtimeOptions.numCtx,
+            localTopK = settings.localConfig.runtimeOptions.topK,
+            localTopP = settings.localConfig.runtimeOptions.topP,
+            localRepeatPenalty = settings.localConfig.runtimeOptions.repeatPenalty,
+            localSeed = settings.localConfig.runtimeOptions.seed,
+            localStopTokens = settings.localConfig.runtimeOptions.stop?.joinToString("\n"),
+            localKeepAlive = settings.localConfig.runtimeOptions.keepAlive
         )
         chatSettingsDao.insertSettings(entity)
     }
@@ -145,7 +175,17 @@ class ChatSettingsRepository(
             selectedBackend = payload.backendSettings.selectedBackend.name,
             localHost = payload.backendSettings.localConfig.host,
             localPort = payload.backendSettings.localConfig.port,
-            localModel = payload.backendSettings.localConfig.model
+            localModel = payload.backendSettings.localConfig.model,
+            localProfile = payload.backendSettings.localConfig.profile.name,
+            localTemperature = payload.backendSettings.localConfig.runtimeOptions.temperature,
+            localNumPredict = payload.backendSettings.localConfig.runtimeOptions.numPredict,
+            localNumCtx = payload.backendSettings.localConfig.runtimeOptions.numCtx,
+            localTopK = payload.backendSettings.localConfig.runtimeOptions.topK,
+            localTopP = payload.backendSettings.localConfig.runtimeOptions.topP,
+            localRepeatPenalty = payload.backendSettings.localConfig.runtimeOptions.repeatPenalty,
+            localSeed = payload.backendSettings.localConfig.runtimeOptions.seed,
+            localStopTokens = payload.backendSettings.localConfig.runtimeOptions.stop?.joinToString("\n"),
+            localKeepAlive = payload.backendSettings.localConfig.runtimeOptions.keepAlive
         )
         chatSettingsDao.insertSettings(entity)
     }

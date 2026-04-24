@@ -29,6 +29,7 @@ import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
 import com.example.aiadventchallenge.domain.chat.ChatMessageHandlerImpl
 import com.example.aiadventchallenge.domain.branch.BranchOrchestrator
 import com.example.aiadventchallenge.domain.branch.BranchOrchestratorImpl
+import com.example.aiadventchallenge.domain.llm.LocalLlmProfileResolver
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.usecase.ProcessChatTurnUseCase
 import com.example.aiadventchallenge.rag.memory.TaskStateUpdater
@@ -53,7 +54,8 @@ class MainActivity : ComponentActivity() {
             agent = AppDependencies.chatAgent,
             contextStrategyFactory = contextStrategyFactory,
             chatSettingsRepository = chatSettingsRepository,
-            prepareRagRequestUseCase = AppDependencies.prepareRagRequestUseCase
+            prepareRagRequestUseCase = AppDependencies.prepareRagRequestUseCase,
+            localLlmProfileResolver = AppDependencies.localLlmProfileResolver
         )
     }
     private val branchOrchestrator by lazy {
@@ -71,9 +73,11 @@ class MainActivity : ComponentActivity() {
             chatRepository = chatRepository,
             branchRepository = branchRepository,
             taskStateRepository = taskStateRepository,
+            chatSettingsRepository = chatSettingsRepository,
             taskStateUpdater = taskStateUpdater,
             chatMessageHandler = chatMessageHandler,
-            prepareRagRequestUseCase = AppDependencies.prepareRagRequestUseCase
+            prepareRagRequestUseCase = AppDependencies.prepareRagRequestUseCase,
+            localLlmProfileResolver = AppDependencies.localLlmProfileResolver
         )
     }
 
@@ -90,7 +94,7 @@ class MainActivity : ComponentActivity() {
             branchOrchestrator,
             mcpToolOrchestrator,
             processChatTurnUseCase,
-            AppDependencies.compareRagAnswersUseCase,
+            AppDependencies.compareLocalOptimizationUseCase,
             AppDependencies.runRagEvaluationUseCase,
         )
     }

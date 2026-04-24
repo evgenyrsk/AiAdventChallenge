@@ -204,5 +204,7 @@ data class PreparedRagRequest(
     val userPrompt: String,
     val retrievalSummary: RetrievalSummary,
     val fallbackAnswerText: String? = null,
-    val conversationContextBlock: String? = null
+    val conversationContextBlock: String? = null,
+    val promptProfile: PromptProfile = PromptProfile.BASELINE,
+    val retrievalLatencyMs: Long? = null
 )

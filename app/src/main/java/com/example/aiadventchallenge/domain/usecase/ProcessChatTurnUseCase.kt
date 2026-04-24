@@ -3,10 +3,12 @@ package com.example.aiadventchallenge.domain.usecase
 import com.example.aiadventchallenge.data.mcp.FitnessRagConfig
 import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
 import com.example.aiadventchallenge.domain.chat.ChatMessageResult
+import com.example.aiadventchallenge.domain.llm.LocalLlmProfileResolver
 import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.repository.BranchRepository
+import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 import com.example.aiadventchallenge.domain.repository.TaskStateRepository
 import com.example.aiadventchallenge.domain.mcp.RetrievalSummary
 import com.example.aiadventchallenge.data.repository.ChatRepository
@@ -18,9 +20,11 @@ class ProcessChatTurnUseCase(
     private val chatRepository: ChatRepository,
     private val branchRepository: BranchRepository,
     private val taskStateRepository: TaskStateRepository,
+    private val chatSettingsRepository: ChatSettingsRepository,
     private val taskStateUpdater: TaskStateUpdater,
     private val chatMessageHandler: ChatMessageHandler,
-    private val prepareRagRequestUseCase: PrepareRagRequestUseCase
+    private val prepareRagRequestUseCase: PrepareRagRequestUseCase,
+    private val localLlmProfileResolver: LocalLlmProfileResolver
 ) {
 
     suspend operator fun invoke(
@@ -77,13 +81,20 @@ class ProcessChatTurnUseCase(
 
         taskStateRepository.upsertTaskState(activeBranchId, updatedTaskState)
 
+        val backendSettings = chatSettingsRepository.getAiBackendSettings()
+        val promptProfile = localLlmProfileResolver.resolveExecutionSettings(
+            localConfig = backendSettings.localConfig,
+            answerMode = answerMode
+        ).promptProfile
+
         val preparedRagRequest = prepareRagRequestUseCase(
             question = userInput,
             config = FitnessRagConfig.enhancedPipeline,
             conversationContext = RagConversationContext(
                 taskState = updatedTaskState,
                 recentMessages = history.takeLast(4).map(ChatMessage::content)
-            )
+            ),
+            promptProfile = promptProfile
         )
 
         val result = chatMessageHandler.generateAiResponse(
