@@ -10,6 +10,7 @@ import com.example.aiadventchallenge.data.repository.AiRepositoryImpl
 import com.example.aiadventchallenge.data.repository.AiRequestRepository
 import com.example.aiadventchallenge.data.repository.InvariantRepositoryImpl
 import com.example.aiadventchallenge.data.repository.LocalOllamaRepository
+import com.example.aiadventchallenge.data.repository.PrivateAiServiceRepository
 import com.example.aiadventchallenge.data.repository.RoutingAiRepository
 import com.example.aiadventchallenge.data.local.database.AppDatabase
 import com.example.aiadventchallenge.data.mcp.MultiServerRepository
@@ -88,6 +89,13 @@ object AppDependencies {
         )
     }
 
+    val privateAiServiceRepository: PrivateAiServiceRepository by lazy {
+        PrivateAiServiceRepository(
+            httpClient = httpClient,
+            aiRequestRepository = aiRequestRepository
+        )
+    }
+
     val localLlmProfileResolver: LocalLlmProfileResolver by lazy {
         LocalLlmProfileResolver()
     }
@@ -96,7 +104,8 @@ object AppDependencies {
         RoutingAiRepository(
             chatSettingsRepository = chatSettingsRepository,
             remoteRepository = remoteRepository,
-            localOllamaRepository = localOllamaRepository
+            localOllamaRepository = localOllamaRepository,
+            privateAiServiceRepository = privateAiServiceRepository
         )
     }
 

@@ -5,6 +5,7 @@ import com.example.aiadventchallenge.domain.model.AiBackendType
 import com.example.aiadventchallenge.domain.model.ChatAnswerPresentation
 import com.example.aiadventchallenge.domain.model.ChatExecutionInfo
 import com.example.aiadventchallenge.domain.model.LocalLlmConfig
+import com.example.aiadventchallenge.domain.model.PrivateAiServiceConfig
 import com.example.aiadventchallenge.domain.model.AnswerMode
 import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.RagComparisonResult
@@ -35,6 +36,7 @@ data class ChatUiState(
     val fitnessProfile: FitnessProfileType = FitnessProfileType.INTERMEDIATE,
     val selectedBackend: AiBackendType = AiBackendType.REMOTE,
     val localLlmConfig: LocalLlmConfig = LocalLlmConfig(),
+    val privateAiServiceConfig: PrivateAiServiceConfig = PrivateAiServiceConfig(),
     val answerMode: AnswerMode = AnswerMode.PLAIN_LLM,
     val latestRetrievalSummary: RetrievalSummary? = null,
     val latestTaskState: ConversationTaskState? = null,

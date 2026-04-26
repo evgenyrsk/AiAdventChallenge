@@ -24,5 +24,16 @@ data class ChatSettingsEntity(
     val localRepeatPenalty: Double? = null,
     val localSeed: Int? = null,
     val localStopTokens: String? = null,
-    val localKeepAlive: String? = null
+    val localKeepAlive: String? = null,
+    val privateServiceBaseUrl: String = "http://10.0.2.2:8085",
+    val privateServiceApiKey: String = "",
+    val privateServiceModel: String = "qwen2.5:3b-instruct",
+    val privateServiceTimeoutMs: Long = 120000L,
+    val privateServiceMaxTokens: Int? = null,
+    val privateServiceContextWindow: Int? = null,
+    val privateServiceTopK: Int? = null,
+    val privateServiceTopP: Double? = null,
+    val privateServiceRepeatPenalty: Double? = null,
+    val privateServiceSeed: Int? = null,
+    val privateServiceStopTokens: String? = null
 )

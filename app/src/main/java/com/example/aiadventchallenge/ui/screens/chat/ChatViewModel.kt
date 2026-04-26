@@ -753,7 +753,8 @@ class ChatViewModel(
             isBranchingStrategy = settings.type == ContextStrategyType.BRANCHING,
             fitnessProfile = fitnessProfile,
             selectedBackend = backendSettings.selectedBackend,
-            localLlmConfig = backendSettings.localConfig
+            localLlmConfig = backendSettings.localConfig,
+            privateAiServiceConfig = backendSettings.privateServiceConfig
         )
     }
 

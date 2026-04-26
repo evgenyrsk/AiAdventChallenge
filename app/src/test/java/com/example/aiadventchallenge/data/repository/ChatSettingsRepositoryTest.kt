@@ -10,6 +10,7 @@ import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.LocalLlmConfig
 import com.example.aiadventchallenge.domain.model.LocalLlmProfile
 import com.example.aiadventchallenge.domain.model.LocalLlmRuntimeOptions
+import com.example.aiadventchallenge.domain.model.PrivateAiServiceConfig
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -34,7 +35,11 @@ class ChatSettingsRepositoryTest {
             localModel = "qwen2.5",
             localProfile = "OPTIMIZED_CHAT",
             localTemperature = 0.2,
-            localNumCtx = 4096
+            localNumCtx = 4096,
+            privateServiceBaseUrl = "http://10.0.2.2:8085",
+            privateServiceApiKey = "demo-key",
+            privateServiceModel = "qwen2.5:3b-instruct",
+            privateServiceTimeoutMs = 90000L
         )
 
         val settings = repository.getAiBackendSettings()
@@ -46,6 +51,10 @@ class ChatSettingsRepositoryTest {
         assertEquals(LocalLlmProfile.OPTIMIZED_CHAT, settings.localConfig.profile)
         assertEquals(0.2, settings.localConfig.runtimeOptions.temperature)
         assertEquals(4096, settings.localConfig.runtimeOptions.numCtx)
+        assertEquals("http://10.0.2.2:8085", settings.privateServiceConfig.baseUrl)
+        assertEquals("demo-key", settings.privateServiceConfig.apiKey)
+        assertEquals("qwen2.5:3b-instruct", settings.privateServiceConfig.model)
+        assertEquals(90000L, settings.privateServiceConfig.timeoutMs)
     }
 
     @Test
@@ -70,6 +79,13 @@ class ChatSettingsRepositoryTest {
                         numPredict = 280,
                         numCtx = 6144
                     )
+                ),
+                privateServiceConfig = PrivateAiServiceConfig(
+                    baseUrl = "http://demo",
+                    apiKey = "secret",
+                    model = "demo-model",
+                    timeoutMs = 45000L,
+                    maxTokens = 256
                 )
             )
         )
@@ -87,7 +103,12 @@ class ChatSettingsRepositoryTest {
                         it.localProfile == "OPTIMIZED_RAG" &&
                         it.localTemperature == 0.1 &&
                         it.localNumPredict == 280 &&
-                        it.localNumCtx == 6144
+                        it.localNumCtx == 6144 &&
+                        it.privateServiceBaseUrl == "http://demo" &&
+                        it.privateServiceApiKey == "secret" &&
+                        it.privateServiceModel == "demo-model" &&
+                        it.privateServiceTimeoutMs == 45000L &&
+                        it.privateServiceMaxTokens == 256
                 }
             )
         }
@@ -120,6 +141,13 @@ class ChatSettingsRepositoryTest {
                             topK = 40,
                             stop = listOf("END")
                         )
+                    ),
+                    privateServiceConfig = PrivateAiServiceConfig(
+                        apiKey = "private-key",
+                        model = "qwen2.5:7b-instruct",
+                        timeoutMs = 60000L,
+                        contextWindow = 8192,
+                        topP = 0.9
                     )
                 )
             )
@@ -138,7 +166,13 @@ class ChatSettingsRepositoryTest {
                         it.localProfile == "OPTIMIZED_CHAT" &&
                         it.localTemperature == 0.2 &&
                         it.localTopK == 40 &&
-                        it.localStopTokens == "END"
+                        it.localStopTokens == "END" &&
+                        it.privateServiceBaseUrl == "http://10.0.2.2:8085" &&
+                        it.privateServiceApiKey == "private-key" &&
+                        it.privateServiceModel == "qwen2.5:7b-instruct" &&
+                        it.privateServiceTimeoutMs == 60000L &&
+                        it.privateServiceContextWindow == 8192 &&
+                        it.privateServiceTopP == 0.9
                 }
             )
         }

@@ -26,3 +26,4 @@ rootProject.name = "AiAdventChallenge"
 include(":app")
 include(":mcp-server")
 include(":rag-core")
+include(":private-ai-service")
