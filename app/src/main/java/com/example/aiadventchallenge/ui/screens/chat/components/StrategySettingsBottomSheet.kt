@@ -16,6 +16,7 @@ import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.LocalLlmConfig
 import com.example.aiadventchallenge.domain.model.LocalLlmProfile
 import com.example.aiadventchallenge.domain.model.LocalLlmRuntimeOptions
+import com.example.aiadventchallenge.domain.model.PrivateAiServiceConfig
 import com.example.aiadventchallenge.ui.components.FitnessProfileSelector
 import kotlin.math.roundToInt
 
@@ -26,6 +27,7 @@ fun StrategySettingsBottomSheet(
     currentFitnessProfile: FitnessProfileType,
     currentBackend: AiBackendType,
     currentLocalConfig: LocalLlmConfig,
+    currentPrivateServiceConfig: PrivateAiServiceConfig,
     onApplySettings: (ChatSettingsPayload) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
@@ -47,6 +49,17 @@ fun StrategySettingsBottomSheet(
     var seed by remember { mutableStateOf(currentLocalConfig.runtimeOptions.seed?.toString().orEmpty()) }
     var stopTokens by remember { mutableStateOf(currentLocalConfig.runtimeOptions.stop?.joinToString(", ").orEmpty()) }
     var keepAlive by remember { mutableStateOf(currentLocalConfig.runtimeOptions.keepAlive.orEmpty()) }
+    var privateBaseUrl by remember { mutableStateOf(currentPrivateServiceConfig.baseUrl) }
+    var privateApiKey by remember { mutableStateOf(currentPrivateServiceConfig.apiKey) }
+    var privateModel by remember { mutableStateOf(currentPrivateServiceConfig.model) }
+    var privateTimeoutMs by remember { mutableStateOf(currentPrivateServiceConfig.timeoutMs.toString()) }
+    var privateMaxTokens by remember { mutableStateOf(currentPrivateServiceConfig.maxTokens?.toString().orEmpty()) }
+    var privateContextWindow by remember { mutableStateOf(currentPrivateServiceConfig.contextWindow?.toString().orEmpty()) }
+    var privateTopK by remember { mutableStateOf(currentPrivateServiceConfig.topK?.toString().orEmpty()) }
+    var privateTopP by remember { mutableStateOf(currentPrivateServiceConfig.topP?.toString().orEmpty()) }
+    var privateRepeatPenalty by remember { mutableStateOf(currentPrivateServiceConfig.repeatPenalty?.toString().orEmpty()) }
+    var privateSeed by remember { mutableStateOf(currentPrivateServiceConfig.seed?.toString().orEmpty()) }
+    var privateStopTokens by remember { mutableStateOf(currentPrivateServiceConfig.stop?.joinToString(", ").orEmpty()) }
 
     Column(
         modifier = modifier
@@ -180,12 +193,14 @@ fun StrategySettingsBottomSheet(
                             text = when (backend) {
                                 AiBackendType.REMOTE -> "Remote"
                                 AiBackendType.LOCAL_OLLAMA -> "Local Ollama"
+                                AiBackendType.PRIVATE_AI_SERVICE -> "Private AI Service"
                             }
                         )
                         Text(
                             text = when (backend) {
                                 AiBackendType.REMOTE -> "Использовать существующий облачный backend"
                                 AiBackendType.LOCAL_OLLAMA -> "Отправлять запросы в локальную модель через Ollama"
+                                AiBackendType.PRIVATE_AI_SERVICE -> "Отправлять запросы в приватный gateway поверх Ollama"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -193,6 +208,85 @@ fun StrategySettingsBottomSheet(
                     }
                 }
             }
+        }
+
+        if (selectedBackend == AiBackendType.PRIVATE_AI_SERVICE) {
+            OutlinedTextField(
+                value = privateBaseUrl,
+                onValueChange = { privateBaseUrl = it },
+                label = { Text("Base URL") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = privateApiKey,
+                onValueChange = { privateApiKey = it },
+                label = { Text("API key") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = privateModel,
+                onValueChange = { privateModel = it },
+                label = { Text("Model") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = privateTimeoutMs,
+                onValueChange = { privateTimeoutMs = it.filter { ch -> ch.isDigit() } },
+                label = { Text("Timeout (ms)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = privateMaxTokens,
+                onValueChange = { privateMaxTokens = it.filter { ch -> ch.isDigit() } },
+                label = { Text("Max tokens") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = privateContextWindow,
+                onValueChange = { privateContextWindow = it.filter { ch -> ch.isDigit() } },
+                label = { Text("Context window") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = privateTopK,
+                onValueChange = { privateTopK = it.filter { ch -> ch.isDigit() } },
+                label = { Text("Top K") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = privateTopP,
+                onValueChange = { privateTopP = it },
+                label = { Text("Top P") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = privateRepeatPenalty,
+                onValueChange = { privateRepeatPenalty = it },
+                label = { Text("Repeat penalty") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = privateSeed,
+                onValueChange = { privateSeed = it.filter { ch -> ch.isDigit() || ch == '-' } },
+                label = { Text("Seed") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = privateStopTokens,
+                onValueChange = { privateStopTokens = it },
+                label = { Text("Stop tokens (comma separated)") },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         if (selectedBackend == AiBackendType.LOCAL_OLLAMA) {
@@ -361,6 +455,22 @@ fun StrategySettingsBottomSheet(
                                         .takeIf { it.isNotEmpty() },
                                     keepAlive = keepAlive.trim().ifBlank { null }
                                 )
+                            ),
+                            privateServiceConfig = PrivateAiServiceConfig(
+                                baseUrl = privateBaseUrl.trim().ifBlank { currentPrivateServiceConfig.baseUrl },
+                                apiKey = privateApiKey.trim().ifBlank { currentPrivateServiceConfig.apiKey },
+                                model = privateModel.trim().ifBlank { currentPrivateServiceConfig.model },
+                                timeoutMs = privateTimeoutMs.toLongOrNull() ?: currentPrivateServiceConfig.timeoutMs,
+                                maxTokens = privateMaxTokens.toIntOrNull(),
+                                contextWindow = privateContextWindow.toIntOrNull(),
+                                topK = privateTopK.toIntOrNull(),
+                                topP = privateTopP.toDoubleOrNull(),
+                                repeatPenalty = privateRepeatPenalty.toDoubleOrNull(),
+                                seed = privateSeed.toIntOrNull(),
+                                stop = privateStopTokens.split(',')
+                                    .map { it.trim() }
+                                    .filter { it.isNotBlank() }
+                                    .takeIf { it.isNotEmpty() }
                             )
                         )
                     )

@@ -1,5 +1,6 @@
 package com.example.aiadventchallenge.data.repository
 
+import com.example.aiadventchallenge.BuildConfig
 import com.example.aiadventchallenge.data.local.dao.ChatSettingsDao
 import com.example.aiadventchallenge.data.local.entity.ChatSettingsEntity
 import com.example.aiadventchallenge.domain.model.AiBackendSettings
@@ -11,6 +12,7 @@ import com.example.aiadventchallenge.domain.model.FitnessProfileType
 import com.example.aiadventchallenge.domain.model.LocalLlmConfig
 import com.example.aiadventchallenge.domain.model.LocalLlmProfile
 import com.example.aiadventchallenge.domain.model.LocalLlmRuntimeOptions
+import com.example.aiadventchallenge.domain.model.PrivateAiServiceConfig
 import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 
 class ChatSettingsRepository(
@@ -141,6 +143,23 @@ class ChatSettingsRepository(
                         ?.takeIf { it.isNotEmpty() },
                     keepAlive = entity.localKeepAlive
                 )
+            ),
+            privateServiceConfig = PrivateAiServiceConfig(
+                baseUrl = entity.privateServiceBaseUrl.ifBlank { BuildConfig.PRIVATE_AI_SERVICE_BASE_URL },
+                apiKey = entity.privateServiceApiKey.ifBlank { BuildConfig.PRIVATE_AI_SERVICE_API_KEY },
+                model = entity.privateServiceModel.ifBlank { BuildConfig.PRIVATE_AI_SERVICE_MODEL },
+                timeoutMs = entity.privateServiceTimeoutMs,
+                maxTokens = entity.privateServiceMaxTokens,
+                contextWindow = entity.privateServiceContextWindow,
+                topK = entity.privateServiceTopK,
+                topP = entity.privateServiceTopP,
+                repeatPenalty = entity.privateServiceRepeatPenalty,
+                seed = entity.privateServiceSeed,
+                stop = entity.privateServiceStopTokens
+                    ?.split('\n')
+                    ?.map(String::trim)
+                    ?.filter(String::isNotBlank)
+                    ?.takeIf { it.isNotEmpty() }
             )
         )
     }
@@ -161,7 +180,18 @@ class ChatSettingsRepository(
             localRepeatPenalty = settings.localConfig.runtimeOptions.repeatPenalty,
             localSeed = settings.localConfig.runtimeOptions.seed,
             localStopTokens = settings.localConfig.runtimeOptions.stop?.joinToString("\n"),
-            localKeepAlive = settings.localConfig.runtimeOptions.keepAlive
+            localKeepAlive = settings.localConfig.runtimeOptions.keepAlive,
+            privateServiceBaseUrl = settings.privateServiceConfig.baseUrl,
+            privateServiceApiKey = settings.privateServiceConfig.apiKey,
+            privateServiceModel = settings.privateServiceConfig.model,
+            privateServiceTimeoutMs = settings.privateServiceConfig.timeoutMs,
+            privateServiceMaxTokens = settings.privateServiceConfig.maxTokens,
+            privateServiceContextWindow = settings.privateServiceConfig.contextWindow,
+            privateServiceTopK = settings.privateServiceConfig.topK,
+            privateServiceTopP = settings.privateServiceConfig.topP,
+            privateServiceRepeatPenalty = settings.privateServiceConfig.repeatPenalty,
+            privateServiceSeed = settings.privateServiceConfig.seed,
+            privateServiceStopTokens = settings.privateServiceConfig.stop?.joinToString("\n")
         )
         chatSettingsDao.insertSettings(entity)
     }
@@ -185,7 +215,18 @@ class ChatSettingsRepository(
             localRepeatPenalty = payload.backendSettings.localConfig.runtimeOptions.repeatPenalty,
             localSeed = payload.backendSettings.localConfig.runtimeOptions.seed,
             localStopTokens = payload.backendSettings.localConfig.runtimeOptions.stop?.joinToString("\n"),
-            localKeepAlive = payload.backendSettings.localConfig.runtimeOptions.keepAlive
+            localKeepAlive = payload.backendSettings.localConfig.runtimeOptions.keepAlive,
+            privateServiceBaseUrl = payload.backendSettings.privateServiceConfig.baseUrl,
+            privateServiceApiKey = payload.backendSettings.privateServiceConfig.apiKey,
+            privateServiceModel = payload.backendSettings.privateServiceConfig.model,
+            privateServiceTimeoutMs = payload.backendSettings.privateServiceConfig.timeoutMs,
+            privateServiceMaxTokens = payload.backendSettings.privateServiceConfig.maxTokens,
+            privateServiceContextWindow = payload.backendSettings.privateServiceConfig.contextWindow,
+            privateServiceTopK = payload.backendSettings.privateServiceConfig.topK,
+            privateServiceTopP = payload.backendSettings.privateServiceConfig.topP,
+            privateServiceRepeatPenalty = payload.backendSettings.privateServiceConfig.repeatPenalty,
+            privateServiceSeed = payload.backendSettings.privateServiceConfig.seed,
+            privateServiceStopTokens = payload.backendSettings.privateServiceConfig.stop?.joinToString("\n")
         )
         chatSettingsDao.insertSettings(entity)
     }

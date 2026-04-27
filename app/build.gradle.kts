@@ -8,6 +8,9 @@ if (localPropertiesFile.exists()) {
 
 val aiApiKey = localProperties.getProperty("AI_API_KEY") ?: ""
 val documentRetrievalSource = localProperties.getProperty("DOCUMENT_RETRIEVAL_SOURCE") ?: "local_docs"
+val privateAiServiceBaseUrl = localProperties.getProperty("PRIVATE_AI_SERVICE_BASE_URL") ?: "http://10.0.2.2:8085"
+val privateAiServiceApiKey = localProperties.getProperty("PRIVATE_AI_SERVICE_API_KEY") ?: ""
+val privateAiServiceModel = localProperties.getProperty("PRIVATE_AI_SERVICE_MODEL") ?: "qwen2.5:3b-instruct"
 
 plugins {
     alias(libs.plugins.android.application)
@@ -33,6 +36,9 @@ android {
 
         buildConfigField("String", "AI_API_KEY", "\"$aiApiKey\"")
         buildConfigField("String", "DOCUMENT_RETRIEVAL_SOURCE", "\"$documentRetrievalSource\"")
+        buildConfigField("String", "PRIVATE_AI_SERVICE_BASE_URL", "\"$privateAiServiceBaseUrl\"")
+        buildConfigField("String", "PRIVATE_AI_SERVICE_API_KEY", "\"$privateAiServiceApiKey\"")
+        buildConfigField("String", "PRIVATE_AI_SERVICE_MODEL", "\"$privateAiServiceModel\"")
     }
 
     buildTypes {

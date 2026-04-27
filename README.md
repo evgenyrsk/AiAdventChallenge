@@ -128,6 +128,7 @@ app/src/main/java/com/example/aiadventchallenge/
 Документация по функциональности:
 
 - [Обзор функциональности](docs/DOCUMENT_INDEXING_FEATURE.md)
+- [Private AI service](docs/PRIVATE_AI_SERVICE.md)
 - [Demo corpus](demo/document-indexing-corpus/README.md)
 - [Фитнес demo corpus](demo/fitness-knowledge-corpus/README.md)
 - [Сценарий fitness-демо](docs/FITNESS_DEMO_SCRIPT.md)

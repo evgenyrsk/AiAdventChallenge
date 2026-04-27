@@ -27,10 +27,12 @@ class RoutingAiRepositoryTest {
     private val chatSettingsRepository = mockk<ChatSettingsRepository>()
     private val remoteRepository = mockk<AiRepository>()
     private val localOllamaRepository = mockk<LocalOllamaRepository>()
+    private val privateAiServiceRepository = mockk<PrivateAiServiceRepository>()
     private val routingRepository = RoutingAiRepository(
         chatSettingsRepository = chatSettingsRepository,
         remoteRepository = remoteRepository,
-        localOllamaRepository = localOllamaRepository
+        localOllamaRepository = localOllamaRepository,
+        privateAiServiceRepository = privateAiServiceRepository
     )
 
     @Before
@@ -65,6 +67,7 @@ class RoutingAiRepositoryTest {
         assertEquals(expected, result)
         coVerify(exactly = 1) { remoteRepository.askWithContext(messages, any(), RequestType.CHAT) }
         coVerify(exactly = 0) { localOllamaRepository.askWithContext(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { privateAiServiceRepository.askWithContext(any(), any(), any(), any()) }
     }
 
     @Test
@@ -87,5 +90,29 @@ class RoutingAiRepositoryTest {
         assertEquals(expected, result)
         coVerify(exactly = 0) { remoteRepository.askWithContext(any<List<Message>>(), any(), RequestType.CHAT) }
         coVerify(exactly = 1) { localOllamaRepository.askWithContext(messages, any(), RequestType.CHAT, settings) }
+        coVerify(exactly = 0) { privateAiServiceRepository.askWithContext(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `askWithContext routes to private ai service backend`() = runTest {
+        val messages = listOf(Message(MessageRole.USER, "Привет"))
+        val expected = ChatResult.Success(
+            AnswerWithUsage(
+                content = "Private",
+                promptTokens = null,
+                completionTokens = null,
+                totalTokens = null
+            )
+        )
+        val settings = AiBackendSettings(selectedBackend = AiBackendType.PRIVATE_AI_SERVICE)
+        coEvery { chatSettingsRepository.getAiBackendSettings() } returns settings
+        coEvery { privateAiServiceRepository.askWithContext(messages, any(), RequestType.CHAT, settings) } returns expected
+
+        val result = routingRepository.askWithContext(messages, RequestConfig(), RequestType.CHAT)
+
+        assertEquals(expected, result)
+        coVerify(exactly = 0) { remoteRepository.askWithContext(any<List<Message>>(), any(), RequestType.CHAT) }
+        coVerify(exactly = 0) { localOllamaRepository.askWithContext(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { privateAiServiceRepository.askWithContext(messages, any(), RequestType.CHAT, settings) }
     }
 }

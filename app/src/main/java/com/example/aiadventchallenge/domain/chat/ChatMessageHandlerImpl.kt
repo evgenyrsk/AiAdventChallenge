@@ -22,6 +22,7 @@ import com.example.aiadventchallenge.domain.model.ChatExecutionInfo
 import com.example.aiadventchallenge.domain.model.ChatFailureCategory
 import com.example.aiadventchallenge.domain.model.ChatSourcePreview
 import com.example.aiadventchallenge.domain.model.RagAnswerMode
+import com.example.aiadventchallenge.domain.model.AiBackendType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -421,10 +422,10 @@ class ChatMessageHandlerImpl(
             latencyMs = latencyMs,
             retrievalLatencyMs = retrievalLatencyMs,
             generationLatencyMs = generationLatencyMs,
-            model = if (backendSettings.selectedBackend == com.example.aiadventchallenge.domain.model.AiBackendType.LOCAL_OLLAMA) {
-                backendSettings.localConfig.model
-            } else {
-                requestConfig.modelId
+            model = when (backendSettings.selectedBackend) {
+                AiBackendType.LOCAL_OLLAMA -> backendSettings.localConfig.model
+                AiBackendType.PRIVATE_AI_SERVICE -> requestConfig.modelId ?: backendSettings.privateServiceConfig.model
+                AiBackendType.REMOTE -> requestConfig.modelId
             },
             profile = requestConfig.localLlmProfile,
             promptProfile = requestConfig.promptProfile,
@@ -498,6 +499,9 @@ class ChatMessageHandlerImpl(
             backendSettings.selectedBackend == com.example.aiadventchallenge.domain.model.AiBackendType.LOCAL_OLLAMA &&
                 (normalized.contains("ollama") || normalized.contains("локальн")) ->
                 ChatFailureCategory.LOCAL_MODEL_UNAVAILABLE
+            backendSettings.selectedBackend == AiBackendType.PRIVATE_AI_SERVICE &&
+                (normalized.contains("private ai service") || normalized.contains("gateway") || normalized.contains("api key")) ->
+                ChatFailureCategory.REMOTE_MODEL_UNAVAILABLE
             backendSettings.selectedBackend == com.example.aiadventchallenge.domain.model.AiBackendType.REMOTE ->
                 ChatFailureCategory.REMOTE_MODEL_UNAVAILABLE
             retrievalSummary != null && retrievalSummary.chunks.isEmpty() -> ChatFailureCategory.RETRIEVAL_EMPTY

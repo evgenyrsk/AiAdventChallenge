@@ -18,7 +18,8 @@ import com.example.aiadventchallenge.domain.repository.ChatSettingsRepository
 class RoutingAiRepository(
     private val chatSettingsRepository: ChatSettingsRepository,
     private val remoteRepository: AiRepository,
-    private val localOllamaRepository: LocalOllamaRepository
+    private val localOllamaRepository: LocalOllamaRepository,
+    private val privateAiServiceRepository: PrivateAiServiceRepository
 ) : AiRepository {
 
     override suspend fun ask(
@@ -31,6 +32,7 @@ class RoutingAiRepository(
         return when (settings.selectedBackend) {
             AiBackendType.REMOTE -> remoteRepository.ask(userInput, profile, config)
             AiBackendType.LOCAL_OLLAMA -> localOllamaRepository.ask(userInput, profile, config)
+            AiBackendType.PRIVATE_AI_SERVICE -> privateAiServiceRepository.ask(userInput, profile, config)
         }
     }
 
@@ -46,6 +48,10 @@ class RoutingAiRepository(
                 Log.d(TAG, "Routing askWithContext to LOCAL_OLLAMA")
                 localOllamaRepository.askWithContext(messages, config, RequestType.CHAT, settings)
             }
+            AiBackendType.PRIVATE_AI_SERVICE -> {
+                Log.d(TAG, "Routing askWithContext to PRIVATE_AI_SERVICE")
+                privateAiServiceRepository.askWithContext(messages, config, RequestType.CHAT, settings)
+            }
         }
     }
 
@@ -59,6 +65,9 @@ class RoutingAiRepository(
             AiBackendType.REMOTE -> remoteRepository.askWithUsage(userInput, profile, config)
             AiBackendType.LOCAL_OLLAMA -> ChatResult.Error(
                 "Локальный backend поддерживается только для chat context запросов."
+            )
+            AiBackendType.PRIVATE_AI_SERVICE -> ChatResult.Error(
+                "Private AI service backend поддерживается только для chat context запросов."
             )
         }
     }
@@ -76,6 +85,10 @@ class RoutingAiRepository(
                 Log.d(TAG, "Routing askWithContext($requestType) to LOCAL_OLLAMA")
                 localOllamaRepository.askWithContext(messages, config, requestType, settings)
             }
+            AiBackendType.PRIVATE_AI_SERVICE -> {
+                Log.d(TAG, "Routing askWithContext($requestType) to PRIVATE_AI_SERVICE")
+                privateAiServiceRepository.askWithContext(messages, config, requestType, settings)
+            }
         }
     }
 
@@ -90,6 +103,9 @@ class RoutingAiRepository(
             AiBackendType.REMOTE -> remoteRepository.askWithUsage(userInput, profile, config, requestType)
             AiBackendType.LOCAL_OLLAMA -> ChatResult.Error(
                 "Локальный backend поддерживается только для chat context запросов."
+            )
+            AiBackendType.PRIVATE_AI_SERVICE -> ChatResult.Error(
+                "Private AI service backend поддерживается только для chat context запросов."
             )
         }
     }

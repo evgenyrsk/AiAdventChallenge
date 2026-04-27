@@ -164,7 +164,10 @@ fun ChatScreen(
                             Text(
                                 text = getBackendDisplayName(
                                     backend = chatUiState.selectedBackend,
-                                    model = chatUiState.localLlmConfig.model
+                                    model = when (chatUiState.selectedBackend) {
+                                        AiBackendType.PRIVATE_AI_SERVICE -> chatUiState.privateAiServiceConfig.model
+                                        else -> chatUiState.localLlmConfig.model
+                                    }
                                 ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -438,6 +441,7 @@ fun ChatScreen(
                         currentFitnessProfile = chatUiState.fitnessProfile,
                         currentBackend = chatUiState.selectedBackend,
                         currentLocalConfig = chatUiState.localLlmConfig,
+                        currentPrivateServiceConfig = chatUiState.privateAiServiceConfig,
                         onApplySettings = { payload ->
                             if (payload.strategyType != config.type) {
                                 pendingSettingsPayload = payload
@@ -645,6 +649,7 @@ private fun buildBackendBadgeLabel(executionInfo: ChatExecutionInfo): String {
     val backendLabel = when (executionInfo.backend) {
         AiBackendType.REMOTE -> "Cloud"
         AiBackendType.LOCAL_OLLAMA -> "Ollama"
+        AiBackendType.PRIVATE_AI_SERVICE -> "Private AI"
     }
     return if (executionInfo.ragEnabled) {
         "$backendLabel RAG"
@@ -1344,5 +1349,6 @@ private fun getBackendDisplayName(backend: AiBackendType, model: String): String
     return when (backend) {
         AiBackendType.REMOTE -> "Backend: Remote"
         AiBackendType.LOCAL_OLLAMA -> "Backend: Local Ollama ($model)"
+        AiBackendType.PRIVATE_AI_SERVICE -> "Backend: Private AI Service ($model)"
     }
 }

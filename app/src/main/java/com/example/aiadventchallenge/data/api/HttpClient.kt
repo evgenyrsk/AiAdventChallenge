@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
 class HttpClient private constructor() {
+    private val baseClient: OkHttpClient = OkHttpClient.Builder()
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(120, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
@@ -24,6 +25,8 @@ class HttpClient private constructor() {
     suspend fun post(
         url: String,
         requestJson: String,
+        headers: Map<String, String> = emptyMap(),
+        timeoutMs: Long? = null
         headers: Map<String, String> = emptyMap()
     ): Result<String> = suspendCancellableCoroutine { continuation ->
         val body = requestJson.toRequestBody("application/json".toMediaType())
@@ -38,7 +41,13 @@ class HttpClient private constructor() {
 
         val httpRequest = requestBuilder.build()
 
-        val call = client.newCall(httpRequest)
+        headers.forEach { (name, value) ->
+            requestBuilder.addHeader(name, value)
+        }
+
+        val httpRequest = requestBuilder.build()
+
+        val call = client(timeoutMs).newCall(httpRequest)
 
         continuation.invokeOnCancellation {
             call.cancel()
@@ -66,6 +75,52 @@ class HttpClient private constructor() {
                 }
             }
         })
+    }
+
+    suspend fun get(
+        url: String,
+        headers: Map<String, String> = emptyMap(),
+        timeoutMs: Long? = null
+    ): Result<String> = suspendCancellableCoroutine { continuation ->
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .get()
+
+        headers.forEach { (name, value) ->
+            requestBuilder.addHeader(name, value)
+        }
+
+        val call = client(timeoutMs).newCall(requestBuilder.build())
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (!continuation.isCancelled) {
+                    continuation.resume(Result.failure(e))
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use { httpResponse ->
+                    val responseBody = httpResponse.body.string()
+                    if (!continuation.isCancelled) {
+                        if (httpResponse.isSuccessful) {
+                            continuation.resume(Result.success(responseBody))
+                        } else {
+                            continuation.resume(Result.failure(HttpException(httpResponse.code, responseBody)))
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    private fun client(timeoutMs: Long?): OkHttpClient {
+        if (timeoutMs == null) return baseClient
+        return baseClient.newBuilder()
+            .connectTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .writeTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .build()
     }
 
     class HttpException(val code: Int, val body: String) : Exception("HTTP $code: $body")
