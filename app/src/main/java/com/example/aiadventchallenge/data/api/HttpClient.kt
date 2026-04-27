@@ -15,6 +15,7 @@ import kotlin.coroutines.resume
 
 class HttpClient private constructor() {
     private val baseClient: OkHttpClient = OkHttpClient.Builder()
+    private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(120, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(120, TimeUnit.SECONDS)
@@ -26,12 +27,19 @@ class HttpClient private constructor() {
         requestJson: String,
         headers: Map<String, String> = emptyMap(),
         timeoutMs: Long? = null
+        headers: Map<String, String> = emptyMap()
     ): Result<String> = suspendCancellableCoroutine { continuation ->
         val body = requestJson.toRequestBody("application/json".toMediaType())
 
         val requestBuilder = Request.Builder()
             .url(url)
             .post(body)
+
+        headers.forEach { (name, value) ->
+            requestBuilder.addHeader(name, value)
+        }
+
+        val httpRequest = requestBuilder.build()
 
         headers.forEach { (name, value) ->
             requestBuilder.addHeader(name, value)
