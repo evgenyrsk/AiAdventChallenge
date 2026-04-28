@@ -77,7 +77,12 @@ class FixedSizeChunkingStrategy : ChunkingStrategy {
                 documentId = document.rawDocument.documentId,
                 positionStart = start,
                 positionEnd = end,
-                pageNumber = pageNumber
+                pageNumber = pageNumber,
+                extra = if (document.rawDocument.source == "project_docs") {
+                    mapOf("sourceType" to "PROJECT_DOCS")
+                } else {
+                    emptyMap()
+                }
             )
         )
     }

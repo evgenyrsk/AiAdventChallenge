@@ -8,6 +8,7 @@ import com.example.aiadventchallenge.data.local.entity.ChatMessageEntity
 import com.example.aiadventchallenge.data.local.entity.SummaryEntity
 import com.example.aiadventchallenge.domain.model.ChatMessage
 import com.example.aiadventchallenge.domain.model.CompressedChatHistory
+import com.example.aiadventchallenge.domain.model.ConversationMode
 import com.example.aiadventchallenge.domain.model.DialogTokenStats
 import com.example.aiadventchallenge.domain.model.SummaryMessage
 import kotlinx.coroutines.flow.Flow
@@ -30,6 +31,7 @@ class ChatRepository(
                     isFromUser = entity.isFromUser,
                     isSystemMessage = entity.isSystemMessage,
                     branchId = entity.branchId,
+                    conversationMode = entity.conversationMode.toConversationMode(),
                     promptTokens = entity.promptTokens,
                     completionTokens = entity.completionTokens,
                     totalTokens = entity.totalTokens
@@ -38,8 +40,11 @@ class ChatRepository(
         }
     }
 
-    suspend fun getMessagesByBranch(branchId: String = "main"): List<ChatMessage> {
-        val entities = chatMessageDao.getMessagesByBranch(branchId)
+    suspend fun getMessagesByBranch(
+        branchId: String = "main",
+        conversationMode: ConversationMode = ConversationMode.FITNESS
+    ): List<ChatMessage> {
+        val entities = chatMessageDao.getMessagesByBranch(branchId, conversationMode.name)
 
         return entities.map { entity ->
             ChatMessage(
@@ -49,6 +54,7 @@ class ChatRepository(
                 isFromUser = entity.isFromUser,
                 isSystemMessage = entity.isSystemMessage,
                 branchId = entity.branchId,
+                conversationMode = entity.conversationMode.toConversationMode(),
                 promptTokens = entity.promptTokens,
                 completionTokens = entity.completionTokens,
                 totalTokens = entity.totalTokens,
@@ -68,6 +74,7 @@ class ChatRepository(
                 isFromUser = entity.isFromUser,
                 isSystemMessage = entity.isSystemMessage,
                 branchId = entity.branchId,
+                conversationMode = entity.conversationMode.toConversationMode(),
                 promptTokens = entity.promptTokens,
                 completionTokens = entity.completionTokens,
                 totalTokens = entity.totalTokens,
@@ -76,7 +83,11 @@ class ChatRepository(
         }
     }
 
-    suspend fun insertMessage(message: ChatMessage, branchId: String = "main", parentMessageId: String? = null) {
+    suspend fun insertMessage(
+        message: ChatMessage,
+        branchId: String = "main",
+        parentMessageId: String? = null
+    ) {
         val entity = ChatMessageEntity(
             id = message.id,
             parentMessageId = parentMessageId,
@@ -87,6 +98,7 @@ class ChatRepository(
             completionTokens = message.completionTokens,
             totalTokens = message.totalTokens,
             branchId = branchId,
+            conversationMode = message.conversationMode.name,
             isHidden = message.isHidden
         )
         chatMessageDao.insertMessage(entity)
@@ -101,6 +113,7 @@ class ChatRepository(
                 isFromUser = message.isFromUser,
                 isSystemMessage = message.isSystemMessage,
                 branchId = branchId,
+                conversationMode = message.conversationMode.name,
                 promptTokens = message.promptTokens,
                 completionTokens = message.completionTokens,
                 totalTokens = message.totalTokens,
@@ -136,6 +149,7 @@ class ChatRepository(
             isFromUser = entity.isFromUser,
             isSystemMessage = entity.isSystemMessage,
             branchId = entity.branchId,
+            conversationMode = entity.conversationMode.toConversationMode(),
             promptTokens = entity.promptTokens,
             completionTokens = entity.completionTokens,
             totalTokens = entity.totalTokens,
@@ -153,6 +167,7 @@ class ChatRepository(
                 isFromUser = entity.isFromUser,
                 isSystemMessage = entity.isSystemMessage,
                 branchId = entity.branchId,
+                conversationMode = entity.conversationMode.toConversationMode(),
                 promptTokens = entity.promptTokens,
                 completionTokens = entity.completionTokens,
                 totalTokens = entity.totalTokens,
@@ -171,6 +186,7 @@ class ChatRepository(
                 isFromUser = entity.isFromUser,
                 isSystemMessage = entity.isSystemMessage,
                 branchId = entity.branchId,
+                conversationMode = entity.conversationMode.toConversationMode(),
                 promptTokens = entity.promptTokens,
                 completionTokens = entity.completionTokens,
                 totalTokens = entity.totalTokens,
@@ -189,11 +205,17 @@ class ChatRepository(
                 isFromUser = entity.isFromUser,
                 isSystemMessage = entity.isSystemMessage,
                 branchId = entity.branchId,
+                conversationMode = entity.conversationMode.toConversationMode(),
                 promptTokens = entity.promptTokens,
                 completionTokens = entity.completionTokens,
                 totalTokens = entity.totalTokens,
                 isHidden = entity.isHidden
             )
         }
+    }
+
+    private fun String.toConversationMode(): ConversationMode {
+        return runCatching { ConversationMode.valueOf(this) }
+            .getOrDefault(ConversationMode.FITNESS)
     }
 }

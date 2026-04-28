@@ -58,7 +58,8 @@ class StructureAwareChunkingStrategy : ChunkingStrategy {
                         parentSectionId = "${document.rawDocument.documentId}:${sectionIndex}",
                         tokenCount = approximateTokenCount(split.content),
                         charCount = split.content.length,
-                        isCanonicalKnowledge = isCanonicalKnowledge(document.rawDocument.relativePath)
+                        isCanonicalKnowledge = isCanonicalKnowledge(document.rawDocument.relativePath),
+                        extra = buildExtraMetadata(document.rawDocument.source)
                     )
                 )
             }
@@ -232,5 +233,13 @@ class StructureAwareChunkingStrategy : ChunkingStrategy {
             !relativePath.contains("/fixtures/") &&
             !relativePath.contains("/notes/") &&
             !relativePath.endsWith("README.md")
+    }
+
+    private fun buildExtraMetadata(source: String): Map<String, String> {
+        return if (source == "project_docs") {
+            mapOf("sourceType" to "PROJECT_DOCS")
+        } else {
+            emptyMap()
+        }
     }
 }

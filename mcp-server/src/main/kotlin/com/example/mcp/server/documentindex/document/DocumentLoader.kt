@@ -64,6 +64,10 @@ class DocumentLoader(
     }
 
     companion object {
+        val DEFAULT_IGNORED_DIRECTORIES = setOf(
+            ".git", ".gradle", ".idea", "build", ".kotlin", "output", "node_modules", ".opencode"
+        )
+
         val CODE_EXTENSIONS = setOf(
             "kt", "kts", "java", "py", "js", "ts", "tsx", "jsx",
             "c", "cpp", "h", "hpp", "swift", "go", "rb", "rs", "sh",
@@ -74,10 +78,6 @@ class DocumentLoader(
             "md", "markdown", "txt", "pdf", "kt", "kts", "java", "py", "js", "ts", "tsx",
             "jsx", "xml", "json", "yaml", "yml", "c", "cpp", "h", "hpp", "swift",
             "go", "rb", "rs", "sh", "sql", "gradle", "properties", "csv", "log"
-        )
-
-        private val DEFAULT_IGNORED_DIRECTORIES = setOf(
-            ".git", ".gradle", ".idea", "build", ".kotlin", "output", "node_modules", ".opencode"
         )
 
         private val DEFAULT_EXCLUDED_PATH_PATTERNS = listOf(

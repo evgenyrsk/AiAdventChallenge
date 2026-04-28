@@ -40,7 +40,10 @@ data class McpServerConfig(
                 "list_indexed_documents",
                 "search_index",
                 "retrieve_relevant_chunks",
-                "answer_with_retrieval"
+                "answer_with_retrieval",
+                "get_git_branch",
+                "list_project_files",
+                "get_git_diff_summary"
             )
         )
         

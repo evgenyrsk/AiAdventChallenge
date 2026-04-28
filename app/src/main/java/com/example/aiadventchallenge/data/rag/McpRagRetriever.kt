@@ -13,11 +13,10 @@ import com.example.aiadventchallenge.domain.model.RagRetrievalRequest
 import com.example.aiadventchallenge.domain.model.RagRetrievalResult
 import com.example.aiadventchallenge.domain.rag.RagRetriever
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.JsonPrimitive
 
 class McpRagRetriever(
     private val repository: MultiServerRepository,
@@ -28,53 +27,7 @@ class McpRagRetriever(
         val raw = when (
             val result = repository.callTool(
                 toolName = "retrieve_relevant_chunks",
-                params = mapOf(
-                    "query" to request.effectiveQuery,
-                    "originalQuery" to request.originalQuery,
-                    "rewrittenQuery" to request.rewrittenQuery,
-                    "effectiveQuery" to request.effectiveQuery,
-                    "source" to request.config.source,
-                    "strategy" to request.config.strategy,
-                    "topK" to request.config.retrievalTopKAfterFilter,
-                    "maxChars" to request.config.maxChars,
-                    "perDocumentLimit" to request.config.perDocumentLimit,
-                    "rewriteEnabled" to request.config.rewriteEnabled,
-                    "postProcessingEnabled" to request.config.postProcessingEnabled,
-                    "postProcessingMode" to request.config.postProcessingMode.name.lowercase(),
-                    "topKBeforeFilter" to request.config.retrievalTopKBeforeFilter,
-                    "finalTopK" to request.config.retrievalTopKAfterFilter,
-                    "lexicalTopK" to request.config.lexicalTopK,
-                    "semanticTopK" to request.config.semanticTopK,
-                    "fusionK" to request.config.fusionK,
-                    "similarityThreshold" to request.config.similarityThreshold,
-                    "minAnswerableChunks" to request.config.minAnswerableChunks,
-                    "allowAnswerWithRetrievalFallback" to request.config.allowAnswerWithRetrievalFallback,
-                    "fallbackOnEmptyPostProcessing" to request.config.fallbackOnEmptyPostProcessing,
-                    "rerankEnabled" to request.config.rerankEnabled,
-                    "rerankScoreThreshold" to request.config.rerankScoreThreshold,
-                    "rerankTimeoutMs" to request.config.rerankTimeoutMs,
-                    "rerankFallbackPolicy" to request.config.rerankFallbackPolicy.name.lowercase(),
-                    "queryContext" to (request.memorySummary ?: request.config.queryContext),
-                    "canonicalOnly" to request.config.canonicalOnly,
-                    "contextInput" to request.contextInput?.let { context ->
-                        mapOf(
-                            "userQuestion" to context.userQuestion,
-                            "conversationGoal" to context.conversationGoal,
-                            "constraints" to context.constraints,
-                            "retrievalHints" to context.retrievalHints,
-                            "memorySummary" to context.memorySummary
-                        )
-                    },
-                    "rewriteDebug" to request.rewriteResult?.let { rewrite ->
-                        mapOf(
-                            "rewriteApplied" to rewrite.applied,
-                            "detectedIntent" to rewrite.detectedIntent.name,
-                            "rewriteStrategy" to rewrite.strategy.name,
-                            "addedTerms" to rewrite.addedTerms,
-                            "removedPhrases" to rewrite.removedPhrases
-                        )
-                    }
-                )
+                params = buildParams(request)
             )
         ) {
             is McpToolData.StringResult -> result.message
@@ -85,26 +38,26 @@ class McpRagRetriever(
             ?: throw IllegalStateException("Missing data payload in retrieval response")
 
         return RagRetrievalResult(
-            query = data["query"]?.jsonPrimitive?.content.orEmpty(),
-            originalQuery = data["originalQuery"]?.jsonPrimitive?.content.orEmpty(),
+            query = data.stringOrNull("query").orEmpty(),
+            originalQuery = data.stringOrNull("originalQuery").orEmpty(),
             rewrittenQuery = jsonContentOrNull(data["rewrittenQuery"]),
-            effectiveQuery = data["effectiveQuery"]?.jsonPrimitive?.content.orEmpty(),
-            source = data["source"]?.jsonPrimitive?.content.orEmpty(),
-            strategy = data["strategy"]?.jsonPrimitive?.content.orEmpty(),
-            selectedCount = data["selectedCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-            totalChars = data["totalChars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-            contextText = data["contextText"]?.jsonPrimitive?.content.orEmpty(),
-            chunks = parseChunks(data["chunks"]?.jsonArray),
-            initialCandidates = parseChunks(data["initialCandidates"]?.jsonArray),
-            finalCandidates = parseChunks(data["finalCandidates"]?.jsonArray),
-            filteredCandidates = parseChunks(data["filteredCandidates"]?.jsonArray),
-            debug = data["debug"]?.jsonObject?.let { debug ->
+            effectiveQuery = data.stringOrNull("effectiveQuery").orEmpty(),
+            source = data.stringOrNull("source").orEmpty(),
+            strategy = data.stringOrNull("strategy").orEmpty(),
+            selectedCount = data.intOrNull("selectedCount") ?: 0,
+            totalChars = data.intOrNull("totalChars") ?: 0,
+            contextText = data.stringOrNull("contextText").orEmpty(),
+            chunks = parseChunks(data.arrayOrNull("chunks")),
+            initialCandidates = parseChunks(data.arrayOrNull("initialCandidates")),
+            finalCandidates = parseChunks(data.arrayOrNull("finalCandidates")),
+            filteredCandidates = parseChunks(data.arrayOrNull("filteredCandidates")),
+            debug = data.objectOrNull("debug")?.let { debug ->
                 RagRetrievalDebug(
-                    topKBeforeFilter = debug["topKBeforeFilter"]?.jsonPrimitive?.content?.toIntOrNull() ?: request.config.retrievalTopKBeforeFilter,
-                    finalTopK = debug["finalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: request.config.retrievalTopKAfterFilter,
-                    lexicalTopK = debug["lexicalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: request.config.lexicalTopK,
-                    semanticTopK = debug["semanticTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: request.config.semanticTopK,
-                    fusionK = debug["fusionK"]?.jsonPrimitive?.content?.toIntOrNull() ?: request.config.fusionK,
+                    topKBeforeFilter = debug.intOrNull("topKBeforeFilter") ?: request.config.retrievalTopKBeforeFilter,
+                    finalTopK = debug.intOrNull("finalTopK") ?: request.config.retrievalTopKAfterFilter,
+                    lexicalTopK = debug.intOrNull("lexicalTopK") ?: request.config.lexicalTopK,
+                    semanticTopK = debug.intOrNull("semanticTopK") ?: request.config.semanticTopK,
+                    fusionK = debug.intOrNull("fusionK") ?: request.config.fusionK,
                     similarityThreshold = jsonContentOrNull(debug["similarityThreshold"])?.toDoubleOrNull(),
                     postProcessingMode = jsonContentOrNull(debug["postProcessingMode"])
                         ?.let { mode ->
@@ -112,23 +65,23 @@ class McpRagRetriever(
                                 .getOrDefault(request.config.postProcessingMode)
                         }
                         ?: request.config.postProcessingMode,
-                    rewriteApplied = debug["rewriteApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                    rewriteApplied = debug.booleanOrNull("rewriteApplied") ?: false,
                     detectedIntent = jsonContentOrNull(debug["detectedIntent"]),
                     rewriteStrategy = jsonContentOrNull(debug["rewriteStrategy"]),
-                    addedTerms = debug["addedTerms"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
-                    removedPhrases = debug["removedPhrases"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                    addedTerms = debug.arrayOrNull("addedTerms")?.stringValues().orEmpty(),
+                    removedPhrases = debug.arrayOrNull("removedPhrases")?.stringValues().orEmpty(),
                     rerankProvider = jsonContentOrNull(debug["rerankProvider"]),
                     rerankModel = jsonContentOrNull(debug["rerankModel"]),
-                    rerankApplied = debug["rerankApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                    rerankInputCount = debug["rerankInputCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-                    rerankOutputCount = debug["rerankOutputCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                    rerankApplied = debug.booleanOrNull("rerankApplied") ?: false,
+                    rerankInputCount = debug.intOrNull("rerankInputCount") ?: 0,
+                    rerankOutputCount = debug.intOrNull("rerankOutputCount") ?: 0,
                     rerankScoreThreshold = jsonContentOrNull(debug["rerankScoreThreshold"])?.toDoubleOrNull(),
-                    rerankTimeoutMs = debug["rerankTimeoutMs"]?.jsonPrimitive?.content?.toLongOrNull(),
-                    rerankFallbackUsed = debug["rerankFallbackUsed"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                    rerankTimeoutMs = debug.longOrNull("rerankTimeoutMs"),
+                    rerankFallbackUsed = debug.booleanOrNull("rerankFallbackUsed") ?: false,
                     rerankFallbackReason = jsonContentOrNull(debug["rerankFallbackReason"]),
-                    fallbackApplied = debug["fallbackApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                    fallbackApplied = debug.booleanOrNull("fallbackApplied") ?: false,
                     fallbackReason = jsonContentOrNull(debug["fallbackReason"]),
-                    degradedMode = debug["degradedMode"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+                    degradedMode = debug.booleanOrNull("degradedMode") ?: false
                 )
             } ?: RagRetrievalDebug(
                 topKBeforeFilter = request.config.retrievalTopKBeforeFilter,
@@ -156,36 +109,89 @@ class McpRagRetriever(
                 fallbackReason = null,
                 degradedMode = false
             ),
-            contextEnvelope = data["contextEnvelope"]?.jsonPrimitive?.content.orEmpty(),
-            grounding = parseGrounding(data["grounding"]?.jsonObject),
-            degradedMode = data["degradedMode"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            contextEnvelope = data.stringOrNull("contextEnvelope").orEmpty(),
+            grounding = parseGrounding(data.objectOrNull("grounding")),
+            degradedMode = data.booleanOrNull("degradedMode") ?: false
         )
     }
 
+    private fun buildParams(request: RagRetrievalRequest): Map<String, Any?> {
+        val params = mutableMapOf<String, Any?>(
+            "query" to request.effectiveQuery,
+            "originalQuery" to request.originalQuery,
+            "effectiveQuery" to request.effectiveQuery,
+            "source" to request.config.source,
+            "strategy" to request.config.strategy,
+            "topK" to request.config.retrievalTopKAfterFilter,
+            "maxChars" to request.config.maxChars,
+            "perDocumentLimit" to request.config.perDocumentLimit,
+            "rewriteEnabled" to request.config.rewriteEnabled,
+            "postProcessingEnabled" to request.config.postProcessingEnabled,
+            "postProcessingMode" to request.config.postProcessingMode.name.lowercase(),
+            "topKBeforeFilter" to request.config.retrievalTopKBeforeFilter,
+            "finalTopK" to request.config.retrievalTopKAfterFilter,
+            "lexicalTopK" to request.config.lexicalTopK,
+            "semanticTopK" to request.config.semanticTopK,
+            "fusionK" to request.config.fusionK,
+            "minAnswerableChunks" to request.config.minAnswerableChunks,
+            "allowAnswerWithRetrievalFallback" to request.config.allowAnswerWithRetrievalFallback,
+            "fallbackOnEmptyPostProcessing" to request.config.fallbackOnEmptyPostProcessing,
+            "rerankEnabled" to request.config.rerankEnabled,
+            "rerankTimeoutMs" to request.config.rerankTimeoutMs,
+            "rerankFallbackPolicy" to request.config.rerankFallbackPolicy.name.lowercase(),
+            "canonicalOnly" to request.config.canonicalOnly
+        )
+
+        params.putIfNotNull("rewrittenQuery", request.rewrittenQuery)
+        params.putIfNotNull("similarityThreshold", request.config.similarityThreshold)
+        params.putIfNotNull("rerankScoreThreshold", request.config.rerankScoreThreshold)
+        params.putIfNotNull("queryContext", request.memorySummary ?: request.config.queryContext)
+        request.contextInput?.let { context ->
+            params["contextInput"] = mapOf(
+                "userQuestion" to context.userQuestion,
+                "constraints" to context.constraints,
+                "retrievalHints" to context.retrievalHints
+            ).plusNotNull(
+                "conversationGoal" to context.conversationGoal,
+                "memorySummary" to context.memorySummary
+            )
+        }
+        request.rewriteResult?.let { rewrite ->
+            params["rewriteDebug"] = mapOf(
+                "rewriteApplied" to rewrite.applied,
+                "detectedIntent" to rewrite.detectedIntent.name,
+                "rewriteStrategy" to rewrite.strategy.name,
+                "addedTerms" to rewrite.addedTerms,
+                "removedPhrases" to rewrite.removedPhrases
+            )
+        }
+        return params
+    }
+
     private fun parseChunks(array: kotlinx.serialization.json.JsonArray?): List<RagContextChunk> {
-        return array?.map { element ->
-            val chunk = element.jsonObject
+        return array?.mapNotNull { element ->
+            val chunk = element as? JsonObject ?: return@mapNotNull null
             RagContextChunk(
-                chunkId = chunk["chunkId"]?.jsonPrimitive?.content.orEmpty(),
-                source = chunk["source"]?.jsonPrimitive?.content.orEmpty(),
-                title = chunk["title"]?.jsonPrimitive?.content.orEmpty(),
-                relativePath = chunk["relativePath"]?.jsonPrimitive?.content.orEmpty(),
-                section = chunk["section"]?.jsonPrimitive?.content.orEmpty(),
-                finalRank = chunk["finalRank"]?.jsonPrimitive?.content?.toIntOrNull(),
-                score = chunk["score"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
-                semanticScore = chunk["semanticScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
-                keywordScore = chunk["keywordScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
-                lexicalScore = chunk["lexicalScore"]?.jsonPrimitive?.content?.toDoubleOrNull()
-                    ?: chunk["keywordScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
-                vectorScore = chunk["vectorScore"]?.jsonPrimitive?.content?.toDoubleOrNull()
-                    ?: chunk["semanticScore"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
-                fusionScore = chunk["fusionScore"]?.jsonPrimitive?.content?.toDoubleOrNull()
-                    ?: chunk["score"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                chunkId = chunk.stringOrNull("chunkId").orEmpty(),
+                source = chunk.stringOrNull("source").orEmpty(),
+                title = chunk.stringOrNull("title").orEmpty(),
+                relativePath = chunk.stringOrNull("relativePath").orEmpty(),
+                section = chunk.stringOrNull("section").orEmpty(),
+                finalRank = chunk.intOrNull("finalRank"),
+                score = chunk.doubleOrNull("score") ?: 0.0,
+                semanticScore = chunk.doubleOrNull("semanticScore") ?: 0.0,
+                keywordScore = chunk.doubleOrNull("keywordScore") ?: 0.0,
+                lexicalScore = chunk.doubleOrNull("lexicalScore")
+                    ?: chunk.doubleOrNull("keywordScore") ?: 0.0,
+                vectorScore = chunk.doubleOrNull("vectorScore")
+                    ?: chunk.doubleOrNull("semanticScore") ?: 0.0,
+                fusionScore = chunk.doubleOrNull("fusionScore")
+                    ?: chunk.doubleOrNull("score") ?: 0.0,
                 candidateSource = jsonContentOrNull(chunk["candidateSource"]) ?: "hybrid",
                 rerankScore = jsonContentOrNull(chunk["rerankScore"])?.toDoubleOrNull(),
                 text = jsonContentOrNull(chunk["fullText"])
-                    ?: chunk["excerpt"]?.jsonPrimitive?.content.orEmpty(),
-                filteredOut = chunk["filteredOut"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                    ?: chunk.stringOrNull("excerpt").orEmpty(),
+                filteredOut = chunk.booleanOrNull("filteredOut") ?: false,
                 filterReason = jsonContentOrNull(chunk["filterReason"]),
                 explanation = jsonContentOrNull(chunk["explanation"])
             )
@@ -194,10 +200,10 @@ class McpRagRetriever(
 
     private fun parseGrounding(grounding: JsonObject?): RagGrounding? {
         if (grounding == null) return null
-        val confidence = grounding["confidence"]?.jsonObject ?: return null
+        val confidence = grounding.objectOrNull("confidence") ?: return null
         return RagGrounding(
-            sources = grounding["sources"]?.jsonArray?.map { element ->
-                val source = element.jsonObject
+            sources = grounding.arrayOrNull("sources")?.mapNotNull { element ->
+                val source = element as? JsonObject ?: return@mapNotNull null
                 GroundedSource(
                     source = jsonContentOrNull(source["source"]),
                     title = jsonContentOrNull(source["title"]),
@@ -205,52 +211,82 @@ class McpRagRetriever(
                     chunkId = jsonContentOrNull(source["chunkId"]),
                     similarityScore = jsonContentOrNull(source["similarityScore"])?.toDoubleOrNull(),
                     rerankScore = jsonContentOrNull(source["rerankScore"])?.toDoubleOrNull(),
-                    finalRank = source["finalRank"]?.jsonPrimitive?.content?.toIntOrNull(),
+                    finalRank = source.intOrNull("finalRank"),
                     relativePath = jsonContentOrNull(source["relativePath"])
                 )
             }.orEmpty(),
-            quotes = grounding["quotes"]?.jsonArray?.map { element ->
-                val quote = element.jsonObject
+            quotes = grounding.arrayOrNull("quotes")?.mapNotNull { element ->
+                val quote = element as? JsonObject ?: return@mapNotNull null
                 GroundedQuote(
-                    quotedText = quote["quotedText"]?.jsonPrimitive?.content.orEmpty(),
+                    quotedText = quote.stringOrNull("quotedText").orEmpty(),
                     source = jsonContentOrNull(quote["source"]),
                     title = jsonContentOrNull(quote["title"]),
                     section = jsonContentOrNull(quote["section"]),
                     chunkId = jsonContentOrNull(quote["chunkId"]),
                     relativePath = jsonContentOrNull(quote["relativePath"]),
-                    quoteRank = quote["quoteRank"]?.jsonPrimitive?.content?.toIntOrNull(),
-                    originFinalRank = quote["originFinalRank"]?.jsonPrimitive?.content?.toIntOrNull()
+                    quoteRank = quote.intOrNull("quoteRank"),
+                    originFinalRank = quote.intOrNull("originFinalRank")
                 )
             }.orEmpty(),
             confidence = RagConfidenceSummary(
-                answerable = confidence["answerable"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true,
+                answerable = confidence.booleanOrNull("answerable") ?: true,
                 reason = jsonContentOrNull(confidence["reason"]),
-                minAnswerableChunks = confidence["minAnswerableChunks"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1,
-                finalChunkCount = confidence["finalChunkCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                minAnswerableChunks = confidence.intOrNull("minAnswerableChunks") ?: 1,
+                finalChunkCount = confidence.intOrNull("finalChunkCount") ?: 0,
                 topSimilarityScore = jsonContentOrNull(confidence["topSimilarityScore"])?.toDoubleOrNull(),
                 topSemanticScore = jsonContentOrNull(confidence["topSemanticScore"])?.toDoubleOrNull(),
                 topRerankScore = jsonContentOrNull(confidence["topRerankScore"])?.toDoubleOrNull(),
                 similarityThreshold = jsonContentOrNull(confidence["similarityThreshold"])?.toDoubleOrNull(),
                 rerankThreshold = jsonContentOrNull(confidence["rerankThreshold"])?.toDoubleOrNull(),
-                retrievalFallbackApplied = confidence["retrievalFallbackApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                retrievalFallbackApplied = confidence.booleanOrNull("retrievalFallbackApplied") ?: false,
                 confidenceLevel = jsonContentOrNull(confidence["confidenceLevel"]),
                 coverageScore = jsonContentOrNull(confidence["coverageScore"])?.toDoubleOrNull() ?: 0.0,
                 consistencyScore = jsonContentOrNull(confidence["consistencyScore"])?.toDoubleOrNull() ?: 0.0,
                 evidenceScore = jsonContentOrNull(confidence["evidenceScore"])?.toDoubleOrNull() ?: 0.0
             ),
             fallbackReason = jsonContentOrNull(grounding["fallbackReason"]),
-            isFallbackIDontKnow = grounding["isFallbackIDontKnow"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            isFallbackIDontKnow = grounding.booleanOrNull("isFallbackIDontKnow") ?: false
         )
     }
 
     private fun jsonContentOrNull(element: JsonElement?): String? {
-        return element?.jsonPrimitive?.content?.takeUnless { it == "null" }
+        return (element as? JsonPrimitive)?.content?.takeUnless { it == "null" }
     }
 
     private fun extractDataPayload(raw: String): JsonObject? {
-        val root = json.parseToJsonElement(raw).jsonObject
+        val root = json.parseToJsonElement(raw) as? JsonObject ?: return null
 
-        return root["data"]?.jsonObject
-            ?: root["result"]?.jsonObject?.get("data")?.jsonObject
+        return root.objectOrNull("data")
+            ?: root.objectOrNull("result")?.objectOrNull("data")
+    }
+
+    private fun MutableMap<String, Any?>.putIfNotNull(key: String, value: Any?) {
+        if (value != null) this[key] = value
+    }
+
+    private fun Map<String, Any?>.plusNotNull(vararg entries: Pair<String, Any?>): Map<String, Any?> {
+        val result = toMutableMap()
+        entries.forEach { (key, value) ->
+            if (value != null) result[key] = value
+        }
+        return result
+    }
+
+    private fun JsonObject.stringOrNull(key: String): String? = jsonContentOrNull(this[key])
+
+    private fun JsonObject.intOrNull(key: String): Int? = stringOrNull(key)?.toIntOrNull()
+
+    private fun JsonObject.longOrNull(key: String): Long? = stringOrNull(key)?.toLongOrNull()
+
+    private fun JsonObject.doubleOrNull(key: String): Double? = stringOrNull(key)?.toDoubleOrNull()
+
+    private fun JsonObject.booleanOrNull(key: String): Boolean? = stringOrNull(key)?.toBooleanStrictOrNull()
+
+    private fun JsonObject.objectOrNull(key: String): JsonObject? = this[key] as? JsonObject
+
+    private fun JsonObject.arrayOrNull(key: String): JsonArray? = this[key] as? JsonArray
+
+    private fun JsonArray.stringValues(): List<String> {
+        return mapNotNull { element -> (element as? JsonPrimitive)?.content?.takeUnless { it == "null" } }
     }
 }

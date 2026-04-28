@@ -93,6 +93,8 @@ class MainActivity : ComponentActivity() {
             chatMessageHandler,
             branchOrchestrator,
             mcpToolOrchestrator,
+            AppDependencies.chatCommandRouter,
+            AppDependencies.developerHelpUseCase,
             processChatTurnUseCase,
             AppDependencies.compareLocalOptimizationUseCase,
             AppDependencies.runRagEvaluationUseCase,

@@ -22,7 +22,8 @@ import com.example.mcp.server.documentindex.retrieval.RetrievalOrchestrationServ
 class DocumentIndexingService(
     private val pipeline: DocumentIndexingPipeline = DocumentIndexingPipeline(),
     private val retrievalService: DocumentRetrievalService = DocumentRetrievalService(),
-    private val retrievalOrchestrationService: RetrievalOrchestrationService = RetrievalOrchestrationService(retrievalService)
+    private val retrievalOrchestrationService: RetrievalOrchestrationService = RetrievalOrchestrationService(retrievalService),
+    private val projectContextService: ProjectContextService = ProjectContextService()
 ) {
 
     fun indexDocuments(
@@ -170,4 +171,10 @@ class DocumentIndexingService(
             )
         )
     }
+
+    fun getGitBranch(): GitBranchResult = projectContextService.getGitBranch()
+
+    fun listProjectFiles(limit: Int = 200): ProjectFilesResult = projectContextService.listProjectFiles(limit)
+
+    fun getGitDiffSummary(maxChars: Int = 4000): GitDiffSummaryResult = projectContextService.getGitDiffSummary(maxChars)
 }
