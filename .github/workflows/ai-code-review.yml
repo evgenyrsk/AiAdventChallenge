@@ -15,13 +15,13 @@ concurrency:
 jobs:
   review:
     name: Review pull request
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.AI_REVIEW_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     if: ${{ !github.event.pull_request.draft }}
 
     env:
       AI_REVIEW_BACKEND: ${{ vars.AI_REVIEW_BACKEND || 'private' }}
-      AI_REVIEW_BASE_URL: ${{ secrets.AI_REVIEW_BASE_URL }}
+      AI_REVIEW_BASE_URL: ${{ secrets.AI_REVIEW_BASE_URL || vars.AI_REVIEW_BASE_URL }}
       AI_REVIEW_API_KEY: ${{ secrets.AI_REVIEW_API_KEY }}
       AI_REVIEW_MODEL: ${{ vars.AI_REVIEW_MODEL }}
       AI_REVIEW_MAX_TOKENS: ${{ vars.AI_REVIEW_MAX_TOKENS || '1600' }}
