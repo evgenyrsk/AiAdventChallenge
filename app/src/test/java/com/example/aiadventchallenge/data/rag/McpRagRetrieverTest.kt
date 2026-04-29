@@ -7,8 +7,11 @@ import com.example.aiadventchallenge.domain.model.RagPostProcessingMode
 import com.example.aiadventchallenge.domain.model.RagRetrievalRequest
 import io.mockk.coEvery
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -185,6 +188,76 @@ class McpRagRetrieverTest {
         assertEquals("Missing data payload in retrieval response", error?.message)
     }
 
+    @Test
+    fun `retrieve omits nullable optional params`() = runTest {
+        val capturedParams = slot<Map<String, Any?>>()
+        coEvery {
+            repository.callTool("retrieve_relevant_chunks", capture(capturedParams))
+        } returns minimalResponse()
+
+        retriever.retrieve(request())
+
+        assertFalse(capturedParams.captured.containsKey("rewrittenQuery"))
+        assertFalse(capturedParams.captured.containsKey("similarityThreshold"))
+        assertFalse(capturedParams.captured.containsKey("rerankScoreThreshold"))
+        assertFalse(capturedParams.captured.containsKey("queryContext"))
+        assertFalse(capturedParams.captured.containsKey("contextInput"))
+        assertFalse(capturedParams.captured.containsKey("rewriteDebug"))
+    }
+
+    @Test
+    fun `retrieve tolerates nullable response fields`() = runTest {
+        coEvery {
+            repository.callTool("retrieve_relevant_chunks", any())
+        } returns McpToolData.StringResult(
+            """
+            {
+              "jsonrpc": "2.0",
+              "result": {
+                "message": "Retrieved relevant chunks for fitness_knowledge",
+                "data": {
+                  "query": "Что важнее для похудения?",
+                  "originalQuery": "Что важнее для похудения?",
+                  "rewrittenQuery": null,
+                  "effectiveQuery": "Что важнее для похудения?",
+                  "source": "fitness_knowledge",
+                  "strategy": "structure_aware",
+                  "selectedCount": 0,
+                  "totalChars": 0,
+                  "contextText": "",
+                  "initialCandidates": null,
+                  "finalCandidates": null,
+                  "filteredCandidates": null,
+                  "chunks": [],
+                  "debug": {
+                    "topKBeforeFilter": null,
+                    "finalTopK": null,
+                    "similarityThreshold": null,
+                    "postProcessingMode": null,
+                    "rewriteApplied": null,
+                    "addedTerms": null,
+                    "removedPhrases": null,
+                    "rerankTimeoutMs": null,
+                    "fallbackApplied": null
+                  },
+                  "grounding": null,
+                  "degradedMode": null
+                }
+              },
+              "error": null
+            }
+            """.trimIndent()
+        )
+
+        val result = retriever.retrieve(request())
+
+        assertNull(result.rewrittenQuery)
+        assertNull(result.grounding)
+        assertEquals(4, result.debug.topKBeforeFilter)
+        assertEquals(RagPostProcessingMode.NONE, result.debug.postProcessingMode)
+        assertFalse(result.degradedMode)
+    }
+
     private fun request(): RagRetrievalRequest {
         return RagRetrievalRequest(
             originalQuery = "Что важнее для похудения?",
@@ -205,6 +278,26 @@ class McpRagRetrieverTest {
                 perDocumentLimit = 1,
                 fallbackOnEmptyPostProcessing = true
             )
+        )
+    }
+
+    private fun minimalResponse(): McpToolData.StringResult {
+        return McpToolData.StringResult(
+            """
+            {
+              "data": {
+                "query": "Что важнее для похудения?",
+                "originalQuery": "Что важнее для похудения?",
+                "effectiveQuery": "Что важнее для похудения?",
+                "source": "fitness_knowledge",
+                "strategy": "structure_aware",
+                "selectedCount": 0,
+                "totalChars": 0,
+                "contextText": "",
+                "chunks": []
+              }
+            }
+            """.trimIndent()
         )
     }
 }

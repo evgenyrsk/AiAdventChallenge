@@ -29,6 +29,9 @@ import com.example.aiadventchallenge.domain.branch.BranchCreationErrorType
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.mcp.ToolExecutionResult
 import com.example.aiadventchallenge.domain.model.mcp.McpConnectionStatus
+import com.example.aiadventchallenge.domain.usecase.ChatCommand
+import com.example.aiadventchallenge.domain.usecase.ChatCommandRouter
+import com.example.aiadventchallenge.domain.usecase.DeveloperHelpUseCase
 import com.example.aiadventchallenge.domain.usecase.ProcessChatTurnUseCase
 import com.example.aiadventchallenge.domain.usecase.CompareLocalOptimizationUseCase
 import com.example.aiadventchallenge.domain.usecase.RunRagEvaluationUseCase
@@ -51,6 +54,8 @@ class ChatViewModel(
     private val chatMessageHandler: ChatMessageHandler,
     private val branchOrchestrator: BranchOrchestrator,
     private val mcpToolOrchestrator: McpToolOrchestrator,
+    private val chatCommandRouter: ChatCommandRouter,
+    private val developerHelpUseCase: DeveloperHelpUseCase,
     private val processChatTurnUseCase: ProcessChatTurnUseCase,
     private val compareLocalOptimizationUseCase: CompareLocalOptimizationUseCase,
     private val runRagEvaluationUseCase: RunRagEvaluationUseCase
@@ -249,6 +254,16 @@ class ChatViewModel(
         viewModelScope.launch {
             val activeBranchId = branchRepository.getActiveBranchId() ?: "main"
             val parentMessageId = _messages.value.lastOrNull()?.id
+            val command = chatCommandRouter.route(userInput)
+
+            if (command is ChatCommand.Help) {
+                handleDeveloperHelp(
+                    rawInput = userInput,
+                    activeBranchId = activeBranchId,
+                    parentMessageId = parentMessageId
+                )
+                return@launch
+            }
 
             val answerMode = _chatUiState.value.answerMode
             val mcpToolResult = mcpToolOrchestrator.detectAndExecuteTool(
@@ -425,6 +440,34 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    private suspend fun handleDeveloperHelp(
+        rawInput: String,
+        activeBranchId: String,
+        parentMessageId: String?
+    ) {
+        runCatching {
+            developerHelpUseCase(
+                rawInput = rawInput,
+                activeBranchId = activeBranchId,
+                parentMessageId = parentMessageId
+            )
+        }.onSuccess { result ->
+            branchRepository.updateLastMessage(activeBranchId, result.userMessage?.id ?: result.aiMessage.id)
+            branchRepository.updateLastMessage(activeBranchId, result.aiMessage.id)
+            _chatUiState.value = _chatUiState.value.copy(
+                latestRetrievalSummary = result.retrievalSummary,
+                latestExecutionInfo = result.executionInfo,
+                latestAnswerPresentation = result.answerPresentation,
+                latestComparisonResult = null,
+                latestEvaluationResult = null
+            )
+        }.onFailure { error ->
+            Log.e(TAG, "❌ Developer help failed", error)
+            addSystemMessage("Developer Help error: ${error.message ?: "unknown error"}")
+        }
+        _isLoading.value = false
     }
 
     private suspend fun addSystemMessage(content: String, parentMessageId: String? = null) {

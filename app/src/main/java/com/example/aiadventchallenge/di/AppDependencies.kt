@@ -38,7 +38,12 @@ import com.example.aiadventchallenge.domain.mcp.MultiServerOrchestrator
 import com.example.aiadventchallenge.domain.rag.DefaultQueryRewriter
 import com.example.aiadventchallenge.domain.rag.RagPromptBuilder
 import com.example.aiadventchallenge.domain.rag.QueryRewriter
+import com.example.aiadventchallenge.domain.rag.RetrievalSummaryFactory
 import android.content.Context
+import com.example.aiadventchallenge.domain.usecase.ChatCommandRouter
+import com.example.aiadventchallenge.domain.usecase.DeveloperDocsRetriever
+import com.example.aiadventchallenge.domain.usecase.DeveloperHelpPromptAssembler
+import com.example.aiadventchallenge.domain.usecase.DeveloperHelpUseCase
 import com.example.aiadventchallenge.domain.usecase.RewriteQueryUseCase
 
 @SuppressLint("StaticFieldLeak")
@@ -163,6 +168,10 @@ object AppDependencies {
         RagPromptBuilder()
     }
 
+    val retrievalSummaryFactory: RetrievalSummaryFactory by lazy {
+        RetrievalSummaryFactory()
+    }
+
     val queryRewriter: QueryRewriter by lazy {
         DefaultQueryRewriter()
     }
@@ -180,6 +189,38 @@ object AppDependencies {
             ragRetriever = ragRetriever,
             ragPromptBuilder = ragPromptBuilder,
             rewriteQueryUseCase = rewriteQueryUseCase
+        )
+    }
+
+    val chatCommandRouter: ChatCommandRouter by lazy {
+        ChatCommandRouter()
+    }
+
+    val developerDocsRetriever: DeveloperDocsRetriever by lazy {
+        DeveloperDocsRetriever(
+            prepareRagRequestUseCase = prepareRagRequestUseCase,
+            ragRetriever = ragRetriever
+        )
+    }
+
+    val developerHelpPromptAssembler: DeveloperHelpPromptAssembler by lazy {
+        DeveloperHelpPromptAssembler()
+    }
+
+    val developerHelpUseCase: DeveloperHelpUseCase by lazy {
+        DeveloperHelpUseCase(
+            chatRepository = com.example.aiadventchallenge.data.repository.ChatRepository(
+                database.chatMessageDao(),
+                database.branchDao(),
+                database.factDao()
+            ),
+            chatSettingsRepository = chatSettingsRepository,
+            chatAgent = chatAgent,
+            developerDocsRetriever = developerDocsRetriever,
+            promptAssembler = developerHelpPromptAssembler,
+            mcpRepository = multiServerRepository,
+            localLlmProfileResolver = localLlmProfileResolver,
+            retrievalSummaryFactory = retrievalSummaryFactory
         )
     }
 

@@ -25,5 +25,6 @@ data class ChatMessageEntity(
     val completionTokens: Int? = null,
     val totalTokens: Int? = null,
     val branchId: String = "main",
+    val conversationMode: String = "FITNESS",
     val isHidden: Boolean = false
 )

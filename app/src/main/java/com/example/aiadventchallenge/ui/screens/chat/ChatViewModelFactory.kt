@@ -13,6 +13,8 @@ import com.example.aiadventchallenge.domain.chat.ChatMessageHandler
 import com.example.aiadventchallenge.domain.branch.BranchOrchestrator
 import com.example.aiadventchallenge.domain.mcp.McpToolOrchestrator
 import com.example.aiadventchallenge.domain.usecase.CompareLocalOptimizationUseCase
+import com.example.aiadventchallenge.domain.usecase.ChatCommandRouter
+import com.example.aiadventchallenge.domain.usecase.DeveloperHelpUseCase
 import com.example.aiadventchallenge.domain.usecase.ProcessChatTurnUseCase
 import com.example.aiadventchallenge.domain.usecase.RunRagEvaluationUseCase
 
@@ -27,6 +29,8 @@ class ChatViewModelFactory(
     private val chatMessageHandler: ChatMessageHandler,
     private val branchOrchestrator: BranchOrchestrator,
     private val mcpToolOrchestrator: McpToolOrchestrator,
+    private val chatCommandRouter: ChatCommandRouter,
+    private val developerHelpUseCase: DeveloperHelpUseCase,
     private val processChatTurnUseCase: ProcessChatTurnUseCase,
     private val compareLocalOptimizationUseCase: CompareLocalOptimizationUseCase,
     private val runRagEvaluationUseCase: RunRagEvaluationUseCase,
@@ -45,6 +49,8 @@ class ChatViewModelFactory(
                 chatMessageHandler,
                 branchOrchestrator,
                 mcpToolOrchestrator,
+                chatCommandRouter,
+                developerHelpUseCase,
                 processChatTurnUseCase,
                 compareLocalOptimizationUseCase,
                 runRagEvaluationUseCase,

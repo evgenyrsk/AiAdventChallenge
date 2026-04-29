@@ -55,6 +55,18 @@ class DocumentIndexHandler : AbstractMcpJsonRpcHandler() {
         Tool(
             name = "answer_with_retrieval",
             description = "Builds an LLM-ready prompt package from semantic retrieval. Parameters: query, source (optional), strategy (optional), topK (optional), maxChars (optional), documentType (optional), relativePathContains (optional), perDocumentLimit (optional)."
+        ),
+        Tool(
+            name = "get_git_branch",
+            description = "Returns current git branch for the project root. No parameters."
+        ),
+        Tool(
+            name = "list_project_files",
+            description = "Returns a filtered list of project files from the repository root. Parameters: limit (optional)."
+        ),
+        Tool(
+            name = "get_git_diff_summary",
+            description = "Returns compact git status and diff summary for the repository root. Parameters: maxChars (optional)."
         )
     )
 

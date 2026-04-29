@@ -20,8 +20,14 @@ interface ChatMessageDao {
     @Query("SELECT * FROM chat_messages WHERE isHidden = 0 ORDER BY timestamp ASC")
     suspend fun getAllMessagesList(): List<ChatMessageEntity>
 
-    @Query("SELECT * FROM chat_messages WHERE branchId = :branchId AND isHidden = 0 ORDER BY timestamp ASC")
-    suspend fun getMessagesByBranch(branchId: String): List<ChatMessageEntity>
+    @Query("""
+        SELECT * FROM chat_messages
+        WHERE branchId = :branchId
+          AND isHidden = 0
+          AND conversationMode = :conversationMode
+        ORDER BY timestamp ASC
+    """)
+    suspend fun getMessagesByBranch(branchId: String, conversationMode: String = "FITNESS"): List<ChatMessageEntity>
 
     @Query("SELECT * FROM chat_messages WHERE branchId = :branchId AND isHidden = 1 ORDER BY timestamp ASC")
     suspend fun getHiddenMessagesByBranch(branchId: String): List<ChatMessageEntity>

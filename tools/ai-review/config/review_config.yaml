@@ -1,0 +1,58 @@
+# Lightweight AI review configuration.
+# Parsed by the :ai-review-tool Kotlin CLI without external dependencies.
+
+max_diff_chars: 60000
+max_docs_context_chars: 25000
+max_changed_files: 80
+max_file_context_chars: 2500
+max_doc_file_chars: 5000
+max_keyword_terms: 80
+request_timeout_seconds: 90
+max_response_tokens: 1600
+temperature: 0.1
+
+doc_roots:
+  - README.md
+  - docs
+  - MCP_README.md
+  - MCP_INTEGRATION.md
+  - IMPLEMENTATION_SUMMARY.md
+  - ANDROID_INTEGRATION_SUMMARY.md
+  - CONTEXT_STRATEGIES.md
+
+source_extensions:
+  - .kt
+  - .kts
+  - .java
+  - .xml
+  - .gradle
+  - .properties
+  - .md
+  - .json
+  - .yaml
+  - .yml
+
+exclude_paths:
+  - .git
+  - .gradle
+  - .idea
+  - build
+  - generated
+  - node_modules
+  - mcp-server/output
+  - output
+  - tools/ai-review/output
+
+exclude_extensions:
+  - .png
+  - .jpg
+  - .jpeg
+  - .webp
+  - .gif
+  - .mp4
+  - .apk
+  - .aab
+  - .db
+  - .jar
+  - .keystore
+  - .lock

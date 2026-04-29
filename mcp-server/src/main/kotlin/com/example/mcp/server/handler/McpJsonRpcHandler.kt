@@ -43,6 +43,52 @@ abstract class AbstractMcpJsonRpcHandler {
 
     protected abstract fun getServerInfo(): String
 
+    private fun JsonObject.stringOrNull(key: String): String? {
+        val primitive = this[key] as? JsonPrimitive ?: return null
+        return primitive.content.takeUnless { it == "null" }
+    }
+
+    private fun JsonObject.intOrNull(key: String): Int? = stringOrNull(key)?.toIntOrNull()
+
+    private fun JsonObject.longOrNull(key: String): Long? = stringOrNull(key)?.toLongOrNull()
+
+    private fun JsonObject.doubleOrNull(key: String): Double? = stringOrNull(key)?.toDoubleOrNull()
+
+    private fun JsonObject.booleanOrNull(key: String): Boolean? = stringOrNull(key)?.toBooleanStrictOrNull()
+
+    private fun JsonObject.objectOrNull(key: String): JsonObject? = this[key] as? JsonObject
+
+    private fun JsonObject.arrayOrNull(key: String): JsonArray? = this[key] as? JsonArray
+
+    private fun JsonArray.stringValues(): List<String> = mapNotNull { element ->
+        (element as? JsonPrimitive)?.content?.takeUnless { it == "null" }
+    }
+
+    private fun JsonObject.retrievalContextInputOrNull(
+        key: String,
+        originalQuery: String
+    ): com.example.mcp.server.documentindex.model.RetrievalContextInput? {
+        val ctx = objectOrNull(key) ?: return null
+        return com.example.mcp.server.documentindex.model.RetrievalContextInput(
+            userQuestion = ctx.stringOrNull("userQuestion") ?: originalQuery,
+            conversationGoal = ctx.stringOrNull("conversationGoal"),
+            constraints = ctx.arrayOrNull("constraints")?.stringValues().orEmpty(),
+            retrievalHints = ctx.arrayOrNull("retrievalHints")?.stringValues().orEmpty(),
+            memorySummary = ctx.stringOrNull("memorySummary")
+        )
+    }
+
+    private fun JsonObject.rewriteDebugOrNull(key: String): RewriteDebugInfo? {
+        val debug = objectOrNull(key) ?: return null
+        return RewriteDebugInfo(
+            rewriteApplied = debug.booleanOrNull("rewriteApplied") ?: false,
+            detectedIntent = debug.stringOrNull("detectedIntent"),
+            rewriteStrategy = debug.stringOrNull("rewriteStrategy"),
+            addedTerms = debug.arrayOrNull("addedTerms")?.stringValues().orEmpty(),
+            removedPhrases = debug.arrayOrNull("removedPhrases")?.stringValues().orEmpty()
+        )
+    }
+
     protected open fun handleInitialize(request: JsonRpcRequest): String {
         println("   Method: initialize")
 
@@ -240,7 +286,7 @@ abstract class AbstractMcpJsonRpcHandler {
         println("   Method: index_documents")
 
         return try {
-            val params = request.params ?: throw Exception("Missing params")
+            val params = JsonObject(request.params ?: throw Exception("Missing params"))
             val path = params["path"]?.jsonPrimitive?.content
                 ?: throw Exception("Missing path parameter")
             val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
@@ -290,7 +336,7 @@ abstract class AbstractMcpJsonRpcHandler {
         println("   Method: reindex_documents")
 
         return try {
-            val params = request.params ?: throw Exception("Missing params")
+            val params = JsonObject(request.params ?: throw Exception("Missing params"))
             val path = params["path"]?.jsonPrimitive?.content
                 ?: throw Exception("Missing path parameter")
             val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
@@ -360,7 +406,7 @@ abstract class AbstractMcpJsonRpcHandler {
         println("   Method: search_index")
 
         return try {
-            val params = request.params ?: throw Exception("Missing params")
+            val params = JsonObject(request.params ?: throw Exception("Missing params"))
             val query = params["query"]?.jsonPrimitive?.content
                 ?: throw Exception("Missing query parameter")
             val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
@@ -394,65 +440,49 @@ abstract class AbstractMcpJsonRpcHandler {
         println("   Method: retrieve_relevant_chunks")
 
         return try {
-            val params = request.params ?: throw Exception("Missing params")
-            val query = params["query"]?.jsonPrimitive?.content
+            val params = JsonObject(request.params ?: throw Exception("Missing params"))
+            val query = params.stringOrNull("query")
                 ?: throw Exception("Missing query parameter")
-            val originalQuery = params["originalQuery"]?.jsonPrimitive?.content ?: query
-            val rewrittenQuery = params["rewrittenQuery"]?.jsonPrimitive?.content
-            val effectiveQuery = params["effectiveQuery"]?.jsonPrimitive?.content ?: query
-            val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
-            val strategy = params["strategy"]?.jsonPrimitive?.content ?: "structure_aware"
-            val topK = params["topK"]?.jsonPrimitive?.content?.toIntOrNull() ?: 5
-            val maxChars = params["maxChars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 4000
-            val documentType = params["documentType"]?.jsonPrimitive?.content
-            val relativePathContains = params["relativePathContains"]?.jsonPrimitive?.content
-            val perDocumentLimit = params["perDocumentLimit"]?.jsonPrimitive?.content?.toIntOrNull() ?: 2
-            val rewriteEnabled = params["rewriteEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            val postProcessingEnabled = params["postProcessingEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            val topKBeforeFilter = params["topKBeforeFilter"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
-            val finalTopK = params["finalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
-            val lexicalTopK = params["lexicalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
-            val semanticTopK = params["semanticTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
-            val fusionK = params["fusionK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
-            val similarityThreshold = params["similarityThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
-            val minAnswerableChunks = params["minAnswerableChunks"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
-            val allowAnswerWithRetrievalFallback = params["allowAnswerWithRetrievalFallback"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            val fallbackOnEmptyPostProcessing = params["fallbackOnEmptyPostProcessing"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
-            val rerankEnabled = params["rerankEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            val rerankScoreThreshold = params["rerankScoreThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
-            val rerankTimeoutMs = params["rerankTimeoutMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 3500L
-            val rerankFallbackPolicy = params["rerankFallbackPolicy"]?.jsonPrimitive?.content
+            val originalQuery = params.stringOrNull("originalQuery") ?: query
+            val rewrittenQuery = params.stringOrNull("rewrittenQuery")
+            val effectiveQuery = params.stringOrNull("effectiveQuery") ?: query
+            val source = params.stringOrNull("source") ?: "local_docs"
+            val strategy = params.stringOrNull("strategy") ?: "structure_aware"
+            val topK = params.intOrNull("topK") ?: 5
+            val maxChars = params.intOrNull("maxChars") ?: 4000
+            val documentType = params.stringOrNull("documentType")
+            val relativePathContains = params.stringOrNull("relativePathContains")
+            val perDocumentLimit = params.intOrNull("perDocumentLimit") ?: 2
+            val rewriteEnabled = params.booleanOrNull("rewriteEnabled") ?: false
+            val postProcessingEnabled = params.booleanOrNull("postProcessingEnabled") ?: false
+            val topKBeforeFilter = params.intOrNull("topKBeforeFilter") ?: topK
+            val finalTopK = params.intOrNull("finalTopK") ?: topK
+            val lexicalTopK = params.intOrNull("lexicalTopK") ?: topKBeforeFilter
+            val semanticTopK = params.intOrNull("semanticTopK") ?: topKBeforeFilter
+            val fusionK = params.intOrNull("fusionK") ?: topKBeforeFilter
+            val similarityThreshold = params.doubleOrNull("similarityThreshold")
+            val minAnswerableChunks = params.intOrNull("minAnswerableChunks") ?: 1
+            val allowAnswerWithRetrievalFallback = params.booleanOrNull("allowAnswerWithRetrievalFallback") ?: false
+            val fallbackOnEmptyPostProcessing = params.booleanOrNull("fallbackOnEmptyPostProcessing") ?: true
+            val rerankEnabled = params.booleanOrNull("rerankEnabled") ?: false
+            val rerankScoreThreshold = params.doubleOrNull("rerankScoreThreshold")
+            val rerankTimeoutMs = params.longOrNull("rerankTimeoutMs") ?: 3500L
+            val rerankFallbackPolicy = params.stringOrNull("rerankFallbackPolicy")
                 ?.let { value ->
                     runCatching { com.example.mcp.server.documentindex.model.RetrievalRerankFallbackPolicy.valueOf(value.uppercase()) }
                         .getOrDefault(com.example.mcp.server.documentindex.model.RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL)
                 }
                 ?: com.example.mcp.server.documentindex.model.RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL
-            val queryContext = params["queryContext"]?.jsonPrimitive?.content
-            val canonicalOnly = params["canonicalOnly"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            val postProcessingMode = params["postProcessingMode"]?.jsonPrimitive?.content
+            val queryContext = params.stringOrNull("queryContext")
+            val canonicalOnly = params.booleanOrNull("canonicalOnly") ?: false
+            val postProcessingMode = params.stringOrNull("postProcessingMode")
                 ?.let { value ->
                     runCatching { RetrievalPostProcessingMode.valueOf(value.uppercase()) }
                         .getOrDefault(RetrievalPostProcessingMode.NONE)
                 }
                 ?: RetrievalPostProcessingMode.NONE
-            val contextInput = params["contextInput"]?.jsonObject?.let { ctx ->
-                com.example.mcp.server.documentindex.model.RetrievalContextInput(
-                    userQuestion = ctx["userQuestion"]?.jsonPrimitive?.content ?: originalQuery,
-                    conversationGoal = ctx["conversationGoal"]?.jsonPrimitive?.content,
-                    constraints = ctx["constraints"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
-                    retrievalHints = ctx["retrievalHints"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
-                    memorySummary = ctx["memorySummary"]?.jsonPrimitive?.content
-                )
-            }
-            val rewriteDebug = params["rewriteDebug"]?.jsonObject?.let { debug ->
-                RewriteDebugInfo(
-                    rewriteApplied = debug["rewriteApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                    detectedIntent = debug["detectedIntent"]?.jsonPrimitive?.content,
-                    rewriteStrategy = debug["rewriteStrategy"]?.jsonPrimitive?.content,
-                    addedTerms = debug["addedTerms"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
-                    removedPhrases = debug["removedPhrases"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
-                )
-            }
+            val contextInput = params.retrievalContextInputOrNull("contextInput", originalQuery)
+            val rewriteDebug = params.rewriteDebugOrNull("rewriteDebug")
 
             val result = documentIndexingService.retrieveRelevantChunks(
                 query = query,
@@ -504,65 +534,49 @@ abstract class AbstractMcpJsonRpcHandler {
         println("   Method: answer_with_retrieval")
 
         return try {
-            val params = request.params ?: throw Exception("Missing params")
-            val query = params["query"]?.jsonPrimitive?.content
+            val params = JsonObject(request.params ?: throw Exception("Missing params"))
+            val query = params.stringOrNull("query")
                 ?: throw Exception("Missing query parameter")
-            val originalQuery = params["originalQuery"]?.jsonPrimitive?.content ?: query
-            val rewrittenQuery = params["rewrittenQuery"]?.jsonPrimitive?.content
-            val effectiveQuery = params["effectiveQuery"]?.jsonPrimitive?.content ?: query
-            val source = params["source"]?.jsonPrimitive?.content ?: "local_docs"
-            val strategy = params["strategy"]?.jsonPrimitive?.content ?: "structure_aware"
-            val topK = params["topK"]?.jsonPrimitive?.content?.toIntOrNull() ?: 5
-            val maxChars = params["maxChars"]?.jsonPrimitive?.content?.toIntOrNull() ?: 4000
-            val documentType = params["documentType"]?.jsonPrimitive?.content
-            val relativePathContains = params["relativePathContains"]?.jsonPrimitive?.content
-            val perDocumentLimit = params["perDocumentLimit"]?.jsonPrimitive?.content?.toIntOrNull() ?: 2
-            val rewriteEnabled = params["rewriteEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            val postProcessingEnabled = params["postProcessingEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            val topKBeforeFilter = params["topKBeforeFilter"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
-            val finalTopK = params["finalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topK
-            val lexicalTopK = params["lexicalTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
-            val semanticTopK = params["semanticTopK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
-            val fusionK = params["fusionK"]?.jsonPrimitive?.content?.toIntOrNull() ?: topKBeforeFilter
-            val similarityThreshold = params["similarityThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
-            val minAnswerableChunks = params["minAnswerableChunks"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
-            val allowAnswerWithRetrievalFallback = params["allowAnswerWithRetrievalFallback"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            val fallbackOnEmptyPostProcessing = params["fallbackOnEmptyPostProcessing"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
-            val rerankEnabled = params["rerankEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            val rerankScoreThreshold = params["rerankScoreThreshold"]?.jsonPrimitive?.content?.toDoubleOrNull()
-            val rerankTimeoutMs = params["rerankTimeoutMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 3500L
-            val rerankFallbackPolicy = params["rerankFallbackPolicy"]?.jsonPrimitive?.content
+            val originalQuery = params.stringOrNull("originalQuery") ?: query
+            val rewrittenQuery = params.stringOrNull("rewrittenQuery")
+            val effectiveQuery = params.stringOrNull("effectiveQuery") ?: query
+            val source = params.stringOrNull("source") ?: "local_docs"
+            val strategy = params.stringOrNull("strategy") ?: "structure_aware"
+            val topK = params.intOrNull("topK") ?: 5
+            val maxChars = params.intOrNull("maxChars") ?: 4000
+            val documentType = params.stringOrNull("documentType")
+            val relativePathContains = params.stringOrNull("relativePathContains")
+            val perDocumentLimit = params.intOrNull("perDocumentLimit") ?: 2
+            val rewriteEnabled = params.booleanOrNull("rewriteEnabled") ?: false
+            val postProcessingEnabled = params.booleanOrNull("postProcessingEnabled") ?: false
+            val topKBeforeFilter = params.intOrNull("topKBeforeFilter") ?: topK
+            val finalTopK = params.intOrNull("finalTopK") ?: topK
+            val lexicalTopK = params.intOrNull("lexicalTopK") ?: topKBeforeFilter
+            val semanticTopK = params.intOrNull("semanticTopK") ?: topKBeforeFilter
+            val fusionK = params.intOrNull("fusionK") ?: topKBeforeFilter
+            val similarityThreshold = params.doubleOrNull("similarityThreshold")
+            val minAnswerableChunks = params.intOrNull("minAnswerableChunks") ?: 1
+            val allowAnswerWithRetrievalFallback = params.booleanOrNull("allowAnswerWithRetrievalFallback") ?: false
+            val fallbackOnEmptyPostProcessing = params.booleanOrNull("fallbackOnEmptyPostProcessing") ?: true
+            val rerankEnabled = params.booleanOrNull("rerankEnabled") ?: false
+            val rerankScoreThreshold = params.doubleOrNull("rerankScoreThreshold")
+            val rerankTimeoutMs = params.longOrNull("rerankTimeoutMs") ?: 3500L
+            val rerankFallbackPolicy = params.stringOrNull("rerankFallbackPolicy")
                 ?.let { value ->
                     runCatching { com.example.mcp.server.documentindex.model.RetrievalRerankFallbackPolicy.valueOf(value.uppercase()) }
                         .getOrDefault(com.example.mcp.server.documentindex.model.RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL)
                 }
                 ?: com.example.mcp.server.documentindex.model.RetrievalRerankFallbackPolicy.HEURISTIC_THEN_RETRIEVAL
-            val queryContext = params["queryContext"]?.jsonPrimitive?.content
-            val canonicalOnly = params["canonicalOnly"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            val postProcessingMode = params["postProcessingMode"]?.jsonPrimitive?.content
+            val queryContext = params.stringOrNull("queryContext")
+            val canonicalOnly = params.booleanOrNull("canonicalOnly") ?: false
+            val postProcessingMode = params.stringOrNull("postProcessingMode")
                 ?.let { value ->
                     runCatching { RetrievalPostProcessingMode.valueOf(value.uppercase()) }
                         .getOrDefault(RetrievalPostProcessingMode.NONE)
                 }
                 ?: RetrievalPostProcessingMode.NONE
-            val contextInput = params["contextInput"]?.jsonObject?.let { ctx ->
-                com.example.mcp.server.documentindex.model.RetrievalContextInput(
-                    userQuestion = ctx["userQuestion"]?.jsonPrimitive?.content ?: originalQuery,
-                    conversationGoal = ctx["conversationGoal"]?.jsonPrimitive?.content,
-                    constraints = ctx["constraints"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
-                    retrievalHints = ctx["retrievalHints"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
-                    memorySummary = ctx["memorySummary"]?.jsonPrimitive?.content
-                )
-            }
-            val rewriteDebug = params["rewriteDebug"]?.jsonObject?.let { debug ->
-                RewriteDebugInfo(
-                    rewriteApplied = debug["rewriteApplied"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                    detectedIntent = debug["detectedIntent"]?.jsonPrimitive?.content,
-                    rewriteStrategy = debug["rewriteStrategy"]?.jsonPrimitive?.content,
-                    addedTerms = debug["addedTerms"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
-                    removedPhrases = debug["removedPhrases"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
-                )
-            }
+            val contextInput = params.retrievalContextInputOrNull("contextInput", originalQuery)
+            val rewriteDebug = params.rewriteDebugOrNull("rewriteDebug")
 
             val result = documentIndexingService.answerWithRetrieval(
                 query = query,
@@ -610,6 +624,56 @@ abstract class AbstractMcpJsonRpcHandler {
         }
     }
 
+    protected open fun handleGetGitBranch(request: JsonRpcRequest): String {
+        println("   Method: get_git_branch")
+
+        return try {
+            val result = documentIndexingService.getGitBranch()
+            val resultJson = buildJsonObject {
+                put("message", "Current git branch")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
+    protected open fun handleListProjectFiles(request: JsonRpcRequest): String {
+        println("   Method: list_project_files")
+
+        return try {
+            val limit = request.params?.get("limit")?.jsonPrimitive?.content?.toIntOrNull() ?: 200
+            val result = documentIndexingService.listProjectFiles(limit)
+            val resultJson = buildJsonObject {
+                put("message", "Project files")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
+    protected open fun handleGetGitDiffSummary(request: JsonRpcRequest): String {
+        println("   Method: get_git_diff_summary")
+
+        return try {
+            val maxChars = request.params?.get("maxChars")?.jsonPrimitive?.content?.toIntOrNull() ?: 4000
+            val result = documentIndexingService.getGitDiffSummary(maxChars)
+            val resultJson = buildJsonObject {
+                put("message", "Git diff summary")
+                put("data", json.encodeToJsonElement(result))
+            }
+            buildSuccessResponse(request.id, resultJson)
+        } catch (e: Exception) {
+            println("   Error: ${e.message}")
+            buildErrorResponse(request.id, e)
+        }
+    }
+
     protected open fun handleUnknownMethod(request: JsonRpcRequest): String {
         return """{"jsonrpc":"2.0","id":${request.id},"result":null,"error":{"code":-32601,"message":"Method not found: ${request.method}"}}"""
     }
@@ -642,6 +706,9 @@ abstract class AbstractMcpJsonRpcHandler {
                 "search_index" -> handleSearchIndex(request)
                 "retrieve_relevant_chunks" -> handleRetrieveRelevantChunks(request)
                 "answer_with_retrieval" -> handleAnswerWithRetrieval(request)
+                "get_git_branch" -> handleGetGitBranch(request)
+                "list_project_files" -> handleListProjectFiles(request)
+                "get_git_diff_summary" -> handleGetGitDiffSummary(request)
                 else -> handleUnknownMethod(request)
             }
         } catch (e: Exception) {
@@ -712,6 +779,18 @@ class McpJsonRpcHandler : AbstractMcpJsonRpcHandler() {
         Tool(
             name = "answer_with_retrieval",
             description = "Builds an LLM-ready prompt package from semantic retrieval. Parameters: query, source (optional), strategy (optional), topK (optional), maxChars (optional), documentType (optional), relativePathContains (optional), perDocumentLimit (optional)."
+        ),
+        Tool(
+            name = "get_git_branch",
+            description = "Returns current git branch for the project root. No parameters."
+        ),
+        Tool(
+            name = "list_project_files",
+            description = "Returns a filtered list of repository files. Parameters: limit (optional)."
+        ),
+        Tool(
+            name = "get_git_diff_summary",
+            description = "Returns compact git status and diff stat. Parameters: maxChars (optional)."
         )
     )
 

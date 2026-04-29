@@ -17,6 +17,9 @@ object MessageMapper {
         result.add(Message(MessageRole.SYSTEM, systemPrompt))
 
         chatMessages.forEach { chatMessage ->
+            if (chatMessage.conversationMode != com.example.aiadventchallenge.domain.model.ConversationMode.FITNESS) {
+                return@forEach
+            }
             val role = if (chatMessage.isFromUser) MessageRole.USER else MessageRole.ASSISTANT
             result.add(Message(role, chatMessage.content))
         }
@@ -37,6 +40,9 @@ object MessageMapper {
         }
 
         history.recentMessages.forEach { chatMessage ->
+            if (chatMessage.conversationMode != com.example.aiadventchallenge.domain.model.ConversationMode.FITNESS) {
+                return@forEach
+            }
             val role = if (chatMessage.isFromUser) MessageRole.USER else MessageRole.ASSISTANT
             result.add(Message(role, chatMessage.content))
         }
