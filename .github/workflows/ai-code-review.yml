@@ -1,0 +1,107 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ai-code-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Review pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ !github.event.pull_request.draft }}
+
+    env:
+      AI_REVIEW_BACKEND: ${{ vars.AI_REVIEW_BACKEND || 'private' }}
+      AI_REVIEW_BASE_URL: ${{ secrets.AI_REVIEW_BASE_URL }}
+      AI_REVIEW_API_KEY: ${{ secrets.AI_REVIEW_API_KEY }}
+      AI_REVIEW_MODEL: ${{ vars.AI_REVIEW_MODEL }}
+      AI_REVIEW_MAX_TOKENS: ${{ vars.AI_REVIEW_MAX_TOKENS || '1600' }}
+      AI_REVIEW_TIMEOUT_SECONDS: ${{ vars.AI_REVIEW_TIMEOUT_SECONDS || '90' }}
+      AI_REVIEW_POST_COMMENT: ${{ vars.AI_REVIEW_POST_COMMENT || 'false' }}
+
+    steps:
+      - name: Checkout trusted base tooling
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base-repo
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+        with:
+          path: pr-repo
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare pull request diff
+        shell: bash
+        working-directory: pr-repo
+        run: |
+          set -euo pipefail
+          mkdir -p tools/ai-review/output
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          echo "Base SHA: ${BASE_SHA}"
+          echo "Checked out HEAD SHA: ${HEAD_SHA}"
+          git diff --no-ext-diff --unified=80 \
+            "${BASE_SHA}" \
+            "${HEAD_SHA}" \
+            > tools/ai-review/output/diff.patch
+          git diff --name-only \
+            "${BASE_SHA}" \
+            "${HEAD_SHA}" \
+            > tools/ai-review/output/changed_files.txt
+          echo "Changed files:"
+          sed -n '1,200p' tools/ai-review/output/changed_files.txt
+
+      - name: Run AI review
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd base-repo
+          ./gradlew :ai-review-tool:run --args="\
+            --repo-root ../pr-repo \
+            --diff-file ../pr-repo/tools/ai-review/output/diff.patch \
+            --changed-files-file ../pr-repo/tools/ai-review/output/changed_files.txt \
+            --config tools/ai-review/config/review_config.yaml \
+            --prompt-template tools/ai-review/prompts/code_review_prompt.md \
+            --output ../pr-repo/tools/ai-review/output/review.md"
+
+      - name: Upload review artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-code-review
+          path: |
+            pr-repo/tools/ai-review/output/review.md
+            pr-repo/tools/ai-review/output/changed_files.txt
+          if-no-files-found: ignore
+
+      - name: Publish PR comment
+        if: ${{ env.AI_REVIEW_POST_COMMENT == 'true' && github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- ai-code-review -->';
+            const body = `${marker}\n${fs.readFileSync('pr-repo/tools/ai-review/output/review.md', 'utf8')}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+            const previous = comments.data.find(comment => comment.body && comment.body.startsWith(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
