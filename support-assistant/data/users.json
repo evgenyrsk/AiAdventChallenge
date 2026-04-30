@@ -1,0 +1,29 @@
+[
+  {
+    "id": "user_001",
+    "email": "test@example.com",
+    "subscriptionStatus": "active",
+    "authProvider": "google",
+    "lastLoginAt": "2026-04-28T10:00:00Z",
+    "appVersion": "1.0.0",
+    "platform": "android"
+  },
+  {
+    "id": "user_002",
+    "email": "history@example.com",
+    "subscriptionStatus": "active",
+    "authProvider": "email",
+    "lastLoginAt": "2026-04-27T18:30:00Z",
+    "appVersion": "1.0.0",
+    "platform": "android"
+  },
+  {
+    "id": "user_003",
+    "email": "expired@example.com",
+    "subscriptionStatus": "expired",
+    "authProvider": "email",
+    "lastLoginAt": "2026-04-20T08:15:00Z",
+    "appVersion": "0.9.8",
+    "platform": "android"
+  }
+]

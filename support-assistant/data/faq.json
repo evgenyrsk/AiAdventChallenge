@@ -1,0 +1,102 @@
+[
+  {
+    "id": "faq_auth_google",
+    "scope": "SUPPORT_FAQ",
+    "title": "Авторизация через Google",
+    "section": "auth",
+    "question": "Почему не работает авторизация?",
+    "answer": "Если вход через Google зависает или возвращает таймаут, чаще всего причина в сетевом сбое, устаревшей версии приложения, неверном системном времени устройства или временной ошибке OAuth-провайдера. Поддержке нужно проверить errorCode, authProvider, appVersion и lastLoginAt.",
+    "tags": ["авторизация", "google", "login", "auth", "AUTH_GOOGLE_TIMEOUT", "oauth"],
+    "suggestedActions": ["Проверить стабильность сети и повторить вход.", "Обновить приложение до актуальной версии.", "Проверить системное время устройства.", "Поддержке проверить errorCode и authProvider в тикете."]
+  },
+  {
+    "id": "faq_profile_loading",
+    "scope": "SUPPORT_FAQ",
+    "title": "Профиль пользователя не загружается",
+    "section": "profile",
+    "question": "Почему не загружается профиль пользователя?",
+    "answer": "Профиль может не загрузиться при истекшей сессии, проблемах синхронизации или недоступности backend. Нужно попросить пользователя перезапустить приложение и повторно войти, а поддержке проверить userId, appVersion, platform и последний успешный вход.",
+    "tags": ["профиль", "profile", "user", "сессия", "sync"],
+    "suggestedActions": ["Перезапустить приложение.", "Выйти и войти снова.", "Проверить последний успешный вход пользователя."]
+  },
+  {
+    "id": "faq_chat_history",
+    "scope": "SUPPORT_FAQ",
+    "title": "История чата не сохраняется",
+    "section": "chat_history",
+    "question": "Почему пропала история сообщений?",
+    "answer": "История чата может не отображаться после переустановки, если локальное хранилище было очищено или синхронизация еще не завершилась. Если syncState равен pending, стоит дождаться синхронизации и проверить подключение.",
+    "tags": ["история", "чат", "messages", "history", "syncState", "pending"],
+    "suggestedActions": ["Проверить подключение к интернету.", "Подождать завершения синхронизации.", "Поддержке проверить syncState и наличие локальной очистки данных."]
+  },
+  {
+    "id": "faq_workout_generation",
+    "scope": "SUPPORT_FAQ",
+    "title": "Программа тренировок не отображается",
+    "section": "training",
+    "question": "Почему не отображается программа тренировок?",
+    "answer": "Программа тренировок может быть недоступна, если профиль неполный, подписка неактивна, генерация еще выполняется или сервис LLM временно недоступен. Поддержке нужно проверить subscriptionStatus, состояние профиля и ошибки генерации.",
+    "tags": ["тренировки", "training", "program", "subscriptionStatus", "generation"],
+    "suggestedActions": ["Проверить заполненность профиля.", "Проверить статус подписки.", "Повторить генерацию позже."]
+  },
+  {
+    "id": "faq_nutrition_recommendations",
+    "scope": "SUPPORT_FAQ",
+    "title": "Некорректные рекомендации по питанию",
+    "section": "nutrition",
+    "question": "Почему рекомендации по питанию выглядят некорректно?",
+    "answer": "Рекомендации по питанию зависят от данных профиля, цели, веса, активности и ограничений. Поддержка не должна давать медицинские советы; нужно проверить входные данные профиля и предложить пользователю обновить параметры.",
+    "tags": ["питание", "nutrition", "калории", "profile", "medical"],
+    "suggestedActions": ["Проверить параметры профиля.", "Уточнить цель пользователя.", "Не давать медицинских рекомендаций вне поддержки продукта."]
+  },
+  {
+    "id": "faq_rag_documents",
+    "scope": "SUPPORT_DOCS",
+    "title": "RAG не находит документы",
+    "section": "rag",
+    "question": "Почему ассистент не находит документы?",
+    "answer": "RAG может не найти документы, если корпус не проиндексирован, выбран неверный source, документы не попали в индекс или запрос слишком общий. Для support assistant используется отдельный scope SUPPORT_FAQ/SUPPORT_DOCS и он не смешивается с fitness knowledge base.",
+    "tags": ["RAG", "retrieval", "documents", "index", "SUPPORT_FAQ", "SUPPORT_DOCS"],
+    "suggestedActions": ["Проверить наличие FAQ/docs.", "Уточнить формулировку вопроса.", "Проверить, что используется support scope, а не fitness knowledge base."]
+  },
+  {
+    "id": "faq_local_llm",
+    "scope": "SUPPORT_FAQ",
+    "title": "Локальная LLM не отвечает",
+    "section": "local_llm",
+    "question": "Почему локальная модель не отвечает?",
+    "answer": "Локальная LLM обычно не отвечает, если Ollama не запущена, модель не скачана, указан неверный baseUrl или превышен timeout. Поддержке нужно проверить backend, baseUrl, модель и errorCode вроде OLLAMA_CONNECTION_REFUSED.",
+    "tags": ["local LLM", "ollama", "model", "timeout", "OLLAMA_CONNECTION_REFUSED"],
+    "suggestedActions": ["Проверить, что Ollama запущена.", "Проверить, что модель скачана.", "Проверить SUPPORT_LLM_BASE_URL или OLLAMA baseUrl."]
+  },
+  {
+    "id": "faq_private_ai_service",
+    "scope": "SUPPORT_FAQ",
+    "title": "Ошибка подключения к private AI service",
+    "section": "private_ai_service",
+    "question": "Почему не работает private AI service?",
+    "answer": "Private AI service может быть недоступен из-за неверного baseUrl, отсутствующего API key, rate limit, таймаута или недоступности upstream Ollama. Нельзя логировать API key или полный prompt.",
+    "tags": ["private AI service", "gateway", "api key", "rate limit", "timeout", "502", "504"],
+    "suggestedActions": ["Проверить доступность /health.", "Проверить baseUrl без раскрытия API key.", "Проверить rate limit и upstream Ollama."]
+  },
+  {
+    "id": "faq_subscription_access",
+    "scope": "SUPPORT_FAQ",
+    "title": "Подписка и доступ",
+    "section": "subscription",
+    "question": "Почему пропала подписка?",
+    "answer": "Если subscriptionStatus не active или последний платеж failed, доступ к части функций может быть ограничен. Поддержке нужно проверить store, lastPaymentStatus и дату последней синхронизации покупки.",
+    "tags": ["подписка", "subscription", "access", "payment", "failed", "google_play"],
+    "suggestedActions": ["Проверить статус оплаты в магазине.", "Выполнить восстановление покупки.", "Поддержке проверить subscriptionStatus и lastPaymentStatus."]
+  },
+  {
+    "id": "faq_data_security",
+    "scope": "SUPPORT_DOCS",
+    "title": "Безопасность данных пользователя",
+    "section": "data_security",
+    "question": "Какие данные пользователя можно использовать в поддержке?",
+    "answer": "В ответе поддержки нужно использовать только минимально необходимые данные: статус подписки, провайдер авторизации, версию приложения, платформу и технические errorCode. Email и другие чувствительные данные не раскрываются без необходимости.",
+    "tags": ["данные", "privacy", "security", "email", "PII"],
+    "suggestedActions": ["Не раскрывать email без необходимости.", "Не логировать секреты.", "Использовать только минимальный support context."]
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "ticket_123",
+    "userId": "user_001",
+    "status": "open",
+    "category": "auth",
+    "message": "Не могу войти через Google",
+    "createdAt": "2026-04-29T09:00:00Z",
+    "metadata": {
+      "errorCode": "AUTH_GOOGLE_TIMEOUT",
+      "device": "Android emulator"
+    }
+  },
+  {
+    "id": "ticket_124",
+    "userId": "user_002",
+    "status": "open",
+    "category": "chat_history",
+    "message": "После переустановки пропала история сообщений",
+    "createdAt": "2026-04-29T10:00:00Z",
+    "metadata": {
+      "syncState": "pending",
+      "device": "Pixel 8"
+    }
+  },
+  {
+    "id": "ticket_125",
+    "userId": "user_003",
+    "status": "open",
+    "category": "subscription",
+    "message": "Пропала подписка и программа тренировок не открывается",
+    "createdAt": "2026-04-29T11:00:00Z",
+    "metadata": {
+      "lastPaymentStatus": "failed",
+      "store": "google_play"
+    }
+  },
+  {
+    "id": "ticket_126",
+    "userId": "user_001",
+    "status": "open",
+    "category": "local_llm",
+    "message": "Локальная модель не отвечает",
+    "createdAt": "2026-04-29T12:00:00Z",
+    "metadata": {
+      "backend": "ollama",
+      "errorCode": "OLLAMA_CONNECTION_REFUSED"
+    }
+  }
+]

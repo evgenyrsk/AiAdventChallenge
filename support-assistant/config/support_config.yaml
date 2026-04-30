@@ -1,0 +1,16 @@
+server:
+  host: "0.0.0.0"
+  port: 8091
+
+rag:
+  topK: 4
+  maxContextChars: 4000
+  scopes:
+    - SUPPORT_FAQ
+    - SUPPORT_DOCS
+
+llm:
+  backend: "private"
+  baseUrl: "http://localhost:8085"
+  model: "qwen2.5:3b-instruct"
+  timeoutMs: 120000
