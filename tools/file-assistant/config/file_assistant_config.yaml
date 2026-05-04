@@ -1,0 +1,52 @@
+# Lightweight File Assistant configuration.
+# Parsed by the :file-assistant-tool Kotlin CLI without external dependencies.
+
+max_read_chars: 120000
+max_write_chars: 120000
+max_search_results: 120
+max_diff_chars: 60000
+max_list_files: 5000
+search_context_lines: 2
+
+allowed_extensions:
+  - .kt
+  - .kts
+  - .md
+  - .json
+  - .yaml
+  - .yml
+  - .xml
+  - .txt
+
+exclude_paths:
+  - .git
+  - .gradle
+  - .idea
+  - build
+  - generated
+  - node_modules
+  - output
+  - mcp-server/output
+  - tools/ai-review/output
+  - tools/file-assistant/output
+
+secret_file_names:
+  - .env
+  - .env.local
+  - local.properties
+  - secrets.properties
+  - keystore.properties
+
+binary_extensions:
+  - .png
+  - .jpg
+  - .jpeg
+  - .webp
+  - .gif
+  - .mp4
+  - .apk
+  - .aab
+  - .db
+  - .jar
+  - .keystore
+  - .lock
